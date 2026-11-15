@@ -1,5 +1,5 @@
 {
-  "name": "@rge/language-server",
+  "name": "@tsengine/language-server",
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
@@ -8,6 +8,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@rge/compiler": "0.0.0"
+    "@tsengine/compiler": "0.0.0"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@rge/compiler",
+  "name": "@tsengine/compiler",
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
@@ -8,10 +8,10 @@
     ".": "./src/index.ts"
   },
   "bin": {
-    "rge-compile": "./src/cli.ts"
+    "tse-compile": "./src/cli.ts"
   },
   "dependencies": {
-    "@rge/runtime": "0.0.0",
+    "@tsengine/runtime": "0.0.0",
     "typescript": "7.1.0-beta"
   }
 }

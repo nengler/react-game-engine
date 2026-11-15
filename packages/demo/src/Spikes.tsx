@@ -1,4 +1,4 @@
-import { Collider, Entity, Shape } from "@rge/runtime/jsx";
+import { Collider, Entity, Shape } from "@tsengine/runtime/jsx";
 
 /** Something that hurts while you stand on it. It only carries a tag: the player decides what touching it does. */
 export function Spikes() {

@@ -2,8 +2,8 @@
  * Render frames of a scripted run to PNG through the headless (software) build, and a contact sheet of them. For looking at
  * a room, an animation or a camera slide without a window.
  *
- *   npm run native:build:headless   (in this repository; an installed game has librge from @rge/native)
- *   rge screenshot packages/demo --script "right*30" --at 0,15,29 --out /tmp/shots
+ *   npm run native:build:headless   (in this repository; an installed game has libtse from @tsengine/native)
+ *   tse screenshot packages/demo --script "right*30" --at 0,15,29 --out /tmp/shots
  *
  * The game folder holds `game.ts`, which exports `gameConfig` (what `run` takes) and may export `bindings` (the action names a
  * script may use, `jump`, `right`; see `parseInputScript`) and `screen` (how the canvas sits in the window, for `click@x,y`). The script is run with the folder as the working directory, so
@@ -29,11 +29,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@rge/player";
-import { contactSheet, decodePng, encodePng, findNativeLibraryOf, pixelDifference, renderRun, type Pixels } from "@rge/player-node";
+import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
+import { contactSheet, decodePng, encodePng, findNativeLibraryOf, pixelDifference, renderRun, type Pixels } from "@tsengine/player-node";
 
 const usage =
-  'usage: rge screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
+  'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
 
 /** Options that take no value. */
 const SWITCHES = new Set(["gpu", "update"]);
@@ -90,21 +90,21 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     const found = findNativeLibraryOf("desktop");
     if (found === null) {
       console.error(
-        "--gpu needs the desktop build of librge: run `npm run native:build` (it needs the window libraries; see Getting started)."
+        "--gpu needs the desktop build of libtse: run `npm run native:build` (it needs the window libraries; see Getting started)."
       );
       return 2;
     }
     library = found;
     if (!hasDisplay(process.env)) {
       // No display (CI, a cloud machine): run again under a virtual one, which Mesa's software OpenGL draws for.
-      if (process.env["RGE_UNDER_XVFB"] === "1" || !onPath("xvfb-run")) {
+      if (process.env["TSE_UNDER_XVFB"] === "1" || !onPath("xvfb-run")) {
         console.error("--gpu needs a display, and there is none: install Xvfb (`sudo apt install xvfb`) or run it in a desktop session.");
         return 2;
       }
       const self = fileURLToPath(new URL("../cli.ts", import.meta.url));
       const again = spawnSync("xvfb-run", ["-a", "-s", XVFB_SCREEN, process.execPath, self, "screenshot", ...argv], {
         stdio: "inherit",
-        env: { ...process.env, RGE_UNDER_XVFB: "1" },
+        env: { ...process.env, TSE_UNDER_XVFB: "1" },
       });
       return again.status ?? 1;
     }

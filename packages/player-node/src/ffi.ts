@@ -1,23 +1,23 @@
 /**
- * The only file that imports koffi: it loads `librge` and declares the functions of
- * `native/include/rge.h`. Everything else in this package talks to the `Native` interface, so
+ * The only file that imports koffi: it loads `libtse` and declares the functions of
+ * `native/include/tse.h`. Everything else in this package talks to the `Native` interface, so
  * moving to `node:ffi` (experimental in Node 26) later means changing this file alone.
  */
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { nativeLibrary } from "@rge/native";
-import { KEYS, RGE_ABI_VERSION } from "@rge/player";
+import { nativeLibrary } from "@tsengine/native";
+import { KEYS, TSE_ABI_VERSION } from "@tsengine/player";
 import koffi from "koffi";
 
-/** `librge`, as plain functions. Pointer arguments are typed arrays; koffi copies them in (and, for the two output buffers, back out). */
+/** `libtse`, as plain functions. Pointer arguments are typed arrays; koffi copies them in (and, for the two output buffers, back out). */
 export interface Native {
   abiVersion(): number;
   keyCount(): number;
   open(width: number, height: number, title: string, options: number): number;
   close(): void;
-  /** Full screen on or off; false when librge cannot (no window, or a hidden one). */
+  /** Full screen on or off; false when libtse cannot (no window, or a hidden one). */
   setFullscreen(on: boolean): boolean;
   loadTexture(path: string): number;
   loadShader(path: string): number;
@@ -28,7 +28,7 @@ export interface Native {
   setMusicVolume(handle: number, volume: number): void;
   stopMusic(handle: number): void;
   setGamepadDeadzone(deadzone: number): void;
-  /** Width and line height of `text` at `size`, or null when librge cannot say (no window open). */
+  /** Width and line height of `text` at `size`, or null when libtse cannot say (no window open). */
   measureText(text: string, size: number): { width: number; height: number } | null;
   /** Width and height of a loaded texture, or null for an invalid handle. */
   textureSize(handle: number): { width: number; height: number } | null;
@@ -42,11 +42,11 @@ export interface Native {
     input: Float64Array,
     keys: Uint8Array
   ): void;
-  /** `rge_overlaps`: the pairs of the `count` boxes that overlap, into `pairs` (`capacity` pairs of room); `order` goes in and comes back sorted. Returns how many pairs there are. */
+  /** `tse_overlaps`: the pairs of the `count` boxes that overlap, into `pairs` (`capacity` pairs of room); `order` goes in and comes back sorted. Returns how many pairs there are. */
   overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array, capacity: number): number;
-  /** `rge_typed`: the characters typed in the last frame into `out` (as many as fit); returns how many there were. */
+  /** `tse_typed`: the characters typed in the last frame into `out` (as many as fit); returns how many there were. */
   typed(out: Uint32Array, capacity: number): number;
-  /** Saved data (ABI v7), as the four `rge_storage_*` calls. `read` copies into `out` only when it fits and returns the entry's size, or -1. */
+  /** Saved data (ABI v7), as the four `tse_storage_*` calls. `read` copies into `out` only when it fits and returns the entry's size, or -1. */
   storageOpen(gameId: string): number;
   storageRead(name: string, out: Uint8Array | null, capacity: number): number;
   storageWrite(name: string, data: Uint8Array): number;
@@ -58,20 +58,20 @@ export interface Native {
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function libraryNames(): string[] {
-  if (process.platform === "win32") return ["rge.dll", "Release/rge.dll", "Debug/rge.dll"];
-  if (process.platform === "darwin") return ["librge.dylib"];
-  return ["librge.so"];
+  if (process.platform === "win32") return ["tse.dll", "Release/tse.dll", "Debug/tse.dll"];
+  if (process.platform === "darwin") return ["libtse.dylib"];
+  return ["libtse.so"];
 }
 
 export type BuildFlavor = "desktop" | "headless";
 
 /**
- * Where `librge` is, or null. `RGE_NATIVE_LIB` wins; then the prebuilt one in `@rge/native` (an installed game has no
+ * Where `libtse` is, or null. `TSE_NATIVE_LIB` wins; then the prebuilt one in `@tsengine/native` (an installed game has no
  * repository); otherwise the CMake build folders under `native/`: `build` (a real window) and `build-headless` (the
  * software renderer, for tests). `prefer` picks which flavor is tried first.
  */
 export function findNativeLibrary(prefer: BuildFlavor = "desktop", env: NodeJS.ProcessEnv = process.env): string | null {
-  const fromEnv = env["RGE_NATIVE_LIB"];
+  const fromEnv = env["TSE_NATIVE_LIB"];
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
   const flavors: BuildFlavor[] = prefer === "desktop" ? ["desktop", "headless"] : ["headless", "desktop"];
   for (const flavor of flavors) {
@@ -89,11 +89,11 @@ export function findNativeLibrary(prefer: BuildFlavor = "desktop", env: NodeJS.P
 }
 
 /**
- * librge of exactly one flavor, or null: the desktop build for drawing on the GPU (`rge screenshot --gpu`), where falling back to the
- * software renderer would hide what a shader or a driver does. `RGE_NATIVE_LIB` still wins.
+ * libtse of exactly one flavor, or null: the desktop build for drawing on the GPU (`tse screenshot --gpu`), where falling back to the
+ * software renderer would hide what a shader or a driver does. `TSE_NATIVE_LIB` still wins.
  */
 export function findNativeLibraryOf(flavor: BuildFlavor, env: NodeJS.ProcessEnv = process.env): string | null {
-  const fromEnv = env["RGE_NATIVE_LIB"];
+  const fromEnv = env["TSE_NATIVE_LIB"];
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
   const shipped = nativeLibrary(flavor);
   if (shipped !== null) return shipped;
@@ -104,50 +104,50 @@ export function findNativeLibraryOf(flavor: BuildFlavor, env: NodeJS.ProcessEnv 
   return null;
 }
 
-/** Throws if the library was built from a different `rge.h` than this package expects. */
+/** Throws if the library was built from a different `tse.h` than this package expects. */
 export function checkAbi(native: Pick<Native, "abiVersion" | "keyCount">): void {
   const version = native.abiVersion();
-  if (version !== RGE_ABI_VERSION) {
+  if (version !== TSE_ABI_VERSION) {
     throw new Error(
-      `librge speaks ABI version ${version}, but @rge/player expects ${RGE_ABI_VERSION}: rebuild it with \`npm run native:build\`.`
+      `libtse speaks ABI version ${version}, but @tsengine/player expects ${TSE_ABI_VERSION}: rebuild it with \`npm run native:build\`.`
     );
   }
   const keys = native.keyCount();
   if (keys !== KEYS.length) {
-    throw new Error(`librge has ${keys} keys, but @rge/player expects ${KEYS.length}: rge.h and protocol.ts have drifted apart.`);
+    throw new Error(`libtse has ${keys} keys, but @tsengine/player expects ${KEYS.length}: tse.h and protocol.ts have drifted apart.`);
   }
 }
 
-/** Load `librge` from `path` and check that it matches this package. */
+/** Load `libtse` from `path` and check that it matches this package. */
 export function loadNative(path: string): Native {
   const lib = koffi.load(path);
-  const abiVersion = lib.func("int32_t rge_abi_version(void)");
-  const keyCount = lib.func("int32_t rge_key_count(void)");
-  const open = lib.func("int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t options)");
-  const close = lib.func("void rge_close(void)");
-  const setFullscreen = lib.func("int32_t rge_set_fullscreen(int32_t on)");
-  const loadTexture = lib.func("int32_t rge_load_texture(const char *path)");
-  const loadShader = lib.func("int32_t rge_load_shader(const char *path)");
-  const loadSound = lib.func("int32_t rge_load_sound(const char *path)");
-  const playSound = lib.func("void rge_play_sound_ex(int32_t handle, double volume)");
-  const loadMusic = lib.func("int32_t rge_load_music(const char *path)");
-  const playMusic = lib.func("void rge_music_play(int32_t handle, double volume, int32_t loop)");
-  const setMusicVolume = lib.func("void rge_music_set_volume(int32_t handle, double volume)");
-  const stopMusic = lib.func("void rge_music_stop(int32_t handle)");
-  const setGamepadDeadzone = lib.func("void rge_set_gamepad_deadzone(double deadzone)");
-  const measureText = lib.func("int32_t rge_measure_text(const char *text, double size, _Out_ double *out)");
-  const textureSize = lib.func("int32_t rge_texture_size(int32_t handle, _Out_ double *out)");
+  const abiVersion = lib.func("int32_t tse_abi_version(void)");
+  const keyCount = lib.func("int32_t tse_key_count(void)");
+  const open = lib.func("int32_t tse_open(int32_t width, int32_t height, const char *title, uint32_t options)");
+  const close = lib.func("void tse_close(void)");
+  const setFullscreen = lib.func("int32_t tse_set_fullscreen(int32_t on)");
+  const loadTexture = lib.func("int32_t tse_load_texture(const char *path)");
+  const loadShader = lib.func("int32_t tse_load_shader(const char *path)");
+  const loadSound = lib.func("int32_t tse_load_sound(const char *path)");
+  const playSound = lib.func("void tse_play_sound_ex(int32_t handle, double volume)");
+  const loadMusic = lib.func("int32_t tse_load_music(const char *path)");
+  const playMusic = lib.func("void tse_music_play(int32_t handle, double volume, int32_t loop)");
+  const setMusicVolume = lib.func("void tse_music_set_volume(int32_t handle, double volume)");
+  const stopMusic = lib.func("void tse_music_stop(int32_t handle)");
+  const setGamepadDeadzone = lib.func("void tse_set_gamepad_deadzone(double deadzone)");
+  const measureText = lib.func("int32_t tse_measure_text(const char *text, double size, _Out_ double *out)");
+  const textureSize = lib.func("int32_t tse_texture_size(int32_t handle, _Out_ double *out)");
   const frame = lib.func(
-    "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)"
+    "void tse_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)"
   );
-  const readPixels = lib.func("int32_t rge_read_pixels(_Out_ uint8_t *rgba, int32_t capacity)");
-  const storageOpen = lib.func("int32_t rge_storage_open(const char *game_id)");
-  const storageRead = lib.func("int32_t rge_storage_read(const char *name, _Out_ uint8_t *out, int32_t capacity)");
-  const storageWrite = lib.func("int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length)");
-  const storageRemove = lib.func("int32_t rge_storage_remove(const char *name)");
-  const typed = lib.func("int32_t rge_typed(_Out_ uint32_t *out, int32_t capacity)");
+  const readPixels = lib.func("int32_t tse_read_pixels(_Out_ uint8_t *rgba, int32_t capacity)");
+  const storageOpen = lib.func("int32_t tse_storage_open(const char *game_id)");
+  const storageRead = lib.func("int32_t tse_storage_read(const char *name, _Out_ uint8_t *out, int32_t capacity)");
+  const storageWrite = lib.func("int32_t tse_storage_write(const char *name, const uint8_t *data, int32_t length)");
+  const storageRemove = lib.func("int32_t tse_storage_remove(const char *name)");
+  const typed = lib.func("int32_t tse_typed(_Out_ uint32_t *out, int32_t capacity)");
   const overlaps = lib.func(
-    "int32_t rge_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)"
+    "int32_t tse_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)"
   );
 
   const native: Native = {

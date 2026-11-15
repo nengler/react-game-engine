@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 /**
- * The language server end to end: started as `rge lsp` would start it (its own process, stdin and stdout), given a game in a
+ * The language server end to end: started as `tse lsp` would start it (its own process, stdin and stdout), given a game in a
  * temporary folder, and spoken to as an editor would.
  */
 import { after, before, describe, it } from "node:test";
@@ -14,7 +14,7 @@ import { applyEdits } from "../src/fixes.ts";
 import { LineMap } from "../src/server.ts";
 
 const main = resolve(dirname(fileURLToPath(import.meta.url)), "../src/main.ts");
-const game = mkdtempSync(join(tmpdir(), "rge-lsp-"));
+const game = mkdtempSync(join(tmpdir(), "tse-lsp-"));
 after(() => rmSync(game, { recursive: true, force: true }));
 
 interface Received {
@@ -81,7 +81,7 @@ class Client {
   }
 }
 
-const COMPONENT = `import { Entity } from "@rge/runtime/jsx";
+const COMPONENT = `import { Entity } from "@tsengine/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 // A component written as in React: two things the compiler knows to say.
@@ -91,7 +91,7 @@ export function Coins() {
   return <Entity transform={{ x: coins }} />;
 }
 `;
-const STATE = `import { createGameState } from "@rge/runtime";
+const STATE = `import { createGameState } from "@tsengine/runtime";
 
 export const useGame = createGameState({ coins: 0 }, {});
 `;
@@ -100,14 +100,14 @@ describe("the language server", () => {
   let client: Client;
   const uri = (path: string): string => pathToFileURL(join(game, path)).href;
   before(() => {
-    writeFileSync(join(game, "package.json"), JSON.stringify({ name: "g", rge: {} }));
+    writeFileSync(join(game, "package.json"), JSON.stringify({ name: "g", tse: {} }));
     mkdirSync(join(game, "src"));
     writeFileSync(join(game, "src/GameState.ts"), STATE);
     writeFileSync(join(game, "src/Coins.tsx"), COMPONENT);
     client = new Client();
   });
 
-  it("starts, publishes a component's RGE diagnostics at their ranges, and offers the quick fix", async () => {
+  it("starts, publishes a component's TSE diagnostics at their ranges, and offers the quick fix", async () => {
     const init = await client.request("initialize", { processId: null, rootUri: pathToFileURL(game).href, capabilities: {} });
     assert.equal(init.result.capabilities.textDocumentSync.change, 1);
     client.send({ method: "initialized", params: {} });
@@ -118,8 +118,8 @@ describe("the language server", () => {
     const published = await client.diagnostics(uri("src/Coins.tsx"), 1);
     const [missing] = published.params.diagnostics;
     assert.equal(published.params.diagnostics.length, 1, JSON.stringify(published.params.diagnostics));
-    assert.equal(missing.code, "RGE1005");
-    assert.equal(missing.source, "rge");
+    assert.equal(missing.code, "TSE1005");
+    assert.equal(missing.source, "tse");
     assert.equal(missing.severity, 1);
     assert.deepEqual(
       missing.range,
@@ -134,7 +134,7 @@ describe("the language server", () => {
     });
     assert.equal(actions.result.length, 1);
     const [action] = actions.result;
-    assert.equal(action.title, `Import 'useMutable' from "@rge/runtime/jsx"`);
+    assert.equal(action.title, `Import 'useMutable' from "@tsengine/runtime/jsx"`);
     assert.equal(action.isPreferred, true);
     const lines = new LineMap(COMPONENT);
     const edits = action.edit.changes[uri("src/Coins.tsx")].map((e: { range: { start: never; end: never }; newText: string }) => ({
@@ -143,7 +143,7 @@ describe("the language server", () => {
       text: e.newText,
     }));
     const fixed = applyEdits(COMPONENT, edits);
-    assert.match(fixed, /^import \{ Entity, useMutable \} from "@rge\/runtime\/jsx";/);
+    assert.match(fixed, /^import \{ Entity, useMutable \} from "@tsengine\/runtime\/jsx";/);
 
     client.send({
       method: "textDocument/didChange",
@@ -167,7 +167,7 @@ describe("the language server", () => {
     });
     const published = await client.diagnostics(uri("src/Coins.tsx"));
     assert.ok(
-      published.params.diagnostics.some((d: { code: string; message: string }) => d.code === "RGE1108" && /coins/.test(d.message)),
+      published.params.diagnostics.some((d: { code: string; message: string }) => d.code === "TSE1108" && /coins/.test(d.message)),
       JSON.stringify(published.params.diagnostics)
     );
   });

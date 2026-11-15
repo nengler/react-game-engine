@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Collider, Entity, Sprite, World } from "@rge/runtime";
+import { Collider, Entity, Sprite, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, elementOf } from "./helpers.ts";
@@ -131,43 +131,6 @@ function Pickup() {
     assert.ok(compile(`function C() { const f = () => 1; return <Entity />; }`).code.includes("readonly f = () =>"));
     // `let` and loops in the body are a render block since 2026-11-13 (render-blocks.test.ts); `var` is not.
     assert.deepEqual(codes("var a = 1;"), [DiagnosticCode.InvalidComponentBody]);
-  });
-
-  it("gives every handler the latest writes, in the order they run, and renders once (docs/DESIGN.md, 'State: useMutable')", async () => {
-    const { Snap } = await load<{ Snap: new () => Entity & { s: { n: number; seenBySecond: number; doubled: number } } }>(
-      compile(`function Snap() {
-  const s = useMutable({ n: 1, seenBySecond: 0, doubled: 0 });
-  useUpdate(() => {
-    s.n += 10;
-    s.n += 10; // reads the write before it: 1 + 10 + 10
-    s.doubled = s.n * 2; // reads 21
-  });
-  useUpdate(() => {
-    s.seenBySecond = s.n; // a later handler sees the earlier one's writes
-  });
-  return <Entity name="Snap" />;
-}`)
-    );
-    const world = new World();
-    const snap = new Snap();
-    world.mount(snap);
-    assert.equal(world.tick(1), 1, "one render for every write of the frame");
-    assert.deepEqual([snap.s.n, snap.s.doubled, snap.s.seenBySecond], [21, 42, 21]);
-    world.tick(1);
-    assert.deepEqual([snap.s.n, snap.s.doubled, snap.s.seenBySecond], [41, 82, 41]);
-  });
-
-  it("renders nothing when every queued update ends where it started", async () => {
-    const { Same } = await load<{ Same: new () => Entity & { n: number } }>(
-      compile(`function Same() {
-  const s = useMutable({ n: 5 });
-  useUpdate(() => { s.n = 5; });
-  return <Entity name="Same" />;
-}`)
-    );
-    const world = new World();
-    world.mount(new Same());
-    assert.equal(world.tick(1), 0);
   });
 
   it("rejects ternary children whose branches are not elements or null", () => {

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, World } from "@rge/runtime";
+import { Entity, World } from "@tsengine/runtime";
 
 import { DiagnosticCode, type StatementIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";

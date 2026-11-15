@@ -1,4 +1,4 @@
-import { Shape } from "@rge/runtime/jsx";
+import { Shape } from "@tsengine/runtime/jsx";
 
 interface RangeRingProps {
   range: number;

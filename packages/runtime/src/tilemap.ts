@@ -1,5 +1,5 @@
 /**
- * Tile maps as data: what `rge-compile --scenes` writes for each Tiled map (`generated/tilemaps.ts`), and the grid the
+ * Tile maps as data: what `tse-compile --scenes` writes for each Tiled map (`generated/tilemaps.ts`), and the grid the
  * movement code of a game asks about. The data is plain numbers, so it is the same under Node and QuickJS.
  */
 

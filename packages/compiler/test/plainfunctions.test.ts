@@ -46,7 +46,7 @@ describe("plain functions imported from a relative .ts file", () => {
   it("are called in props and derived values, as statements in handlers, and passed as values, with loops and anything else inside them", () => {
     const p = project({
       "helpers.ts": HELPERS,
-      "A.tsx": `import { Entity, Shape, useMutable, useUpdate } from "@rge/runtime/jsx";
+      "A.tsx": `import { Entity, Shape, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 import { shade, log, ease } from "./helpers.ts";
 
 interface Props { curve: (t: number) => number }
@@ -87,7 +87,7 @@ export function A() {
   it("are imported when only a function of the component's own uses them, values and types alike", () => {
     const p = project({
       "helpers.ts": `${HELPERS}export interface Shot { readonly speed: number }\nexport const SPEEDS = { fast: 3 };\n`,
-      "A.tsx": `import { Pointer, useMutable } from "@rge/runtime/jsx";
+      "A.tsx": `import { Pointer, useMutable } from "@tsengine/runtime/jsx";
 import { ease, SPEEDS, type Shot } from "./helpers.ts";
 
 export function A() {
@@ -116,7 +116,7 @@ export function A() {
 export const ROOMS: readonly RoomData[] = [{ name: "a", index: 0, x: 0 }, { name: "b", index: 1, x: 320 }, { name: "c", index: 2, x: 640 }];
 export const fx = { bursts: 0, burst(name: string, x: number): void { void name; this.bursts += x; } };
 `,
-      "D.tsx": `import { Entity, Shape, useMutable, useUpdate } from "@rge/runtime/jsx";
+      "D.tsx": `import { Entity, Shape, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 import { ROOMS, fx } from "./data.ts";
 export function D() {
   const s = useMutable({ room: 0 });
@@ -146,8 +146,8 @@ export function D() {
 
   it("give <Game> its controls: an imported createControls, and nothing else", () => {
     const p = project({
-      "controls.ts": `import { createControls } from "@rge/runtime";\nexport const controls = createControls({ jump: ["Z", "PadA"] });\n`,
-      "Main.tsx": `import { Entity, Game, useInput } from "@rge/runtime/jsx";
+      "controls.ts": `import { createControls } from "@tsengine/runtime";\nexport const controls = createControls({ jump: ["Z", "PadA"] });\n`,
+      "Main.tsx": `import { Entity, Game, useInput } from "@tsengine/runtime/jsx";
 import { controls } from "./controls.ts";
 function Hero() { useInput((input) => { if (input.pressed("jump")) { } }); return <Entity name="Hero" />; }
 export default function Main() { return <Game controls={controls}><Hero /></Game>; }
@@ -161,7 +161,7 @@ export default function Main() { return <Game controls={controls}><Hero /></Game
       rmSync(p.dir, { recursive: true, force: true });
     }
     const wrong = project({
-      "Main.tsx": `import { Game } from "@rge/runtime/jsx";\nexport default function Main() { return <Game controls={5}></Game>; }\n`,
+      "Main.tsx": `import { Game } from "@tsengine/runtime/jsx";\nexport default function Main() { return <Game controls={5}></Game>; }\n`,
     });
     try {
       const r = wrong.run();
@@ -175,7 +175,7 @@ export default function Main() { return <Game controls={controls}><Hero /></Game
   it("re-run only when their arguments change: a dynamic prop depends on the state in its arguments", () => {
     const p = project({
       "helpers.ts": HELPERS,
-      "B.tsx": `import { Entity, Shape, useMutable } from "@rge/runtime/jsx";
+      "B.tsx": `import { Entity, Shape, useMutable } from "@tsengine/runtime/jsx";
 import { shade } from "./helpers.ts";
 export function B() {
   const s = useMutable({ n: 0, other: 0 });
@@ -204,7 +204,7 @@ export function B() {
   it("are type-checked: a wrong argument is a compile error, and a function named like a hook is the game state's, not a plain function", () => {
     const wrong = project({
       "helpers.ts": HELPERS,
-      "C.tsx": `import { Entity, Shape } from "@rge/runtime/jsx";\nimport { shade } from "./helpers.ts";\nexport function C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} color={shade("no", 1)} /></Entity>; }\n`,
+      "C.tsx": `import { Entity, Shape } from "@tsengine/runtime/jsx";\nimport { shade } from "./helpers.ts";\nexport function C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} color={shade("no", 1)} /></Entity>; }\n`,
     });
     try {
       const r = wrong.run();
@@ -218,8 +218,8 @@ export function B() {
 
   it("make a router's transition: a Router takes a function from a .ts file, and its route follows state", () => {
     const p = project({
-      "transitions.ts": `import type { TransitionFrame } from "@rge/runtime";\nexport function wipe(t: number): TransitionFrame { return { toX: 320 - 320 * t, cover: 0 }; }\n`,
-      "R.tsx": `import { Entity, Route, Router, useMutable } from "@rge/runtime/jsx";
+      "transitions.ts": `import type { TransitionFrame } from "@tsengine/runtime";\nexport function wipe(t: number): TransitionFrame { return { toX: 320 - 320 * t, cover: 0 }; }\n`,
+      "R.tsx": `import { Entity, Route, Router, useMutable } from "@tsengine/runtime/jsx";
 import { wipe } from "./transitions.ts";
 export function R() {
   const s = useMutable({ screen: "a" });

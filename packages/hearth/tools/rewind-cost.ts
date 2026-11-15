@@ -1,12 +1,12 @@
 /**
- * What rewind costs while playing (DESIGN.md, "Rewind in `rge dev`"): Hearth's good build played to the end of wave 10 with and without
- * `rge dev`'s recording (each frame's input and state hash, a snapshot each second), on a recording backend. Prints the mean and
+ * What rewind costs while playing (DESIGN.md, "Rewind in `tse dev`"): Hearth's good build played to the end of wave 10 with and without
+ * `tse dev`'s recording (each frame's input and state hash, a snapshot each second), on a recording backend. Prints the mean and
  * 99th-percentile script time of a frame during wave 10 for each, the time a snapshot takes, and how long going back a few
  * seconds takes.
  *
  *   node packages/hearth/tools/rewind-cost.ts
  */
-import { createPlayer, parseInputScript, RecordingBackend, Rewind, type Backend, type Player } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend, Rewind, type Backend, type Player } from "@tsengine/player";
 
 import { bindings, gameConfig, screen } from "../game.ts";
 import { useGame } from "../src/GameState.ts";

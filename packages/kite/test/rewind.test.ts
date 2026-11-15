@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 /**
- * Rewind (DESIGN.md, "Rewind in `rge dev`") on a platformer, where a bug is a frame-exact jump: Kite's first rooms, played through rewind,
+ * Rewind (DESIGN.md, "Rewind in `tse dev`") on a platformer, where a bug is a frame-exact jump: Kite's first rooms, played through rewind,
  * then sent back to frames in the middle of wall jumps and played again from a snapshot. Every frame must replay as recorded.
  */
 import { describe, it } from "node:test";
 
-import { createPlayer, parseInputScript, RecordingBackend, Rewind } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend, Rewind } from "@tsengine/player";
 
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";

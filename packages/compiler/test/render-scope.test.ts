@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, Shape, Text, World } from "@rge/runtime";
+import { Entity, Shape, Text, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
@@ -17,7 +17,7 @@ after(() => {
 
 const counts = globalThis as unknown as { shadeCalls: number; labelCalls: number };
 
-const BADGE = `import { Entity, Shape, Text, useInput, useMutable } from "@rge/runtime/jsx";
+const BADGE = `import { Entity, Shape, Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 
 function shade(hp: number): string {
   (globalThis as unknown as { shadeCalls: number }).shadeCalls++;
@@ -107,7 +107,7 @@ describe("dependency-scoped render", () => {
   });
 
   it("leaves a render unguarded when every part reads the same things, as it was", () => {
-    const compiled = compile(`import { Entity, Sprite, useMutable } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Sprite, useMutable } from "@tsengine/runtime/jsx";
 export function P() {
   const s = useMutable({ health: 100 });
   return <Entity><Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} /></Entity>;
@@ -116,7 +116,7 @@ export function P() {
   });
 
   it("never guards a part that reads what the compiler cannot follow: a route's own field", () => {
-    const compiled = compile(`import { Entity, Route, Router, Text, useMutable } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Route, Router, Text, useMutable } from "@tsengine/runtime/jsx";
 export function Screens() {
   const s = useMutable({ screen: "a", n: 0 });
   return (

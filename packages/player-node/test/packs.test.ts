@@ -16,7 +16,7 @@ test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages 
     `export * from "../b/c.tsx";`,
     `const m = await import("./d.ts");`,
     `import { t } from "typescript/ast";`,
-    `import x from "@rge/runtime/jsx";`,
+    `import x from "@tsengine/runtime/jsx";`,
   ].join("\n");
   assert.equal(
     rewriteSpecifiers(before),
@@ -25,24 +25,24 @@ test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages 
       `export * from "../b/c.js";`,
       `const m = await import("./d.js");`,
       `import { t } from "typescript/ast";`,
-      `import x from "@rge/runtime/jsx";`,
+      `import x from "@tsengine/runtime/jsx";`,
     ].join("\n")
   );
 });
 
-test("stampVersion sets a release's version and pins the other @rge packages to it", () => {
-  const pkg = { name: "@rge/player", version: "0.0.0", dependencies: { "@rge/runtime": "0.0.0", koffi: "^2.9.0" } };
+test("stampVersion sets a release's version and pins the other @tsengine packages to it", () => {
+  const pkg = { name: "@tsengine/player", version: "0.0.0", dependencies: { "@tsengine/runtime": "0.0.0", koffi: "^2.9.0" } };
   assert.deepEqual(stampVersion(pkg, "0.1.0"), {
-    name: "@rge/player",
+    name: "@tsengine/player",
     version: "0.1.0",
-    dependencies: { "@rge/runtime": "0.1.0", koffi: "^2.9.0" },
+    dependencies: { "@tsengine/runtime": "0.1.0", koffi: "^2.9.0" },
   });
-  assert.deepEqual(stampVersion({ name: "@rge/runtime", version: "0.0.0" }, "0.1.0"), { name: "@rge/runtime", version: "0.1.0" });
+  assert.deepEqual(stampVersion({ name: "@tsengine/runtime", version: "0.0.0" }, "0.1.0"), { name: "@tsengine/runtime", version: "0.1.0" });
   assert.equal(stampVersion(pkg, undefined), pkg);
 });
 
 test("the packs install into an empty project and every entry point imports under Node", { timeout: 300_000 }, () => {
-  const dir = mkdtempSync(join(tmpdir(), "rge-installed-"));
+  const dir = mkdtempSync(join(tmpdir(), "tse-installed-"));
   try {
     const tarballs = packAll(join(dir, "packs"));
     const project = join(dir, "project");
@@ -50,31 +50,31 @@ test("the packs install into an empty project and every entry point imports unde
     writeFileSync(join(project, "package.json"), JSON.stringify({ name: "installed", private: true, type: "module" }));
     execFileSync("npm", ["install", "--no-audit", "--no-fund", ...tarballs], { cwd: project, stdio: "pipe" });
     const entries = [
-      "@rge/runtime",
-      "@rge/runtime/jsx",
-      "@rge/runtime/jsx-runtime",
-      "@rge/player",
-      "@rge/player-node",
-      "@rge/compiler",
-      "@rge/native",
+      "@tsengine/runtime",
+      "@tsengine/runtime/jsx",
+      "@tsengine/runtime/jsx-runtime",
+      "@tsengine/player",
+      "@tsengine/player-node",
+      "@tsengine/compiler",
+      "@tsengine/native",
     ];
     writeFileSync(
       join(project, "check.mjs"),
       `const out = {};\nfor (const s of ${JSON.stringify(entries)}) out[s] = Object.keys(await import(s)).length;\nconsole.log(JSON.stringify(out));\n`
     );
     const counts = JSON.parse(execFileSync("node", ["check.mjs"], { cwd: project, encoding: "utf8" })) as Record<string, number>;
-    // An installed game has no repository: librge comes from @rge/native, and loads (the ABI check passes).
+    // An installed game has no repository: libtse comes from @tsengine/native, and loads (the ABI check passes).
     if (findNativeLibrary("headless") !== null) {
       writeFileSync(
         join(project, "native.mjs"),
-        `import { findNativeLibrary, loadNative, checkAbi } from "@rge/player-node";\nconst path = findNativeLibrary("headless");\ncheckAbi(loadNative(path));\nconsole.log(path);\n`
+        `import { findNativeLibrary, loadNative, checkAbi } from "@tsengine/player-node";\nconst path = findNativeLibrary("headless");\ncheckAbi(loadNative(path));\nconsole.log(path);\n`
       );
       const path = execFileSync("node", ["native.mjs"], {
         cwd: project,
         encoding: "utf8",
-        env: { ...process.env, RGE_NATIVE_LIB: "" },
+        env: { ...process.env, TSE_NATIVE_LIB: "" },
       }).trim();
-      assert.ok(path.includes(join("node_modules", "@rge", "native", "lib")), `librge came from ${path}`);
+      assert.ok(path.includes(join("node_modules", "@tsengine", "native", "lib")), `libtse came from ${path}`);
     }
     for (const entry of entries) assert.ok((counts[entry] ?? 0) > 0, `${entry} exports nothing`);
   } finally {
@@ -82,8 +82,8 @@ test("the packs install into an empty project and every entry point imports unde
   }
 });
 
-const DESKTOP = ["lib/linux-x64/desktop/librge.so", "bin/linux-x64/desktop/rge-host"];
-const HEADLESS = ["lib/linux-x64/headless/librge.so", "bin/linux-x64/headless/rge-host"];
+const DESKTOP = ["lib/linux-x64/desktop/libtse.so", "bin/linux-x64/desktop/tse-host"];
+const HEADLESS = ["lib/linux-x64/headless/libtse.so", "bin/linux-x64/headless/tse-host"];
 
 test("setupNotes: with everything built, every line says ready and nothing is asked of the author", () => {
   const notes = setupNotes([...DESKTOP, ...HEADLESS], { cmake: true, cargo: true });
@@ -95,15 +95,15 @@ test("setupNotes: with everything built, every line says ready and nothing is as
 test("setupNotes: with no tools and nothing built, games can still be written and checked, and each gap says what to install", () => {
   const notes = setupNotes([], { cmake: false, cargo: false }).join("\n");
   assert.match(notes, /Write, test and check games: ready/);
-  assert.match(notes, /Screenshots and `rge package`: no librge, because cmake was not found.*build-essential cmake/);
-  assert.match(notes, /no rge-host, because cargo was not found.*rustup\.rs.*compares against Node only/);
-  assert.match(notes, /A window \(`rge dev`\): not built.*libx11-dev.*libgl1-mesa-dev/);
+  assert.match(notes, /Screenshots and `tse package`: no libtse, because cmake was not found.*build-essential cmake/);
+  assert.match(notes, /no tse-host, because cargo was not found.*rustup\.rs.*compares against Node only/);
+  assert.match(notes, /A window \(`tse dev`\): not built.*libx11-dev.*libgl1-mesa-dev/);
 });
 
 test("setupNotes: a headless build without a window or a host says what is missing, and says a failed build is not a missing tool", () => {
-  const notes = setupNotes(["lib/linux-x64/headless/librge.so"], { cmake: true, cargo: true }).join("\n");
-  assert.match(notes, /Screenshots and `rge package --headless`: ready/);
-  assert.match(notes, /A window \(`rge dev`\): not built/);
-  assert.match(notes, /no rge-host, because the build failed/);
+  const notes = setupNotes(["lib/linux-x64/headless/libtse.so"], { cmake: true, cargo: true }).join("\n");
+  assert.match(notes, /Screenshots and `tse package --headless`: ready/);
+  assert.match(notes, /A window \(`tse dev`\): not built/);
+  assert.match(notes, /no tse-host, because the build failed/);
   assert.doesNotMatch(notes, /was not found/);
 });

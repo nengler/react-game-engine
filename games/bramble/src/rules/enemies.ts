@@ -4,7 +4,7 @@
  * losing sight. Enemies keep their place when the character leaves a map: they are all in the run, and only the ones on the
  * character's map are stepped.
  */
-import { findPath, lineOfSight, moveActorX, moveActorY, type Cell, type PixelActor } from "@rge/runtime";
+import { findPath, lineOfSight, moveActorX, moveActorY, type Cell, type PixelActor } from "@tsengine/runtime";
 
 import { BEETLE_HP, BEETLE_SPEED, BODY, KNOCKBACK, TILE, WISP_GIVE_UP, WISP_HP, WISP_REPATH, WISP_SIGHT, WISP_SPEED } from "./constants.ts";
 import type { EnemyKind, MapId } from "./maps.ts";

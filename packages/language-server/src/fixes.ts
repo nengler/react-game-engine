@@ -1,11 +1,11 @@
 /**
- * Quick fixes for the `RGE` diagnostics whose message already says what to write instead. Each is a list of text edits on the
+ * Quick fixes for the `TSE` diagnostics whose message already says what to write instead. Each is a list of text edits on the
  * component as the editor has it, found from the diagnostic's span with a small scanner (brackets, strings and comments), not a
  * parse: a fix that cannot be made with confidence is simply not offered.
  */
-import type { CompilerDiagnostic } from "@rge/compiler";
+import type { CompilerDiagnostic } from "@tsengine/compiler";
 
-export const AUTHORING_MODULE = "@rge/runtime/jsx";
+export const AUTHORING_MODULE = "@tsengine/runtime/jsx";
 
 /** Replace `[start, end)` of the text with `text`. Offsets are UTF-16, as JavaScript strings and the LSP count them. */
 export interface Edit {
@@ -34,14 +34,14 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic, convert
   const span = diagnostic.span;
   if (span === null) return [];
   switch (diagnostic.code) {
-    case "RGE1005": {
+    case "TSE1005": {
       const name = /^'([A-Za-z_$][\w$]*)' is not imported/.exec(diagnostic.message)?.[1];
       if (name === undefined) return [];
       return [{ title: `Import '${name}' from "${AUTHORING_MODULE}"`, edits: addImport(source, name), preferred: true }];
     }
-    case "RGE1001":
+    case "TSE1001":
       return fromReact(source, span.start, span.end);
-    case "RGE1004": {
+    case "TSE1004": {
       // A name the module does not export, or a hook it no longer has (`useLayoutEffect`), imported and never called: the span is the name.
       const spanned = source.slice(span.start, span.end);
       const name =
@@ -51,11 +51,11 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic, convert
       const edits = removeImport(source, name);
       return edits.length === 0 ? [] : [{ title: `Remove '${name}' from the import`, edits }];
     }
-    case "RGE1203":
+    case "TSE1203":
       return diagnostic.message.startsWith("Write the text as the children of <Text>") ? textToChildren(source, span.start, span.end) : [];
-    case "RGE1108":
+    case "TSE1108":
       return diagnostic.message.startsWith("Take actions with") ? wholeStateToActions(source, span.start, span.end) : [];
-    case "RGE1102": {
+    case "TSE1102": {
       const replaced = /^`(useState|useRef)` is replaced by `useMutable`/.exec(diagnostic.message)?.[1];
       if (replaced !== undefined) {
         if (converter === undefined) return [];

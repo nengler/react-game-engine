@@ -15,7 +15,7 @@ looks the same in a 640 × 360 window as in a full-screen 4K one.
 ## A HUD
 
 ```tsx
-import { useMutable, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
+import { useMutable, Flex, Hud, Sprite, Text } from "@tsengine/runtime/jsx";
 
 export function PlayerHud({ coins }: { coins: number }) {
   const s = useMutable({ paused: false });
@@ -61,7 +61,7 @@ Keyword props are checked by the compiler from the manifest's `intrinsicLiterals
 | `minWidth`, `maxWidth`, `minHeight`, `maxHeight` | pixels | none | Bounds for `"fit"` and `"grow"` |
 | `float`, `anchor`, `to`, `offsetX`, `offsetY` | boolean, one of nine points, pixels | `false`, `"top-left"`, `"top-left"`, `0` | See "Floating boxes" |
 | `overflow`, `scrollX`, `scrollY`, `scrollbar`, `scrollbarColor`, `scrollbarWidth` | | `"visible"` | See "Clipping and scrolling" |
-| `background`, `borderWidth`, `borderColor`, `borderRadius` | colour, pixels | none | A filled box behind the children, with a border inside the edge (it counts as padding) and rounded corners (`RGE_OP_BOX`); without border or radius it is a plain rectangle |
+| `background`, `borderWidth`, `borderColor`, `borderRadius` | colour, pixels | none | A filled box behind the children, with a border inside the edge (it counts as padding) and rounded corners (`TSE_OP_BOX`); without border or radius it is a plain rectangle |
 | `hover…`, `focus…`, `pressed…`, `disabled…` + `Background` / `BorderColor` / `BackgroundImage` | colour or image | none | The look in a state. Precedence: disabled, pressed, hover, focus, plain. Colours only, so layout never moves |
 | `disabled` | boolean | `false` | No press, no focus; a click on it is swallowed |
 | `transition` | seconds | `0` | Fade colours and `opacity` between states, from the player's animation clock, turning round from where a cut-short fade had got to |
@@ -108,8 +108,8 @@ Layout asks each child for a box. Every drawable built-in has its top-left corne
 | Child | Box |
 | --- | --- |
 | `Shape`, `Pointer`, `Collider` | `width` × `height` |
-| `Text` | Its `width` if it has one (else the measured width) × its lines' height, measured by librge (`rge_measure_text`, raylib's `MeasureTextEx`); a `maxWidth` wraps it first. A bitmap `font` measures by its glyph cell |
-| `Sprite` | The texture's size (`rge_texture_size`); a missing texture is its 16 × 16 magenta square |
+| `Text` | Its `width` if it has one (else the measured width) × its lines' height, measured by libtse (`tse_measure_text`, raylib's `MeasureTextEx`); a `maxWidth` wraps it first. A bitmap `font` measures by its glyph cell |
+| `Sprite` | The texture's size (`tse_texture_size`); a missing texture is its 16 × 16 magenta square |
 | `AnimatedSprite` | Its first frame, so the layout does not jitter |
 | `Flex` | Its sizing, worked out by the passes below |
 | `Entity` or a component | The union of its own box (if it is a leaf) and its children at their `transform` + `placement` positions, ignoring rotation. A `Flex` inside counts at its fit size, and is laid out for real later as a layout root of its own. The extent's top-left goes in the slot |
@@ -185,8 +185,8 @@ draws each box's background as it reaches it and continues into the children. A 
 
 ### Why a port, not a library
 
-**Yoga** (React Native's flexbox) is C++ or WebAssembly: QuickJS-ng has no WebAssembly, and C++ in librge breaks its "C over
-raylib, the C side does no maths" rule. **Clay** is one C header that would link into librge, but it would put layout maths on
+**Yoga** (React Native's flexbox) is C++ or WebAssembly: QuickJS-ng has no WebAssembly, and C++ in libtse breaks its "C over
+raylib, the C side does no maths" rule. **Clay** is one C header that would link into libtse, but it would put layout maths on
 the C side, it lays out its own element tree rather than the engine's objects, and a second, native layout engine would be one
 more thing to keep byte-identical between Node and QuickJS. So the engine ports Clay's algorithm to TypeScript for the subset a
 game UI needs, and keeps Clay as the reference: when an edge case comes up, Clay's answer is the default one.
@@ -240,7 +240,7 @@ pixels, ignores the view and does not nest, so the player does the rest:
 
 ## Nine-slice backgrounds
 
-`backgroundImage` with `slice` needs nothing native: it is nine `RGE_OP_SPRITE_REGION` records of one texture, each placed at its
+`backgroundImage` with `slice` needs nothing native: it is nine `TSE_OP_SPRITE_REGION` records of one texture, each placed at its
 part of the box (through the box's rotation and scale) and scaled by destination ÷ source size. Corners keep their size, edges
 stretch along one axis, the middle along both. Slices come from `sliceTop` … `sliceLeft`, else `slice`; a box smaller than its
 corners shrinks all of them by one factor (CSS's `border-image` rule). Drawn after the colour and border, before the children.
@@ -299,7 +299,7 @@ components because the world must be inside the sized root but outside the camer
   a wide screen shows more of the world instead of bars. The game's width then changes with the window; the HUD's layout and the
   camera read it each frame.
 
-**`pixelPerfect`.** With `true`, the frame starts with `RGE_OP_CANVAS`: librge draws every record into a render texture of the
+**`pixelPerfect`.** With `true`, the frame starts with `TSE_OP_CANVAS`: libtse draws every record into a render texture of the
 game's size (recreated only when the size changes, point-filtered), then clears the window to `border` and draws the texture
 into the destination rectangle the player computed. A turned sprite stays made of square game pixels and half-pixel motion
 snaps. With `false`, records are drawn straight into the window through views scaled by the fit's factor, and the bars are drawn
@@ -317,7 +317,7 @@ change its resolution or `fit` from state. Anywhere else it warns once and acts 
 since what ends up at the root depends on another file. A `transform` on it is a compile error.
 
 Full screen is a key the player handles: `<Game fullscreenKey>` or `PlayerConfig.fullscreenKey` (default `"F11"`, `false` for
-none), and Alt + Enter always (`rge_set_fullscreen`, a borderless window at the desktop's size).
+none), and Alt + Enter always (`tse_set_fullscreen`, a borderless window at the desktop's size).
 
 ## Not built, and what would pull it in
 

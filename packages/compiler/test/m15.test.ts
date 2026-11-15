@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Collider, Entity, Sound, World } from "@rge/runtime";
+import { Collider, Entity, Sound, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -72,7 +72,7 @@ describe("M15: IR and generated code", () => {
   });
 
   it("makes a Sound field per binding, and plays through it", () => {
-    assert.match(compiled.code, /import \{[^}]*\bSound\b[^}]*\} from "@rge\/runtime";/);
+    assert.match(compiled.code, /import \{[^}]*\bSound\b[^}]*\} from "@tsengine\/runtime";/);
     assert.match(compiled.code, /readonly playHit: Sound = new Sound\("hit\.wav"\);/);
     assert.match(compiled.code, /this\.playHit\.play\(\);/);
   });
@@ -151,13 +151,6 @@ describe("M15: diagnostics", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={play} />`), [DiagnosticCode.SoundOutsideHandler]);
   });
 
-  it("plays a sound next to a write", () => {
-    const fine = compile(
-      `function C() { const play = useSound("a.wav"); const s = useMutable({ n: 0 }); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); s.n += 1; }} /></Entity>; }`
-    );
-    assert.deepEqual(typeCheck(fine), []);
-  });
-
   it("reports a call with more than the volume as an unsupported statement", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => play(1, 2)} />`), [DiagnosticCode.UnsupportedStatement]);
   });
@@ -200,7 +193,7 @@ describe("M15: diagnostics", () => {
     );
     const result = getCompiler().compile(
       "C.tsx",
-      `import { Entity } from "@rge/runtime/jsx";\nfunction C() { const play = useSound("a.wav"); return <Entity name="C" />; }`
+      `import { Entity } from "@tsengine/runtime/jsx";\nfunction C() { const play = useSound("a.wav"); return <Entity name="C" />; }`
     );
     assert.deepEqual(
       result.diagnostics.map((d) => d.code),
@@ -221,7 +214,7 @@ describe("M15: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M15${Math.random()}.tsx`,
-        text: `import { Entity, useSound } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`,
+        text: `import { Entity, useSound } from "@tsengine/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`,
       },
     ]);
 

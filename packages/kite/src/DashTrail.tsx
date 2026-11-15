@@ -1,4 +1,4 @@
-import { Entity, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 /** One copy of the character: where its feet were in the world, which way it faced, and how old it is. */
 interface Ghost {

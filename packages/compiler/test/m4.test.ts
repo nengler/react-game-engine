@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Collider, Entity, Sprite, World } from "@rge/runtime";
+import { Collider, Entity, Sprite, World } from "@tsengine/runtime";
 
 import { DiagnosticCode, type ComponentIR } from "../src/index.ts";
 import {
@@ -553,10 +553,10 @@ export function Seeded({ seed: firstSeed, speed: rate = 2 }: SeedProps) {
   });
 
   it("imports a runtime function that is used only in a prop's default", async () => {
-    const compiled = compile(`import { Entity, clamp } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, clamp } from "@tsengine/runtime/jsx";
 interface P { speed?: number }
 export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Capped" transform={{ x: speed }} />; }`);
-    assert.match(compiled.code, /import \{ Entity, clamp, type PrefabDefinition \} from "@rge\/runtime";/);
+    assert.match(compiled.code, /import \{ Entity, clamp, type PrefabDefinition \} from "@tsengine\/runtime";/);
     assert.deepEqual(typeCheck(compiled), []);
     const { Capped } = await load<{ Capped: new (props?: { speed?: number }) => Entity }>(compiled);
     assert.equal(new Capped().transform.x, 3, "the default was computed");
@@ -741,7 +741,7 @@ function Panel(props: BarProps) { return <Entity name="Panel"><Bar onDone={props
 
 describe("M4b: roots", () => {
   it("lowers a fragment root to an implicit container, without needing Entity imported", async () => {
-    const source = `import { useMutable, Sprite } from "@rge/runtime/jsx";
+    const source = `import { useMutable, Sprite } from "@tsengine/runtime/jsx";
 function Pair() {
   const s = useMutable({ on: true });
   return (<>
@@ -860,7 +860,7 @@ describe("M4b: collider callbacks", () => {
       callback.handler.params.map((p) => p.type),
       [{ kind: "Named", name: "Contact" }]
     );
-    assert.match(compiled.code, /import \{ Collider, Entity, type Contact \} from "@rge\/runtime";/);
+    assert.match(compiled.code, /import \{ Collider, Entity, type Contact \} from "@tsengine\/runtime";/);
     assert.match(compiled.code, /onCollisionEnter: \(other: Contact\) => \{/);
     assert.deepEqual(typeCheck(compiled), []);
   });
@@ -893,7 +893,7 @@ describe("M4b: collider callbacks", () => {
   });
 
   it("type-checks authored collider callbacks", () => {
-    const source = `import { useMutable, Entity, Collider } from "@rge/runtime/jsx";
+    const source = `import { useMutable, Entity, Collider } from "@tsengine/runtime/jsx";
 function A() {
   const s = useMutable({ n: 0 });
   return <Entity name="A"><Collider width={1} height={1} onCollisionEnter={(other) => { s.n += 1; }} /></Entity>;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createInputState } from "@rge/runtime";
+import { createInputState } from "@tsengine/runtime";
 
 import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
 import * as K from "../src/rules/constants.ts";

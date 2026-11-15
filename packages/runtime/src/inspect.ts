@@ -1,5 +1,5 @@
 /**
- * What the development inspector (`rge dev`'s page, DESIGN.md, "Seeing inside a running game") shows of a running game: the tree by component, and
+ * What the development inspector (`tse dev`'s page, DESIGN.md, "Seeing inside a running game") shows of a running game: the tree by component, and
  * one object's props, state, refs, game-state subscriptions and renders. It only reads; editing goes through `editState`, which
  * sets state as hot reload does.
  */

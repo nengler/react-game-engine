@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 /**
- * Rewind (DESIGN.md, "Rewind in `rge dev`") on a real game: Hearth's battle, in components, played from its winning replay through rewind,
+ * Rewind (DESIGN.md, "Rewind in `tse dev`") on a real game: Hearth's battle, in components, played from its winning replay through rewind,
  * then sent back and played again from a snapshot. A replay that differed from the recording would name the frame.
  */
 import { describe, it } from "node:test";
 
-import { createPlayer, parseInputScript, RecordingBackend, replayMoment, Rewind, type Player } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend, replayMoment, Rewind, type Player } from "@tsengine/player";
 
 import { bindings, gameConfig, screen } from "../game.ts";
 import { useGame } from "../src/GameState.ts";

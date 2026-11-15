@@ -7,7 +7,7 @@ not been played.
 engine's workspaces. Bramble is the opposite on each count: a world bigger than the screen, scrolled continuously, with interiors
 behind doors; a save and settings kept across runs; maps read from Tiled files with object layers; dialogue with wrapped, revealed
 text, an inventory and a settings screen with rebinding; enemies that find a path to the character. And it is made the way an
-outside author makes a game: from the `rge create` template, installing the engine as packed packages, checked by `rge check`
+outside author makes a game: from the `tse create` template, installing the engine as packed packages, checked by `tse check`
 from a copy outside the repository. The engine's storage (`createSave`, `createSettings`), `<Text maxWidth reveal>`, `findPath` and
 `lineOfSight`, culled tilemaps, the camera's `deadzone` and `smoothing`, Tiled object layers, lighting and `sequence` were all
 built or first used here.
@@ -115,17 +115,17 @@ which is fine for now. The stories `Play/Cave` (after it) and `Play/CaveIntro` (
 ## Not done
 
 A person has not played it in a window. No pushable blocks in the maze, no pixel font (the built-in font is used at sizes 10 and 20;
-a new game from `rge create` now gets Kite's), no shake or fades, no cave theme, no Quit on the title.
+a new game from `tse create` now gets Kite's), no shake or fades, no cave theme, no Quit on the title.
 
 ## Findings while writing
 
 Written down as they were hit; the engine was changed when one was worth it. Each of these is fixed in the engine unless it says
 otherwise.
 
-1. Side-effect imports are not allowed in a component file (`RGE1001`): registering the Tiled maps lives in `src/tilemaps.ts`. The
+1. Side-effect imports are not allowed in a component file (`TSE1001`): registering the Tiled maps lives in `src/tilemaps.ts`. The
    message now says where such an import goes.
 2. A component could not compute a list, test `x !== undefined`, call methods of strings and numbers, or hold a condition in a list
-   item's children (`RGE1002`, `RGE1209`, `RGE1302`): the game kept its lists in the game state and wrapped items in components. All
+   item's children (`TSE1002`, `TSE1209`, `TSE1302`): the game kept its lists in the game state and wrapped items in components. All
    of these now compile, and the workarounds are gone.
 3. A narrowed `const` read in a callback under a condition did not type-check in the generated code: the generated callback now
    starts with `$assume(…)` (DESIGN.md, "Narrowing in the generated code").
@@ -134,18 +134,18 @@ otherwise.
 5. `createSettings` took `false` as the type of a boolean default; it now widens it.
 6. Compile errors named the generated file when the cause was in `src/`; a type error in generated code is now reported at its line
    in `src/`.
-7. `rge check` under `node --test` printed `?` for its counts (`NODE_TEST_CONTEXT`); `rge check` now clears it.
-8. The scene importer took every Tiled object for a prefab (`RGE1503`); an object layer with the bool property `data` is now the
+7. `tse check` under `node --test` printed `?` for its counts (`NODE_TEST_CONTEXT`); `tse check` now clears it.
+8. The scene importer took every Tiled object for a prefab (`TSE1503`); an object layer with the bool property `data` is now the
    rules'.
-9. Props need a declared type (`RGE1208`); the message says so. Not changed.
+9. Props need a declared type (`TSE1208`); the message says so. Not changed.
 10. The cave's cutscene: a field started at `null` cannot have its methods called (it starts from `noCutscene()`), and
-    `import type` from `@rge/runtime` is refused in a component, so `@rge/runtime/jsx` re-exports the type (DESIGN.md, "Sequences,
+    `import type` from `@tsengine/runtime` is refused in a component, so `@tsengine/runtime/jsx` re-exports the type (DESIGN.md, "Sequences,
     for cutscenes").
 
 ## Run it
 
 ```
-npm install && npm run check      # compile, type-check, test, parity under Node and rge-host
+npm install && npm run check      # compile, type-check, test, parity under Node and tse-host
 npm run dev                       # window with hot reload
 npm run assets                    # rewrite the art and sound in assets/
                                   # the maps are scenes/*.tmj: open and edit them in Tiled

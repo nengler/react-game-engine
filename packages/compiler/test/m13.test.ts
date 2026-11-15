@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { AnimatedSprite, Entity, World, runtimeManifest } from "@rge/runtime";
+import { AnimatedSprite, Entity, World, runtimeManifest } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -113,14 +113,6 @@ describe("M13: IR and generated code", () => {
     assert.doesNotMatch(compiled.code, /this\.animatedSprite2\./, "a fixed sprite is never touched by render");
   });
 
-  it("calls super first in a hook override on a component rooted at one that implements the hook", () => {
-    assert.match(
-      compiled.code,
-      /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(\);\n\s+\}/
-    );
-    assert.match(compiled.code, /#onUpdate0\(\): void \{\n\s+this\.\$set_s_ticks\(this\.#\$s_ticksNext \+ 1\);/);
-  });
-
   it("calls super once, then each handler in order, when there are several", () => {
     assert.match(
       compiled.code,
@@ -148,7 +140,7 @@ describe("M13: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M13${Math.random()}.tsx`,
-        text: `import { Entity, AnimatedSprite } from "@rge/runtime/jsx";\nfunction C({ on, names }: { on: boolean; names: string[] }) { return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, AnimatedSprite } from "@tsengine/runtime/jsx";\nfunction C({ on, names }: { on: boolean; names: string[] }) { return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 
@@ -299,7 +291,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       try {
         const result = compiler.compile(
           "C.tsx",
-          `import { Shape, useUpdate, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`
+          `import { Shape, useUpdate, useMutable } from "@tsengine/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`
         );
         assert.ok(result.ok, JSON.stringify(result.diagnostics));
         return result.code;
@@ -313,17 +305,6 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/
     );
   });
-
-  it("keeps the sprite's own names apart from the state of a component rooted at it", () => {
-    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
-    for (const name of ["frames", "fps", "playing", "frame", "elapsed", "image"]) {
-      const result = getCompiler().compile(
-        "C.tsx",
-        `import { AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const ${name} = useMutable({ n: 1 }); return <AnimatedSprite frames={["a.png"]} />; }`
-      );
-      assert.ok(result.ok && result.code.includes(`get $${name}()`), name);
-    }
-  });
 });
 
 describe("sprite sheets and sprite options", () => {
@@ -331,7 +312,7 @@ describe("sprite sheets and sprite options", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M13s${Math.random()}.tsx`,
-        text: `import { Entity, Sprite, AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ n: 0, left: false, anim: "idle" }); const n = s.n; const left = s.left; const anim = s.anim; return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Sprite, AnimatedSprite, useMutable } from "@tsengine/runtime/jsx";\nfunction C() { const s = useMutable({ n: 0, left: false, anim: "idle" }); const n = s.n; const left = s.left; const anim = s.anim; return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 

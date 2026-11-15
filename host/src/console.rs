@@ -14,7 +14,7 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     ctx.globals().set("console", console)
 }
 
-// Not `println!`: it panics when the stream is closed (`rge-host game.js | head`), and a log line must never stop
+// Not `println!`: it panics when the stream is closed (`tse-host game.js | head`), and a log line must never stop
 // the game. A line that cannot be written is dropped.
 fn to_stdout<'js>(ctx: Ctx<'js>, args: rquickjs::function::Rest<Value<'js>>) {
     let _ = writeln!(std::io::stdout(), "{}", format_args_for_print(&ctx, &args));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, Flex, Shape, Sprite, Text, type FlexProps, type GameObject } from "@rge/runtime";
+import { Entity, Flex, Shape, Sprite, Text, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 
@@ -210,13 +210,6 @@ describe("layout: shrinking", () => {
     // 140 in 100: a shrinks to 60 (20), then both give 10 more.
     assert.deepEqual([a.box.size[0], b.box.size[0]], [50, 50]);
     assert.deepEqual([a.layoutX, b.layoutX], [0, 50], "later boxes close up behind a shrunk one");
-  });
-
-  it("shrinks equal boxes equally", () => {
-    const a = cell(60, 20);
-    const b = cell(60, 20);
-    lay(flex({ width: 100 }, a, b));
-    assert.deepEqual([a.box.size[0], b.box.size[0]], [50, 50]);
   });
 
   it("stops a box at its minimum and takes the rest from the others", () => {

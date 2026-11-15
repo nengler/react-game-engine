@@ -8,8 +8,8 @@ import { dirname, join, resolve } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { RecordingBackend, type Player } from "@rge/player";
-import { Text, type GameObject } from "@rge/runtime";
+import { RecordingBackend, type Player } from "@tsengine/player";
+import { Text, type GameObject } from "@tsengine/runtime";
 
 import { compileErrors, playWithReload } from "../src/dev.ts";
 
@@ -122,8 +122,8 @@ describe("playWithReload", () => {
 
   it("keeps only the compiler's error lines for the window", () => {
     assert.equal(
-      compileErrors("read GameState.ts (2 actions)\nwrote Main.ts\nsrc/A.tsx(1,2): error RGE1: bad\n"),
-      "src/A.tsx(1,2): error RGE1: bad"
+      compileErrors("read GameState.ts (2 actions)\nwrote Main.ts\nsrc/A.tsx(1,2): error TSE1: bad\n"),
+      "src/A.tsx(1,2): error TSE1: bad"
     );
     assert.equal(compileErrors("wrote Main.ts\n"), "wrote Main.ts");
   });

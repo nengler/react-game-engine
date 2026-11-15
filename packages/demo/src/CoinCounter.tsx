@@ -1,4 +1,4 @@
-import { Text } from "@rge/runtime/jsx";
+import { Text } from "@tsengine/runtime/jsx";
 
 import { useGame } from "./GameState.ts";
 

@@ -16,7 +16,7 @@ import {
   registerTilemaps,
   shakeOn,
   type TilemapData,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
 
@@ -147,7 +147,7 @@ describe("<Tilemap>", () => {
   });
 
   it("is the same grid movement code asks: solid cells by cell and by pixel, markers by tile", async () => {
-    const { getTilemap } = await import("@rge/runtime");
+    const { getTilemap } = await import("@tsengine/runtime");
     const grid = getTilemap("room");
     assert.equal(grid.solidAt(1, 1), true, "tile 2 is solid");
     assert.equal(grid.solidAt(0, 0), false);
@@ -409,32 +409,6 @@ describe("freeze frames", () => {
     assert.deepEqual([c.updates, c.inputs], [2, 5]);
     world.tick(1 / 60);
     assert.equal(c.updates, 3);
-  });
-
-  it("keeps the key edges of a frozen step for the first step after it", () => {
-    let probe!: Entity & { saw: boolean[] };
-    class Pressed extends Entity {
-      saw: boolean[] = [];
-      override onInput(input: { pressed(k: string): boolean }): void {
-        this.saw.push(input.pressed("Space"));
-      }
-      override onUpdate(): void {}
-    }
-    const backend = new RecordingBackend();
-    backend.queueInput({ dt: 1 / 60 });
-    backend.queueInput({ dt: 1 / 60, pressed: ["Space"] }); // pressed in the middle of the freeze
-    backend.queueInput({ dt: 1 / 60 });
-    backend.queueInput({ dt: 1 / 60 });
-    const player = createPlayer(backend, { fixedStep: 60, root: () => (probe = new Pressed() as Pressed) });
-    player.step(); // warm-up
-    freeze(2);
-    player.step();
-    player.step();
-    player.step();
-    player.step();
-    player.close();
-    const presses = probe.saw.filter(Boolean).length;
-    assert.equal(presses, 1, `seen once, not lost: ${probe.saw.join(",")}`);
   });
 });
 

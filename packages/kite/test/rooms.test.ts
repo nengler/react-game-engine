@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseInputScript, runScript } from "@rge/player";
-import type { GameObject } from "@rge/runtime";
+import { parseInputScript, runScript } from "@tsengine/player";
+import type { GameObject } from "@tsengine/runtime";
 
 import { bindings, gameConfig } from "../game.ts";
 import { fx, sfx } from "../src/effects.ts";

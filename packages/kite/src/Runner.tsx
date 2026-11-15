@@ -1,4 +1,4 @@
-import { Entity, Shape, Tilemap, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Shape, Tilemap, useBody, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import * as K from "./rules/constants.ts";
 import { readControls } from "./rules/controls.ts";

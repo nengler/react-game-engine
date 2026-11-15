@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** Motion (DESIGN.md, "Motion: springs, tweens and opacity"): `useSpring` and `useTween`, shipped hooks that step in the component's update. */
 import { after, describe, it } from "node:test";
 
-import { Entity, EASINGS, World, freeze, springFrom, startSpring, stepSpring, type InputState } from "@rge/runtime";
+import { Entity, EASINGS, World, freeze, springFrom, startSpring, stepSpring, type InputState } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
@@ -124,7 +124,7 @@ describe("the spring's math", () => {
 
 describe("a file that imports a type beside a shipped hook", () => {
   it("keeps the type import as written when the hook is taken out of it", () => {
-    const compiled = compile(`import { type Child, Entity, useMount, useMutable, useTween } from "@rge/runtime/jsx";
+    const compiled = compile(`import { type Child, Entity, useMount, useMutable, useTween } from "@tsengine/runtime/jsx";
 interface FadeProps { children: Child }
 export function FadeIn({ children }: FadeProps) {
   const s = useMutable({ shown: false });

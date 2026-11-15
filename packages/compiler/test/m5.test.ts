@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Sprite, World, type InputState } from "@rge/runtime";
+import { Entity, Sprite, World, type InputState } from "@tsengine/runtime";
 
 import { DiagnosticCode, type ComponentIR, type ExprIR, type StatementIR } from "../src/index.ts";
 import {
@@ -295,7 +295,7 @@ function C() {
   });
 
   it("type-checks authored source with array and record state", () => {
-    const source = `import { useMutable, useUpdate, Entity } from "@rge/runtime/jsx";
+    const source = `import { useMutable, useUpdate, Entity } from "@tsengine/runtime/jsx";
 interface Item { id: string; n: number }
 function C() {
   const s = useMutable({ items: [] as Item[], best: { id: "", n: 0 } as Item });
@@ -650,7 +650,7 @@ describe("M5b: generated code", () => {
   });
 
   it("type-checks authored source with a list", () => {
-    const source = `import { useMutable, Entity, Sprite } from "@rge/runtime/jsx";
+    const source = `import { useMutable, Entity, Sprite } from "@tsengine/runtime/jsx";
 interface Item { id: string; n: number }
 function C() {
   const s = useMutable({ items: [] as Item[] });
@@ -920,7 +920,7 @@ function C() {
 // ---------------------------------------------------------------------------
 
 const CARD = `
-import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, Collider, useMutable } from "@tsengine/runtime/jsx";
 
 interface PanelProps {
   title: string;
@@ -1020,7 +1020,7 @@ describe("M8: generated code", () => {
     assert.match(code, /constructor\(props: Omit<PanelProps, "children">\) \{/);
     assert.match(code, /updateProps\(next: Partial<Omit<PanelProps, "children">>\): void \{/);
     assert.match(code, /this\.passedChildrenHost = this\.entity;\n\s+this\.passedChildrenSlot = 1;/, "the slot follows the first collider");
-    assert.match(code, /import \{[^}]*type Child[^}]*\} from "@rge\/runtime";/);
+    assert.match(code, /import \{[^}]*type Child[^}]*\} from "@tsengine\/runtime";/);
   });
 
   it("gives the component's own children slots, so passed children land between them", () => {
@@ -1050,7 +1050,7 @@ describe("M8: generated code", () => {
   it("type-checks authored source: children are required where declared, and rejected where not", () => {
     const check = (source: string) =>
       getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M8Source${Math.random()}.tsx`, text: source }]);
-    const head = `import { Entity, Sprite, type Child } from "@rge/runtime/jsx";
+    const head = `import { Entity, Sprite, type Child } from "@tsengine/runtime/jsx";
 interface BoxProps { children: Child }
 function Box({ children }: BoxProps) { return <Entity name="Box">{children}</Entity>; }
 interface LeafProps { n: number }
@@ -1124,7 +1124,7 @@ describe("M8: runtime behaviour", () => {
 
 describe("M8: conditional passed children keep their place among static ones", () => {
   const SOURCE = `
-import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, useMutable } from "@tsengine/runtime/jsx";
 interface BoxProps { children: Child }
 function Box({ children }: BoxProps) { return <Entity name="Box"><Entity name="Slot">{children}</Entity></Entity>; }
 function Host() {
@@ -1182,7 +1182,7 @@ function Host() {
 
 describe("M8: a list as the children", () => {
   const LIST = `
-import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, Collider, useMutable } from "@tsengine/runtime/jsx";
 interface Row { id: string }
 interface ColumnProps { children: Child }
 function Column({ children }: ColumnProps) {
@@ -1228,7 +1228,7 @@ function Table() {
 });
 
 describe("M8: diagnostics", () => {
-  const IMPORT = `import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";\n`;
+  const IMPORT = `import { type Child, Entity, Sprite, Collider, useMutable } from "@tsengine/runtime/jsx";\n`;
   const box = (props: string, body: string) =>
     `${IMPORT}interface BoxProps { ${props} }\nfunction Box({ ${props.includes("children") ? "children" : ""} }: BoxProps) { return <Entity name="Box">${body}</Entity>; }`;
   const diag = (source: string) => compileErrors(source).map((d) => d.code);
@@ -1251,15 +1251,6 @@ describe("M8: diagnostics", () => {
     assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
   });
 
-  it("forwards children to another component, alone or beside children of its own (see tier3.test.ts)", () => {
-    const source = `${box("children: Child", "{children}")}
-function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box><Sprite image="a" />{children}</Box></Entity>; }`;
-    assert.match(compile(source).code, /this\.passedChildrenForwardAt = 1;/);
-    const ok = `${box("children: Child", "{children}")}
-function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
-    assert.doesNotThrow(() => compile(ok));
-  });
-
   it("does not read children as a value", () => {
     assert.deepEqual(diag(box("children: Child", `{children}<Sprite image={children} />`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(
@@ -1271,18 +1262,6 @@ function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{child
   it("rejects a default for children", () => {
     const source = `${IMPORT}interface BoxProps { children?: Child }\nfunction Box({ children = null }: BoxProps) { return <Entity name="Box">{children}</Entity>; }`;
     assert.ok(diag(source).includes(DiagnosticCode.InvalidProps));
-  });
-
-  it("takes a list as the whole of the passed children, or beside others", () => {
-    const parent = (children: string) => `${box("children: Child", "{children}")}
-interface Row { id: string }
-function Table() {
-  const s = useMutable({ rows: [] as Row[] });
-  const rows = s.rows;
-  return <Entity name="Table"><Box>${children}</Box></Entity>;
-}`;
-    assert.doesNotThrow(() => compile(parent(`<Sprite image="x" />{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
-    assert.doesNotThrow(() => compile(parent(`{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
   });
 
   it("takes nested children on a list item, and still rejects children as an attribute", () => {

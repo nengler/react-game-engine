@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { AnimatedSprite, Entity, Sprite } from "@rge/runtime";
+import { AnimatedSprite, Entity, Sprite } from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
 

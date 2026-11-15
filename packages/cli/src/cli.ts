@@ -7,31 +7,31 @@ import { packageCommand } from "./commands/package.ts";
 import { previewCommand } from "./commands/preview.ts";
 import { screenshotCommand } from "./commands/screenshot.ts";
 /**
- * rge: one command line for a game made with the engine. Run it in the game's folder, or give the folder as the first argument.
+ * tse: one command line for a game made with the engine. Run it in the game's folder, or give the folder as the first argument.
  *
- *   rge build [folder]                 compile src to generated
- *   rge dev [folder] [--no-watch]      compile, open the window, hot reload
- *   rge check [folder]                 compile, type-check, test, and check parity under Node and rge-host
- *   rge package [folder] [options]     a folder you can hand to someone (see `rge package --help`)
- *   rge screenshot <folder> [options]  PNGs of a scripted run, through the headless build (or the GPU with --gpu)
- *   rge preview [folder] [options]     the game's stories: one component with given props, in a window or as PNGs
- *   rge create <folder> [options]      a new game from the template
- *   rge lsp                            the language server, on stdin and stdout, for an editor (the VS Code extension starts it)
+ *   tse build [folder]                 compile src to generated
+ *   tse dev [folder] [--no-watch]      compile, open the window, hot reload
+ *   tse check [folder]                 compile, type-check, test, and check parity under Node and tse-host
+ *   tse package [folder] [options]     a folder you can hand to someone (see `tse package --help`)
+ *   tse screenshot <folder> [options]  PNGs of a scripted run, through the headless build (or the GPU with --gpu)
+ *   tse preview [folder] [options]     the game's stories: one component with given props, in a window or as PNGs
+ *   tse create <folder> [options]      a new game from the template
+ *   tse lsp                            the language server, on stdin and stdout, for an editor (the VS Code extension starts it)
  *
- * A game's settings live in the "rge" field of its package.json: name, entry, src, generated, scenes, assets, checkAssets.
+ * A game's settings live in the "tse" field of its package.json: name, entry, src, generated, scenes, assets, checkAssets.
  */
 import { UsageError } from "./config.ts";
 
-const USAGE = `usage: rge <command> [folder] [options]
+const USAGE = `usage: tse <command> [folder] [options]
 
   build        compile src to generated
   dev          compile, open the window, hot reload       [--no-watch]
   check        compile, type-check, test, parity
   package      a folder to hand to someone                [--engine node|quickjs] [--headless] [--entry file] [--name name]
-  screenshot   PNGs of a scripted run                     rge screenshot <folder> --script "right*30" --at 0,29 [--gpu] [--compare dir]
+  screenshot   PNGs of a scripted run                     tse screenshot <folder> --script "right*30" --at 0,29 [--gpu] [--compare dir]
   preview      one component at a time, from its stories  [--story HealthBar] [--screenshot | --compare]
-  create       a new game from a template                 rge create <folder> [--name name] [--template blank|menu|platformer] [--packs dir]
-  lsp          the language server for an editor, on stdin and stdout (RGE diagnostics and quick fixes as you type)`;
+  create       a new game from a template                 tse create <folder> [--name name] [--template blank|menu|platformer] [--packs dir]
+  lsp          the language server for an editor, on stdin and stdout (TSE diagnostics and quick fixes as you type)`;
 
 export async function main(argv: readonly string[]): Promise<number> {
   const [command, ...rest] = argv;
@@ -53,7 +53,7 @@ export async function main(argv: readonly string[]): Promise<number> {
         return createCommand(rest);
       case "lsp": {
         // Serves until the editor sends `exit`, which ends the process; an editor that just goes away closes stdin.
-        const { startServer } = await import("@rge/language-server");
+        const { startServer } = await import("@tsengine/language-server");
         startServer(process.stdin, process.stdout);
         return await new Promise<number>((done) => process.stdin.on("end", () => done(1)));
       }
@@ -63,12 +63,12 @@ export async function main(argv: readonly string[]): Promise<number> {
         console.log(USAGE);
         return command === undefined ? 2 : 0;
       default:
-        console.error(`rge: unknown command ${command}\n${USAGE}`);
+        console.error(`tse: unknown command ${command}\n${USAGE}`);
         return 2;
     }
   } catch (error) {
     if (error instanceof UsageError) {
-      console.error(`rge ${command}: ${error.message}`);
+      console.error(`tse ${command}: ${error.message}`);
       return 2;
     }
     throw error;

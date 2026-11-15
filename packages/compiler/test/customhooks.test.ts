@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 /** Custom hooks: functions named `use…` that are inlined into the component that calls them. */
 import { after, describe, it } from "node:test";
 
-import { Entity, World, createInputState } from "@rge/runtime";
+import { Entity, World, createInputState } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -186,16 +186,16 @@ function Two() {
   });
 
   it("work from another .tsx file through the command line, which reads the hook where it is imported from", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-hooks-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-hooks-"));
     try {
       mkdirSync(join(dir, "src"));
       writeFileSync(
         join(dir, "src/hooks.tsx"),
-        `import { useMutable, useUpdate } from "@rge/runtime/jsx";\nexport function useClock(rate: number) {\n  const s = useMutable({ t: 0 });\n  useUpdate((dt) => { s.t += dt * rate; });\n  return s.t;\n}\n`
+        `import { useMutable, useUpdate } from "@tsengine/runtime/jsx";\nexport function useClock(rate: number) {\n  const s = useMutable({ t: 0 });\n  useUpdate((dt) => { s.t += dt * rate; });\n  return s.t;\n}\n`
       );
       writeFileSync(
         join(dir, "src/Clock.tsx"),
-        `import { Entity } from "@rge/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" transform={{ x: t }} />;\n}\n`
+        `import { Entity } from "@tsengine/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" transform={{ x: t }} />;\n}\n`
       );
       const repo = resolve(import.meta.dirname, "../../..");
       execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], {
@@ -215,7 +215,7 @@ function Two() {
     const found = getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`,
-        text: `import { Entity, useMutable, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}`,
+        text: `import { Entity, useMutable, useInput, useUpdate } from "@tsengine/runtime/jsx";\n${SOURCE}`,
       },
     ]);
     assert.deepEqual(found, []);

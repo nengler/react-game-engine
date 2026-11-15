@@ -1,4 +1,4 @@
-import { getTilemap } from "@rge/runtime";
+import { getTilemap } from "@tsengine/runtime";
 
 // The generated table registers its maps as it loads.
 import "../../generated/tilemaps.ts";

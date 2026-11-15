@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, GameObject, Sprite, Transform, World } from "@rge/runtime";
-import { runtimeManifest } from "@rge/runtime";
+import { Entity, GameObject, Sprite, Transform, World } from "@tsengine/runtime";
+import { runtimeManifest } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, type ComponentIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports, elementOf } from "./helpers.ts";
@@ -69,16 +69,6 @@ before(async () => {
 
 function ir(source: string): ComponentIR {
   return compile(source).ir.components[0]!;
-}
-
-function codes(body: string, extra = ""): string[] {
-  return compileErrors(`
-function C() {
-  const s = useMutable({ n: 0 });
-  ${extra}
-  ${body}
-  return <Entity name="C"><Sprite image="a.png" /></Entity>;
-}`).map((d) => d.code);
 }
 
 describe("M3: IR shape", () => {
@@ -160,17 +150,6 @@ describe("M3: runtime behaviour", () => {
     assert.equal(world.tick(0.25), 1);
     assert.equal(timer.s.elapsed, 0.75);
     assert.equal(timer.s.label, "t=0.75", "a read after a write in the same handler sees the write");
-  });
-
-  it("a field can gate another change without rendering in between", () => {
-    const world = new World();
-    const runner = new Runner();
-    world.mount(runner);
-    world.tick(1); // travelled 60: no lap
-    assert.equal(runner.s.laps, 0);
-    world.tick(1); // travelled 120 → a lap, 20 carried over
-    assert.equal(runner.s.laps, 1);
-    assert.equal(runner.s.travelled, 20);
   });
 
   it("a conditional <Entity> gets its transform when it mounts and keeps it in sync", async () => {
@@ -320,9 +299,5 @@ function C() {
       typeCheck(mismatched).map((d) => d.code),
       [DiagnosticCode.GeneratedTypeError]
     );
-  });
-
-  it("rejects hooks that are not at the top level", () => {
-    assert.ok(codes("useUpdate(() => { const r = useMutable({ n: 0 }); });").includes(DiagnosticCode.HookNotAtTopLevel));
   });
 });

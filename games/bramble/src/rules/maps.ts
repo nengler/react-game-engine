@@ -16,7 +16,7 @@
  * so a map saved by Tiled with a mistake fails `test/maps.test.ts` rather than the game. The rules see each map as text, as
  * before: `.` ground, `#` wall, `~` water, `b` a bush.
  */
-import type { TilemapData } from "@rge/runtime";
+import type { TilemapData } from "@tsengine/runtime";
 
 import { tilemaps } from "../../generated/tilemaps.ts";
 import { TILE } from "./constants.ts";

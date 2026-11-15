@@ -1,9 +1,9 @@
 {
-  "name": "rge",
-  "displayName": "react-game-engine",
-  "description": "RGE diagnostics and quick fixes for react-game-engine components, as you type.",
+  "name": "tse",
+  "displayName": "tse",
+  "description": "TSE diagnostics and quick fixes for tse components, as you type.",
   "version": "0.0.1",
-  "publisher": "rge",
+  "publisher": "tse",
   "license": "MIT",
   "private": true,
   "engines": {
@@ -14,19 +14,19 @@
   "activationEvents": ["onLanguage:typescriptreact", "onLanguage:typescript"],
   "contributes": {
     "configuration": {
-      "title": "react-game-engine",
+      "title": "tse",
       "properties": {
-        "rge.node": {
+        "tse.node": {
           "type": "string",
           "default": "node",
-          "description": "The Node.js (22.6 or later) that runs the game's `rge lsp`."
+          "description": "The Node.js (22.6 or later) that runs the game's `tse lsp`."
         }
       }
     },
     "commands": [
       {
-        "command": "rge.restart",
-        "title": "react-game-engine: Restart the language server"
+        "command": "tse.restart",
+        "title": "tse: Restart the language server"
       }
     ]
   }

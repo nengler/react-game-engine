@@ -1,4 +1,4 @@
-import { Entity, Shape, Text, useMount, useSpring, useMutable, useTween } from "@rge/runtime/jsx";
+import { Entity, Shape, Text, useMount, useSpring, useMutable, useTween } from "@tsengine/runtime/jsx";
 
 interface NoticeProps {
   text: string;

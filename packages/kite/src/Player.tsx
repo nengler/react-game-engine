@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, Particles, useSquash, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, Particles, useSquash, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import { DashTrail } from "./DashTrail.tsx";
 import { playEvents, squashFor } from "./effects.ts";

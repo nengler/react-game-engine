@@ -1,5 +1,5 @@
 /**
- * Rewind in `rge dev` (DESIGN.md, "Rewind in `rge dev`"): record every frame's input while playing, snapshot the game every second, and go
+ * Rewind in `tse dev` (DESIGN.md, "Rewind in `tse dev`"): record every frame's input while playing, snapshot the game every second, and go
  * back to any recorded frame by restoring the snapshot before it and playing the recorded input again from there, muted and
  * undrawn, to that frame. While paused there, a hot reload plays the same input again with the new code, so the same moment shows
  * with the fix; resuming plays on with live input and drops the recorded future.
@@ -9,7 +9,7 @@
  * a replay differ: each frame's state is hashed as it is played, and a replay that does not match names the first frame that
  * differs.
  */
-import { captureHotState, type GameStore, type HotState } from "@rge/runtime";
+import { captureHotState, type GameStore, type HotState } from "@tsengine/runtime";
 
 import type { Backend } from "./backend.ts";
 import { DrawList } from "./draw.ts";
@@ -19,17 +19,17 @@ import type { Player, PlayerClock, PlayerConfig } from "./loop.ts";
 import {
   KEYS,
   KEY_INDEX,
-  RGE_IN_DT,
-  RGE_IN_HEIGHT,
-  RGE_IN_LEN,
-  RGE_IN_MOUSE_X,
-  RGE_IN_MOUSE_Y,
-  RGE_IN_QUIT,
-  RGE_IN_WHEEL,
-  RGE_IN_WIDTH,
-  RGE_KEY_DOWN,
-  RGE_KEY_PRESSED,
-  RGE_KEY_RELEASED,
+  TSE_IN_DT,
+  TSE_IN_HEIGHT,
+  TSE_IN_LEN,
+  TSE_IN_MOUSE_X,
+  TSE_IN_MOUSE_Y,
+  TSE_IN_QUIT,
+  TSE_IN_WHEEL,
+  TSE_IN_WIDTH,
+  TSE_KEY_DOWN,
+  TSE_KEY_PRESSED,
+  TSE_KEY_RELEASED,
 } from "./protocol.ts";
 import { RecordingBackend } from "./recording.ts";
 import type { InputFrame } from "./recording.ts";
@@ -152,7 +152,7 @@ export class Rewind {
   #last: { records: Float64Array; length: number; texts: readonly string[]; clear: number } | null = null;
   #paused: number | null = null;
   /** The real input while paused, which rewind reads its keys from. */
-  readonly #pausedValues = new Float64Array(RGE_IN_LEN);
+  readonly #pausedValues = new Float64Array(TSE_IN_LEN);
   readonly #pausedKeys = new Uint8Array(KEYS.length);
   readonly #bar = new DrawList();
   /** The first frame a replay found different from the recording, if any. */
@@ -232,7 +232,7 @@ export class Rewind {
     if (this.#live % this.#every === 0) this.#snapshot(this.#live);
     this.#trim();
     const keys = this.#inputs[this.#live + 1 - this.#base]?.keys;
-    if (keys !== undefined && ((keys[PAUSE_KEY] as number) & RGE_KEY_PRESSED) !== 0) this.pause();
+    if (keys !== undefined && ((keys[PAUSE_KEY] as number) & TSE_KEY_PRESSED) !== 0) this.pause();
     return open;
   }
 
@@ -390,7 +390,7 @@ export class Rewind {
     list.text({ ...W, x: 11, y: 17 }, label, 10, this.divergence !== null ? 0xff8a65ff : 0xffffffff);
     this.#real.frame(last?.clear ?? 0, list.records, list.length, list.texts, this.#pausedValues, this.#pausedKeys);
     const keys = this.#pausedKeys;
-    const pressed = (key: number): boolean => ((keys[key] as number) & RGE_KEY_PRESSED) !== 0;
+    const pressed = (key: number): boolean => ((keys[key] as number) & TSE_KEY_PRESSED) !== 0;
     if (pressed(PAUSE_KEY)) this.resume();
     else if (pressed(LEFT)) this.seek(at - 1);
     else if (pressed(RIGHT)) this.seek(at + 1);
@@ -401,11 +401,11 @@ export class Rewind {
       this.#options.saveMoment?.(moment);
       this.#options.log?.(`rewind: saved the moment from frame ${moment.frame} to ${at} (${moment.frames.length} frames)`);
     }
-    return this.#pausedValues[RGE_IN_QUIT] === 0;
+    return this.#pausedValues[TSE_IN_QUIT] === 0;
   }
 
   #width(): number {
-    const w = this.#pausedValues[RGE_IN_WIDTH] as number;
+    const w = this.#pausedValues[TSE_IN_WIDTH] as number;
     return w > 0 ? w : 640;
   }
 }
@@ -432,16 +432,16 @@ function inputFrame(values: Float64Array, keys: Uint8Array): InputFrame {
     const flags = keys[i] as number;
     if (flags === 0) continue;
     const name = KEYS[i] as string;
-    if ((flags & RGE_KEY_PRESSED) !== 0) pressed.push(name);
-    else if ((flags & RGE_KEY_DOWN) !== 0) down.push(name);
-    if ((flags & RGE_KEY_RELEASED) !== 0) released.push(name);
+    if ((flags & TSE_KEY_PRESSED) !== 0) pressed.push(name);
+    else if ((flags & TSE_KEY_DOWN) !== 0) down.push(name);
+    if ((flags & TSE_KEY_RELEASED) !== 0) released.push(name);
   }
   return {
-    dt: values[RGE_IN_DT] as number,
-    width: values[RGE_IN_WIDTH] as number,
-    height: values[RGE_IN_HEIGHT] as number,
-    mouse: { x: values[RGE_IN_MOUSE_X] as number, y: values[RGE_IN_MOUSE_Y] as number },
-    ...(values[RGE_IN_WHEEL] !== 0 ? { wheel: values[RGE_IN_WHEEL] as number } : {}),
+    dt: values[TSE_IN_DT] as number,
+    width: values[TSE_IN_WIDTH] as number,
+    height: values[TSE_IN_HEIGHT] as number,
+    mouse: { x: values[TSE_IN_MOUSE_X] as number, y: values[TSE_IN_MOUSE_Y] as number },
+    ...(values[TSE_IN_WHEEL] !== 0 ? { wheel: values[TSE_IN_WHEEL] as number } : {}),
     ...(pressed.length > 0 ? { pressed } : {}),
     ...(down.length > 0 ? { down } : {}),
     ...(released.length > 0 ? { released } : {}),
@@ -451,7 +451,7 @@ function inputFrame(values: Float64Array, keys: Uint8Array): InputFrame {
 /**
  * Play a saved moment again, as a test does: the game is built, given the moment's state (its game states matched to `stores` by
  * export name, its tree by path), and stepped through the moment's input on a recording backend. `observe` is called after each
- * frame. This is how a moment saved in `rge dev` (F4 while paused) becomes a replay test.
+ * frame. This is how a moment saved in `tse dev` (F4 while paused) becomes a replay test.
  */
 export function replayMoment<T>(
   config: PlayerConfig,

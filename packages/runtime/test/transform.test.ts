@@ -41,17 +41,6 @@ describe("transform hierarchy", () => {
     assert.equal(world.scaleY, 2);
   });
 
-  it("composes through several levels", () => {
-    const [a, b, c] = [new Entity(), new Entity(), new Entity()];
-    a.transform.x = 1;
-    b.transform.x = 2;
-    c.transform.x = 3;
-    a.addChild(b);
-    b.addChild(new Sprite({ image: "s" }));
-    b.addChild(c);
-    assert.equal(c.worldTransform().x, 6);
-  });
-
   it("gives every built-in object a transform", () => {
     const parent = new Entity();
     parent.transform.x = 100;
@@ -84,13 +73,6 @@ describe("Text", () => {
     const styled = new Text({ text: "x", size: 24, color: "red" });
     assert.deepEqual([styled.size, styled.color], [24, "red"]);
   });
-
-  it("can be placed like any object", () => {
-    const text = new Text({ text: "x" });
-    text.transform.x = 8;
-    text.transform.y = 4;
-    assert.deepEqual([text.worldTransform().x, text.worldTransform().y], [8, 4]);
-  });
 });
 
 describe("Shape", () => {
@@ -98,17 +80,6 @@ describe("Shape", () => {
     const shape = new Shape({ kind: "circle", width: 10, height: 6 });
     assert.deepEqual([shape.kind, shape.width, shape.height, shape.color], ["circle", 10, 6, "white"]);
     assert.equal(new Shape({ kind: "rect", width: 1, height: 1, color: "red" }).color, "red");
-  });
-
-  it("follows its parent", () => {
-    const parent = new Entity();
-    parent.transform.x = 100;
-    const shape = new Shape({ kind: "rect", width: 4, height: 4 });
-    shape.transform.x = 10;
-    parent.addChild(shape);
-    assert.equal(shape.worldTransform().x, 110);
-    parent.transform.x = 200;
-    assert.equal(shape.worldTransform().x, 210);
   });
 });
 

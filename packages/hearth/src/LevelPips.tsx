@@ -1,4 +1,4 @@
-import { Entity, Shape } from "@rge/runtime/jsx";
+import { Entity, Shape } from "@tsengine/runtime/jsx";
 
 import { COLOR } from "./theme.ts";
 

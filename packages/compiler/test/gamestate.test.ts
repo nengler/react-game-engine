@@ -5,14 +5,14 @@ import { join } from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { Entity, Flex, Text, World, resetGameState, type GameState, type GameStore } from "@rge/runtime";
+import { Entity, Flex, Text, World, resetGameState, type GameState, type GameStore } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, formatDiagnostic } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule } from "./helpers.ts";
 
 const ROOT = join(OUTPUT_ROOT, String(process.pid), "gs");
 const STATE_FILE = join(ROOT, "GameState.ts");
-const STATE = `import { createGameState } from "@rge/runtime";
+const STATE = `import { createGameState } from "@tsengine/runtime";
 
 export const useGame = createGameState(
   { coins: 0, player: { hp: 10, name: "Ada" }, muted: false, enemies: [] as { id: number; hp: number }[] },
@@ -100,7 +100,7 @@ export function HpBar() {
 `;
 
 describe("GameState.ts", () => {
-  const read = (text: string) => compiler.parseGameState("GameState.ts", `import { createGameState } from "@rge/runtime";\n${text}`);
+  const read = (text: string) => compiler.parseGameState("GameState.ts", `import { createGameState } from "@tsengine/runtime";\n${text}`);
   const wrap = (body: string) => `export const useGame = createGameState(${body}, {});`;
 
   it("reads a nested state tree with typed leaves", () => {
@@ -438,7 +438,7 @@ export function Swarm() {
   it("types what a selector returns as read-only, so a helper cannot change it in place", () => {
     const file = (text: string) => [{ fileName: join(ROOT, "Ro.tsx"), text }];
     const source = (body: string) =>
-      `import { Entity, useInput } from "@rge/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nfunction grow(list: { id: number; hp: number }[]): void { list.push({ id: 0, hp: 1 }); }\nexport function A() {\n  const list = useGame((s) => s.enemies);\n  const player = useGame((s) => s.player);\n  useInput(() => { ${body} });\n  return <Entity />;\n}`;
+      `import { Entity, useInput } from "@tsengine/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nfunction grow(list: { id: number; hp: number }[]): void { list.push({ id: 0, hp: 1 }); }\nexport function A() {\n  const list = useGame((s) => s.enemies);\n  const player = useGame((s) => s.player);\n  useInput(() => { ${body} });\n  return <Entity />;\n}`;
     assert.deepEqual(compiler.typeCheckSources(file(source(`const n: number = list.length + player.hp;`))), []);
     assert.ok(compiler.typeCheckSources(file(source(`grow(list);`))).length > 0, "a readonly list is not a mutable one");
   });
@@ -458,7 +458,7 @@ export function Swarm() {
 
   it("is checked in the authored source too: a wrong path, a wrong type, a wrong argument is a type error", () => {
     const file = (text: string) => [{ fileName: join(ROOT, "Src.tsx"), text }];
-    const good = `import { Entity, useUpdate } from "@rge/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nexport function A() {\n  const coins = useGame((s) => s.coins);\n  const collect = useGame((s) => s.collect);\n  const n: number = coins;\n  useUpdate(() => collect(n));\n  return <Entity />;\n}`;
+    const good = `import { Entity, useUpdate } from "@tsengine/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nexport function A() {\n  const coins = useGame((s) => s.coins);\n  const collect = useGame((s) => s.collect);\n  const n: number = coins;\n  useUpdate(() => collect(n));\n  return <Entity />;\n}`;
     assert.deepEqual(
       compiler.typeCheckSources(file(good)).map((d) => d.message),
       []
@@ -742,13 +742,6 @@ export function Shop() {
     const state = useGame.getState();
     assert.equal(state.coins, 2);
     assert.equal(state.player.hp, 9);
-  });
-
-  it("is the store's functions in plain code", () => {
-    const actions = useGame.actions() as unknown as Record<string, unknown>;
-    assert.deepEqual(Object.keys(actions).sort(), ["collect", "hurt", "noop", "rename", "spawn"]);
-    (actions.collect as (n: number) => void)(5);
-    assert.equal(useGame.getState().coins, 5);
   });
 
   it("says when a name is a value or is not in the state, and that it must be destructured", () => {

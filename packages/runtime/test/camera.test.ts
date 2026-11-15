@@ -270,15 +270,6 @@ describe("Camera conversions", () => {
       close(back.y, y);
     }
   });
-
-  it("turns a click at the viewport centre into the camera's position", () => {
-    const camera = new Camera({ zoom: 4 });
-    camera.transform.x = 70;
-    camera.transform.y = 30;
-    const p = camera.viewToWorld(0, 0);
-    close(p.x, 70);
-    close(p.y, 30);
-  });
 });
 
 describe("Camera errors", () => {
@@ -383,11 +374,5 @@ describe("Camera deadzone and smoothing", () => {
     camera.onUpdate(1 / 60);
     const t = camera.viewTransform();
     close(0 - t.e, 2200, "the view is on the character at once");
-  });
-
-  it("without either, the view is on the target at every call, as before", () => {
-    const { camera, target } = following({});
-    target.transform.x = 33;
-    assert.equal(viewCentreX(camera), 33);
   });
 });

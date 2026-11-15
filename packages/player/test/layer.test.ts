@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 /** `<Layer>` (ABI v10): its children are drawn between a layer-begin and a layer-end record, at its own z, its opacity on the end. */
 import { describe, it } from "node:test";
 
-import { Entity, Hud, Layer, Light, Lighting, Shape, type GameObject, type LayerProps } from "@rge/runtime";
+import { Entity, Hud, Layer, Light, Lighting, Shape, type GameObject, type LayerProps } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 function draw(root: GameObject, frames = 1): DecodedRecord[] {
@@ -29,7 +29,7 @@ function drawWith(
   });
   for (let i = 0; i < frames; i++) {
     const built = builder.build(root, 400, 300, options.time);
-    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   }
   return { records: [...backend.lastFrame.records], warnings };
 }

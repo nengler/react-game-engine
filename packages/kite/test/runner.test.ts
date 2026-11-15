@@ -7,9 +7,9 @@ import assert from "node:assert/strict";
  */
 import { describe, it } from "node:test";
 
-import { parseInputScript } from "@rge/player";
-import { createInputState, Shape } from "@rge/runtime";
-import { render } from "@rge/testing";
+import { parseInputScript } from "@tsengine/player";
+import { createInputState, Shape } from "@tsengine/runtime";
+import { render } from "@tsengine/testing";
 
 import { Runner } from "../generated/Runner.ts";
 import { newBody, stepBody, type Body } from "../src/rules/body.ts";

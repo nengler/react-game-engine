@@ -6,7 +6,7 @@ that led there are in git history. What still trips a new author is in [PAIN_POI
 
 **Who it is for.** Mostly the author, making their own games; open-sourcing it is a goal for later. A real game comes first,
 readiness for other people second. **Local first:** a game is written, played and packaged on one desktop machine. There is no
-web backend, no hosted build and nothing published yet.
+web backend and no hosted build. A release publishes the `@tsengine/*` packs to npm (README, "Releases").
 
 ## Now (decided 2026-11-15)
 
@@ -19,7 +19,7 @@ backend and QuickJS performance are set aside for now.
 | 1 | Finish the game-state migration: every game on `createGameState(data, actions)` | Done (#144) |
 | 2 | Fix the docs: the guide and the notes match the code | Done: the notes were cut to DESIGN.md, PLAYER.md, LAYOUT.md, the game docs and this file |
 | 3 | Props read live everywhere, and React subset gaps | Done (#146) |
-| 4 | Checking visuals with a GPU renderer (`rge screenshot --gpu`) | Done (#147) |
+| 4 | Checking visuals with a GPU renderer (`tse screenshot --gpu`) | Done (#147) |
 | 5 | Render targets and blend modes (`<Layer>`, ABI v10) | Done (#151) |
 | 6 | Shaders on layers (ABI v11) | Done (#153) |
 | 7 | Lighting: `<Lighting>` and `<Light>` (ABI v12), no shadows | Done (#154) |
@@ -32,13 +32,13 @@ Every step is done; the next order has not been set.
 
 These cannot be checked in a cloud container, and each has found bugs the tests did not.
 
-- **macOS** (decided 2026-11-15: the owner will make games on a Mac). Nothing has been built or run on macOS: librge's CMake build,
-  `rge dev`, `rge package` (both engines), the link lists in `host/build.rs` and the storage paths are written for it but
+- **macOS** (decided 2026-11-15: the owner will make games on a Mac). Nothing has been built or run on macOS: libtse's CMake build,
+  `tse dev`, `tse package` (both engines), the link lists in `host/build.rs` and the storage paths are written for it but
   unverified, and CI is Linux only. Build and play the demo there, file what breaks, then add a macOS CI job if it builds. Linux
   stays the only supported platform until then.
 - **Play in a real window**: the demo and Hearth under Node and packaged (V8 and `--engine quickjs`); Bramble packaged; rewind in
-  `rge dev`. Kite and Bramble have been played under Node on a Linux desktop, with sound.
-- **A save across a real quit** under both hosts (each host was only tested against librge separately).
+  `tse dev`. Kite and Bramble have been played under Node on a Linux desktop, with sound.
+- **A save across a real quit** under both hosts (each host was only tested against libtse separately).
 - **A map saved by Tiled itself.** Every map so far was written by a tool, so the importer has never seen a file Tiled wrote.
   Open Bramble's overworld in Tiled, save it, and fix what breaks.
 - **The guide followed from scratch** by someone who did not write it, from an empty folder to a packaged game.
@@ -57,7 +57,7 @@ Each row waits because nothing above depends on it or no game has asked for it y
 | Web backend (canvas) | Local first; draw records map straight onto canvas calls, so it stays cheap to add. Storage would add a `localStorage` implementation behind the player's `Storage` | Wanting a browser build to share, or runnable examples in the guide |
 | Windows | Link lists and Node packaging steps are written but unverified | Someone wanting to play there |
 | High DPI | Slots into the ABI without rework; everything is logical pixels | A blurry Retina window (likely on the Mac) |
-| One-file executable, a smaller V8 build, signing, publishing to npm (package names and scope undecided) | A package as a folder works; `--engine node` ships all of Node, about 125 MB | Handing a build to someone else, or open-sourcing |
+| One-file executable, a smaller V8 build, signing | A package as a folder works; `--engine node` ships all of Node, about 125 MB | Handing a build to someone else, or open-sourcing |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating |
 | QuickJS: a 10 ms target for 2,000 objects with colliders, bench budgets in CI | V8 is the main engine since 2026-11-10; QuickJS is the JIT-free fallback | Shipping to a platform that bans a JIT |
 | Hearth wave 10 under QuickJS (99th percentile about 29 ms) | Fine under V8 | A hitch seen in the last waves: move the enemy's position out of its props, or draw all health bars from one component |
@@ -72,7 +72,7 @@ Each row waits because nothing above depends on it or no game has asked for it y
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Spread onto a built-in (`<Shape {...p} />`, `RGE1203`) | Needs the keys from the manifest's members; no game wanted it | A game writing it |
+| Spread onto a built-in (`<Shape {...p} />`, `TSE1203`) | Needs the keys from the manifest's members; no game wanted it | A game writing it |
 | Destructuring declarations inside a block | Never hit by a game | An author hitting it |
 | `save: false` on a field, to keep it out of saves | No game needs it; Hearth does not save mid-wave | A game with state that must not be saved |
 | Errors inside a custom hook naming the hook's line and the call | Hooks are inlined, so the error points at the expansion | Custom hooks used widely |
@@ -108,4 +108,4 @@ bars, nine-slice options, sliders, a sharp `<Hud>` over a pixel-art world, sever
 - **No macOS or Windows CI** until a build works there (2026-11-09; the macOS step above would change it).
 - **Actions as the only writers of the game state.** A shortcut for small writes (a `free: [...]` list) is open, but no game has
   asked for one.
-- **Allowing a field write in `useUnmount`** (refused today, `RGE1402`) is open.
+- **Allowing a field write in `useUnmount`** (refused today, `TSE1402`) is open.

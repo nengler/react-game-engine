@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `inert` and `modal` written in components: a menu made inert from a prop, and a modal overlay that takes the keys while shown. */
 import { after, describe, it } from "node:test";
 
-import { World, createInputState } from "@rge/runtime";
+import { World, createInputState } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 

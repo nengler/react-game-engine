@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `<Collider shape points>` in a component: the shape is a checked literal, and the props reach the collider. */
 import { after, describe, it } from "node:test";
 
-import { Collider, World, type Entity } from "@rge/runtime";
+import { Collider, World, type Entity } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 

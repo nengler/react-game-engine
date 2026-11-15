@@ -9,7 +9,7 @@ import { crc32, inflateRawSync } from "node:zlib";
 import { packVscode } from "../../../tools/pack-vscode.ts";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const out = mkdtempSync(join(tmpdir(), "rge-vsix-"));
+const out = mkdtempSync(join(tmpdir(), "tse-vsix-"));
 after(() => rmSync(out, { recursive: true, force: true }));
 
 /** Every file of a zip, by name, read through its central directory, with each CRC checked. */
@@ -52,7 +52,7 @@ describe("the VS Code extension's .vsix", () => {
       version: string;
       publisher: string;
     };
-    assert.equal(path, join(out, `rge-vscode-${manifest.version}.vsix`));
+    assert.equal(path, join(out, `tse-vscode-${manifest.version}.vsix`));
     assert.deepEqual(files.get("extension/extension.js"), readFileSync(join(repo, "editors/vscode/extension.js")));
     assert.match(
       files.get("extension.vsixmanifest")!.toString(),

@@ -1,6 +1,6 @@
 /**
  * Input scripts made from routes through the world. A route is a list of legs, each walked with the rules (`step`) until it is
- * done, and what was held is written as the player's input script (`right*48, up*9, …`): the replay format `rge screenshot` and
+ * done, and what was held is written as the player's input script (`right*48, up*9, …`): the replay format `tse screenshot` and
  * the player take. Walking is by axis, to exact pixels, so a leg that does not get there (a wall in the way) throws here
  * instead of producing a script that wanders.
  */

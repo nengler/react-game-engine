@@ -27,7 +27,7 @@ import type { TooltipProps } from "./components/Tooltip.ts";
 /**
  * The authoring entry point: what component source imports.
  *
- *   import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+ *   import { useMutable, useUpdate, Entity, Sprite } from "@tsengine/runtime/jsx";
  *
  * Source TSX is compiled, never run, so everything here is a declaration that
  * exists for the type-checker (the functions throw if called). Prop types are
@@ -39,7 +39,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 import type { SpringOptions, TweenOptions } from "./math.ts";
 
 export type { TransformProps, TransformShorthand, Child } from "./jsx-runtime.ts";
-/** A cutscene's sequence, for a field's type (`intro: null as Sequence | null`); its steps come from `@rge/runtime` in a `.ts` file. */
+/** A cutscene's sequence, for a field's type (`intro: null as Sequence | null`); its steps come from `@tsengine/runtime` in a `.ts` file. */
 export type { Sequence, SequencePosition, Step } from "./sequence.ts";
 import type { TransformShorthand } from "./jsx-runtime.ts";
 
@@ -55,7 +55,7 @@ import type { Context } from "./context.ts";
 export type Setter<T> = (value: T | ((previous: T) => T)) => void;
 
 function compileTimeOnly(name: string): never {
-  throw new Error(`${name} is a compile-time declaration: components are compiled by @rge/compiler, not executed.`);
+  throw new Error(`${name} is a compile-time declaration: components are compiled by @tsengine/compiler, not executed.`);
 }
 
 /**

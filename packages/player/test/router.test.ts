@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createInputState, Entity, Route, Router, Shape, World, type InputState, type Transition } from "@rge/runtime";
+import { createInputState, Entity, Route, Router, Shape, World, type InputState, type Transition } from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 

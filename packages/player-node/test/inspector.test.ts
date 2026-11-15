@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-/** The development inspector (DESIGN.md, "Seeing inside a running game"): `rge dev`'s page of the tree, a component's state and the game state. */
+/** The development inspector (DESIGN.md, "Seeing inside a running game"): `tse dev`'s page of the tree, a component's state and the game state. */
 import { describe, it } from "node:test";
 
-import { createPlayer, RecordingBackend, Rewind } from "@rge/player";
-import { Entity, World, createGameState } from "@rge/runtime";
+import { createPlayer, RecordingBackend, Rewind } from "@tsengine/player";
+import { Entity, World, createGameState } from "@tsengine/runtime";
 
 import { startInspector } from "../src/inspector.ts";
 
@@ -69,7 +69,7 @@ describe("the inspector", () => {
     const inspector = await startInspector({ root: () => root, stores: () => stores, log: (m) => logged.push(m) });
     try {
       const page = await (await fetch(inspector.url)).text();
-      assert.match(page, /<title>rge inspector<\/title>/);
+      assert.match(page, /<title>tse inspector<\/title>/);
 
       const first = await events(inspector.url, (seen) => seen.has("tree") && seen.has("stores"));
       const tree = first.get("tree") as { children: { id: number; name: string; component: boolean }[] };

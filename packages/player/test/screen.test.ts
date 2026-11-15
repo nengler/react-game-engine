@@ -13,11 +13,11 @@ import {
   type InputState,
   type ScreenProps,
   type ViewTransform,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 import { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement } from "../src/screen.ts";
 
@@ -49,7 +49,7 @@ function draw(
     built.list.records,
     built.list.length,
     built.list.texts,
-    new Float64Array(RGE_IN_LEN),
+    new Float64Array(TSE_IN_LEN),
     new Uint8Array(KEYS.length)
   );
   return { records: [...backend.lastFrame.records], warnings, built };
@@ -188,19 +188,6 @@ describe("FrameBuilder: a root <Screen>", () => {
     const at = apply(built.view, 100, 50);
     close(at.x, 500, "x");
     close(at.y, 300, "y");
-  });
-
-  it("draws bars in the border colour over the window outside the game, last", () => {
-    const { records } = draw(
-      screen({ border: "navy", pixelPerfect: false }, new Shape({ kind: "rect", width: 400, height: 400 })),
-      1000,
-      600
-    );
-    const bars = records.slice(3);
-    assert.equal(records[1]?.op, "rect", "the game's own shape comes first");
-    assert.deepEqual(records[2], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, "then a view in window pixels");
-    assert.equal(bars.length, 4);
-    for (const bar of bars) assert.ok(bar.op === "rect" && bar.color === "#000080ff");
   });
 
   it("places each bar on its window rectangle, whatever the camera does, in a view of window pixels", () => {

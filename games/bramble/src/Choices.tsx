@@ -1,4 +1,4 @@
-import { Flex, Menu, Text } from "@rge/runtime/jsx";
+import { Flex, Menu, Text } from "@tsengine/runtime/jsx";
 
 import { type Row } from "./rules/menu.ts";
 

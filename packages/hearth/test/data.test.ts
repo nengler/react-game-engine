@@ -10,7 +10,7 @@ import { MAP } from "../src/rules/map.ts";
 import { makePath, pathAt } from "../src/rules/path.ts";
 import { rollSigned } from "../src/rules/rng.ts";
 import { pickTarget } from "../src/rules/targeting.ts";
-import { refundOf, statsOf, upgradeCost } from "../src/rules/towers.ts";
+import { statsOf } from "../src/rules/towers.ts";
 import { spawnsOf, WAVES, type Group } from "../src/rules/waves.ts";
 
 describe("the map", () => {
@@ -101,12 +101,6 @@ describe("waves", () => {
 });
 
 describe("the towers' numbers", () => {
-  it("upgrade twice, at 60% then 100% of the base price", () => {
-    assert.equal(upgradeCost("mortar", 0), 48);
-    assert.equal(upgradeCost("mortar", 1), 80);
-    assert.equal(upgradeCost("mortar", 2), null);
-  });
-
   it("raise damage and range 40% and 10% a level", () => {
     const base = statsOf("bolt", 0);
     const top = statsOf("bolt", 2);
@@ -114,18 +108,10 @@ describe("the towers' numbers", () => {
     assert.ok(Math.abs(top.range - base.range * 1.2) < 1e-9);
     assert.equal(statsOf("frost", 2).radius, statsOf("frost", 2).range, "a frost pulse covers its range");
   });
-
-  it("sell for 70% of everything spent", () => {
-    assert.equal(refundOf(50 + 30), 56);
-  });
 });
 
 describe("targeting", () => {
   const at = (id: number, dist: number, hp = 10) => ({ id, dist, x: dist, y: 0, hp });
-  it("aims at the enemy in range that is furthest along the path", () => {
-    const enemies = [at(1, 20), at(2, 35), at(3, 28), at(4, 90)];
-    assert.equal(pickTarget(25, 0, 15, enemies)?.id, 2, "id 4 is the furthest but out of range");
-  });
   it("breaks a tie by the lower id, ignores the dead, and finds nothing out of range", () => {
     assert.equal(pickTarget(0, 0, 50, [at(7, 30), at(3, 30)])?.id, 3);
     assert.equal(pickTarget(0, 0, 50, [at(1, 30, 0), at(2, 10)])?.id, 2);

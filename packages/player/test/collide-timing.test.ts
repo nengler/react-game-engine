@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { describe, it } from "node:test";
 
-import { Collider, Entity, Shape, type GameObject } from "@rge/runtime";
+import { Collider, Entity, Shape, type GameObject } from "@tsengine/runtime";
 
 import { createPlayer, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";

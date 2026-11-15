@@ -2,13 +2,13 @@
 
 This document describes the architecture of the TSX → TypeScript game-object compiler and the runtime it targets, the
 decisions taken, and the alternatives that were considered. It is the place to push back on a decision before more code is
-built on top of it. The native player (librge, its ABI, the hosts and their performance) is described in [PLAYER.md](PLAYER.md),
+built on top of it. The native player (libtse, its ABI, the hosts and their performance) is described in [PLAYER.md](PLAYER.md),
 and `<Flex>` layout and the fixed game resolution in [LAYOUT.md](LAYOUT.md). A date after a heading is when that decision was
 taken; the section describes the code as it is now.
 
 ## Ground rules and settled decisions
 
-A change that breaks one of these rules is written up first (a section here, or in [PLAYER.md](PLAYER.md) for the player) and agreed before it is built. [PLAYER.md](PLAYER.md) adds the player's own rules: the runtime stays backend-free; `@rge/player` and `@rge/runtime` import nothing from Node; `rge.h` is the source of truth for the protocol; the C side does no maths.
+A change that breaks one of these rules is written up first (a section here, or in [PLAYER.md](PLAYER.md) for the player) and agreed before it is built. [PLAYER.md](PLAYER.md) adds the player's own rules: the runtime stays backend-free; `@tsengine/player` and `@tsengine/runtime` import nothing from Node; `tse.h` is the source of truth for the protocol; the C side does no maths.
 
 - **Feel like ideal React.** A component is a function of state and props, hooks follow React's conventions, and imports, `key`, and callbacks-as-props look like React's. "Ideal" means React's model, not its accidents (stale closures, dependency arrays). A feature that makes authors learn an engine-specific API where a React one exists needs a design note first.
 - **IR first.** Each feature starts as new variants in the `packages/compiler/src/ir/` files (`types.ts` re-exports them all). Code is generated only from IR, never from the AST.
@@ -26,15 +26,15 @@ Decisions, each still in force:
 | Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text for type-checking, plus a structured `PropTypeIR` (primitives, literal unions, arrays, function, source text) for the prefab schema. A type the compiler cannot describe is a code-only prop (`settable: false`), so the "revisit for prefab schemas" case did not arise and the checker is not queried (settled in M4a/M6) |
 | Input model | Per-frame `useInput` hook with polled `InputState` for devices. Events that belong to an element are callback props on that element (`<Collider onCollisionEnter>`, `<Pointer onPress>`), lowered to `CallbackProp` with parameter types from the manifest's `intrinsicCallbacks`; no separate event-prop IR variant |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
-| Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
+| Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `TSE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | `useMutable` (2026-11-14, replacing `useState` and React's snapshot): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. Every handler sees the latest writes, in the order handlers run (tree order); render sees the frame's committed state. See "State: `useMutable`" |
 | Global state | `createGameState(data, actions)` in `GameState.ts`, real code the game runs: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (paths the compiler checks and subscribes to), read-only; **update** by calling an action from `useGame.actions()` in a handler. Per process, reset by the player. Decided 2026-11-09 as a Zustand store changed with `set`; that form was removed 2026-11-15. See "Global state" |
-| Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`RGE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
+| Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`TSE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
-| Mutating state in place | A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`, a `for … of` over a field writing its items) is lowered to the copy the author would write: the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value and an alias (`const e = s.enemies[i]; e.hp = 0`) are refused (`RGE1301` / `RGE1402`, with what to write instead); any other in-place write to something that is not a field or a `let` local is refused too. No dev-mode `Object.freeze`. See "State: `useMutable`" |
+| Mutating state in place | A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`, a `for … of` over a field writing its items) is lowered to the copy the author would write: the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value and an alias (`const e = s.enemies[i]; e.hp = 0`) are refused (`TSE1301` / `TSE1402`, with what to write instead); any other in-place write to something that is not a field or a `let` local is refused too. No dev-mode `Object.freeze`. See "State: `useMutable`" |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters |
@@ -63,22 +63,22 @@ Decisions, each still in force:
 Each stage is a pure function of the previous stage's output. Only the parser
 and type checker talk to the TypeScript process.
 
-**Source maps** (`rge-compile --source-maps`, or `compile(name, text, { file, source })`): a version 3 map beside each
+**Source maps** (`tse-compile --source-maps`, or `compile(name, text, { file, source })`): a version 3 map beside each
 generated file. Each generated line maps to the start of the construct it was written for (the component, a hook, an element:
 the IR's spans), not to the exact expression, so a stack trace through `node --enable-source-maps` names the right line of
 the `.tsx`. Spans already point at the source as written, through the custom-hook inliner's `EditMap`.
 
 **Errors in the source** (2026-11-12). Every `compile` now returns the same line origins
 (`origins`), with or without a map. The command line keeps them per generated file, and `mapToSource` moves each type error the
-check of the generated code finds (`RGE9001`) to the source line of the construct its generated line was written for, keeping
-where it was found: `src/Settings.tsx:9:28 - error RGE9001: TS2345: … (in the generated out/Settings.ts:44:59)`. A line written for
+check of the generated code finds (`TSE9001`) to the source line of the construct its generated line was written for, keeping
+where it was found: `src/Settings.tsx:9:28 - error TSE9001: TS2345: … (in the generated out/Settings.ts:44:59)`. A line written for
 no construct (an import, the class header) keeps its generated position. And when a file fails to compile, the generated code is
 not type-checked at all ("skipped type-checking the generated code"), as scenes are not validated: the other files would only
 report its module as missing, or check against an old one.
 
 **Errors while the game runs** (2026-11-12). A thrown error read `at Main.onInput (generated/Main.ts:71:7)`: a generated file and a
-method the author never wrote. `compileArgs` (what `rge dev`, `build` and `check` compile with) now passes `--source-maps`, and `rge dev`
-runs the window, and `rge check` its tests, under `node --enable-source-maps`, so the same error reads
+method the author never wrote. `compileArgs` (what `tse dev`, `build` and `check` compile with) now passes `--source-maps`, and `tse dev`
+runs the window, and `tse check` its tests, under `node --enable-source-maps`, so the same error reads
 `at Main.onInput (src/Main.tsx:14:3)`, the line of the hook (the map is line-level: a generated line maps to the start of the construct
 it was written for). The dev window's error screen shows the stack as Node formats it, so it is mapped too, and hot reload's
 `?v=N` module URLs map (the `sourceMappingURL` is read relative to the module). The method name stays: it is the component's class
@@ -113,7 +113,7 @@ Limitations found while integrating:
 ## Authoring model
 
 ```tsx
-import { useMutable, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, Entity, Sprite } from "@tsengine/runtime/jsx";
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {
@@ -158,18 +158,18 @@ ignored):
   children, so they come and go together (decided 2026-11-11). Text children
   go in a `<Text>` or a component that forwards them (see "Text"); spread props are in "Spread props".
 * Imports: components from `./Name.tsx`, and hooks, built-in elements and
-  `clamp` and the `Child` type from `@rge/runtime/jsx` (the manifest's
+  `clamp` and the `Child` type from `@tsengine/runtime/jsx` (the manifest's
   `authoringModule`; the type is written `import { type Child }`, the one
   place `type` is accepted). Named imports only; any other import is
-  `RGE1001`, and a name the entry point does not export, a `type` on a value,
-  or a type imported as a value is `RGE1004`. The entry point is a set of declarations (calling
+  `TSE1001`, and a name the entry point does not export, a `type` on a value,
+  or a type imported as a value is `TSE1004`. The entry point is a set of declarations (calling
   one throws) typed from the runtime's own classes, with the `JSX` namespace in
-  `@rge/runtime/jsx-runtime`, so the TSX itself type-checks: a project uses
-  `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`
-  (`packages/example/tsconfig.json`). `rge-compile` runs this check first
-  (`RGE9002`; `--no-check` skips it). Imports are mandatory, as in React: a
+  `@tsengine/runtime/jsx-runtime`, so the TSX itself type-checks: a project uses
+  `"jsx": "react-jsx"` and `"jsxImportSource": "@tsengine/runtime"`
+  (`packages/example/tsconfig.json`). `tse-compile` runs this check first
+  (`TSE9002`; `--no-check` skips it). Imports are mandatory, as in React: a
   hook, built-in element or runtime function used without being imported is
-  `RGE1005` (reported once per name per file, naming the import line to
+  `TSE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
   element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`,
@@ -181,7 +181,7 @@ ignored):
   `useMount(() => ...)` and `useUnmount(() => ...)` statements; each may
   appear several times and runs in source order.
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
-  `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
+  `<Collider>`) report `TSE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`,
   `Shape`, `Camera`, `AnimatedSprite`, `Pointer`; the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
@@ -197,7 +197,7 @@ ignored):
 ## State: `useMutable` (2026-11-14)
 
 A component's state is `const s = useMutable({ hp: 3, foes: [] as Foe[] })`, written directly (`s.hp -= 1`,
-`s.foes.push(f)`). There is no `useState` and no `useRef`: each is `RGE1102`, whose message writes out the conversion in the
+`s.foes.push(f)`). There is no `useState` and no `useRef`: each is `TSE1102`, whose message writes out the conversion in the
 author's names, once per hook. The editor's quick fix and `node tools/codemod-mutable.ts <files or folders>` convert a whole file
 (both are `convertToMutable`, `packages/compiler/src/codemod/mutable.ts`; a ref used as a value, such as returned from a hook, is
 left for a person).
@@ -232,7 +232,7 @@ it, since `setA(b); setB(a)` and `setX(x + 1)` twice would mean something React 
    whose item's key is gone, says nothing, and the child's last props stand. Render reads what the frame committed. React keeps
    reads stale for UI reasons (a consistent screen, concurrent rendering) that a fixed-step game loop does not have; the price is
    that update order is visible, which is why it is defined and tested.
-4. **Render stays pure.** No writes in the component body (`RGE1402`); a write belongs in a handler.
+4. **Render stays pure.** No writes in the component body (`TSE1402`); a write belongs in a handler.
 
 **Lists and objects changed in place are lowered to copies.** `s.list.push(x)` becomes `s.list = [...s.list, x]`, and
 `s.list[i].hp -= 1` becomes `s.list.with(i, { ...item, hp })`, copying each level the path passes through and sharing the rest.
@@ -264,8 +264,8 @@ write state as handlers do.
 
 **No `useRef`.** A ref was a field that never renders, readable in handlers only. A `useMutable` field nothing in render reads
 costs one comparison, not a redraw, since each part of `render()` is guarded by what it reads, so two hooks for one kind of value
-were not worth keeping. A field cannot be written in `useUnmount` (`RGE1402`), which a ref could; to tell the parent, call a
-callback prop (`onGone?.()`). There is no `ref={…}` on elements either (`RGE1106`).
+were not worth keeping. A field cannot be written in `useUnmount` (`TSE1402`), which a ref could; to tell the parent, call a
+callback prop (`onGone?.()`). There is no `ref={…}` on elements either (`TSE1106`).
 
 **Things to know.**
 
@@ -327,7 +327,7 @@ Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | ~~arrays and records in handlers (M5a)~~ | done: `TypeIR` `Array` / `SourceType` for state, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`; see "Arrays and records" |
-| ~~prefabs / scenes (M6)~~ | done: `ComponentIR.isExported`, a generated `prefabs` registry per module, project-level `prefabs.ts` / `prefabs.json`, scene validation (`RGE15xx`), `loadScene` in the runtime, a Tiled importer; see "Prefabs and scenes" |
+| ~~prefabs / scenes (M6)~~ | done: `ComponentIR.isExported`, a generated `prefabs` registry per module, project-level `prefabs.ts` / `prefabs.json`, scene validation (`TSE15xx`), `loadScene` in the runtime, a Tiled importer; see "Prefabs and scenes" |
 | ~~children (M8)~~ | done: `ChildIR` `ChildrenSlot`, `ComponentIR.acceptsChildren`, `ElementIR.children` on a component element are the children passed to it; runtime `attachPassedChild` and friends; see "Children" |
 | ~~keyed lists (M5b)~~ | done: `ChildIR` `KeyedListChild { source, item, index, key, element, dependencies }`, `DependencyIR` `Item`; runtime `(slot, order)` and `queueReorder`; see "Keyed lists" |
 | ~~mount and unmount (M9)~~ | done: `OnMount` / `OnUnmount` hooks carrying a `FunctionIR`; see "Mount and unmount" |
@@ -361,11 +361,11 @@ it may in any JavaScript.
 `TemplateLiteral`. Which calls and in-place changes a handler may make is in "Any expression in handlers" below (the handle
 methods, `input.pressed/down/released` and the like, are in `transform/handles.ts`). `var`, labelled jumps, `this`, `await` and
 closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`") are diagnostics
-(`RGE1301`/`RGE1401`/`RGE1402`).
+(`TSE1301`/`TSE1401`/`TSE1402`).
 
 **Scoping**: component scope (state) → function scope (parameters) → block scope (`const`s). Shadowing follows JS: state is
 emitted as a field of `this`, so a parameter or local of the same name cannot be confused with it. Only a redeclaration in the same
-scope (the function body shares its parameters' scope, as in JS) or rebinding `Math`/`clamp` is `RGE1401`.
+scope (the function body shares its parameters' scope, as in JS) or rebinding `Math`/`clamp` is `TSE1401`.
 
 **Storage.** `const s = useMutable({ vx: 0 })` makes one state slot per field (id
 `Hero.s.vx`, field `$s_vx`, pending `#$s_vxNext`, setter `$set_s_vx`), marked
@@ -458,7 +458,7 @@ What stays out: `this`, `await`, `var`, labelled jumps, and calls of unknown glo
 ### Statements in the component body (2026-11-13)
 
 A component body held hooks, derived `const`s and a `return`; a `let`, a loop or a list built up was
-`RGE1101`, so every list a screen drew was made by the rules (Bramble's `rules/view.ts`). Now a run of body statements that are
+`TSE1101`, so every list a screen drew was made by the rules (Bramble's `rules/view.ts`). Now a run of body statements that are
 not hooks, and not all `const name = …`, is a **render block** (`RenderBlockAnalysis` in the analyzer):
 
 - The analyzer groups consecutive non-hook statements; a run of only derived `const`s keeps each as its own derived value, as
@@ -469,7 +469,7 @@ not hooks, and not all `const name = …`, is a **render block** (`RenderBlockAn
   Its value is `Memo(Block(fn))`: `this.$memo("$block1", [deps], () => (() => { … })())`, the deps being every state, prop and
   game-state path the block reads, so it runs again only when one of them changes (as a derived `const` that calls something).
   Each declared name is a derived value reading its member of the memo.
-- It runs during render, so a setter, a sound or an action called in it is `RGE1101` ("it runs on every render"), a ref read is
+- It runs during render, so a setter, a sound or an action called in it is `TSE1101` ("it runs on every render"), a ref read is
   refused as anywhere outside a handler, and a `return` in it is refused: a component returns once, at its end.
 - Declarations in it are `const` or `let` with one name each, for now; destructuring is refused with a message.
 
@@ -507,14 +507,14 @@ sees its children mounted) and unmounting is parent first (the parent's
 in its world when its own hook runs.
 
 **State.** `useMount` may set state: the setter schedules a render, which runs
-in the same `World.flush()` that mounted it. `useUnmount` may not (`RGE1402`):
+in the same `World.flush()` that mounted it. `useUnmount` may not (`TSE1402`):
 the component is going away, so the update could never render. It may read
 state and call callback props, which is how the parent finds out
 (`onDone?.()`). A callback created for a list item can still read its item
 there (see "Keyed lists").
 
-**Rules.** Top-level only, imported from the authoring module (`RGE1005`),
-one arrow function with no parameters (`RGE1401`), several of a kind allowed
+**Rules.** Top-level only, imported from the authoring module (`TSE1005`),
+one arrow function with no parameters (`TSE1401`), several of a kind allowed
 and run in source order.
 
 ### A cleanup from `useMount` (2026-11-12)
@@ -534,7 +534,7 @@ useMount(() => {
 **Lowering.** `useMount`'s function is lowered with `returns: "cleanup"` (`FunctionOptions`): `return;` and `return value;` are
 both allowed, a returned arrow is a `Callback`, and an expression body that is a call (an `ExpressionStatement`) becomes
 `return call;`, as React's `() => store.subscribe(…)`. A setter, an action or a sound played in an expression body stays a
-statement. Every other handler keeps `returns: "void"`, so `return value;` in `useUpdate` or `useUnmount` is still `RGE1401`.
+statement. Every other handler keeps `returns: "void"`, so `return value;` in `useUpdate` or `useUnmount` is still `TSE1401`.
 
 **Callbacks as values.** The subscription needs an arrow handed to a function, which handlers could not do before ("closures
 that escape" were a diagnostic). Now, in a handler, an arrow passed to a plain function, a method of
@@ -621,7 +621,7 @@ drops, where the rules' events cannot help because the component does not know t
 | Start a component's state over when what it shows changes | `key` on any element, not only on a list's items (`<Dialogue key={talk.id} />`), React's own answer. See "Keyed elements". | Built (2026-11-12) |
 | A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's **own** setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
 
-**The diagnostic.** `useEffect` and `useLayoutEffect` are `RGE1102` with a message that names these answers (`REMOVED_HOOKS`
+**The diagnostic.** `useEffect` and `useLayoutEffect` are `TSE1102` with a message that names these answers (`REMOVED_HOOKS`
 in `analyzer/model.ts`), not a bare "Unknown hook".
 
 ## Arrays and records
@@ -647,7 +647,7 @@ an element type, or a `SourceType { text }` (a type written in the file:
 to the file's copied type declarations, so the type-check resolves it. A
 primitive is inferred from the initial value; a field initialised from a prop
 takes the prop's type; an empty array or a record needs its type
-(`enemies: [] as EnemyData[]`; an empty array with none is `RGE1104`, as `[]`
+(`enemies: [] as EnemyData[]`; an empty array with none is `TSE1104`, as `[]`
 alone would be `never[]` in TypeScript). An array field is typed `MutableList<T>`
 in the authoring module (see "State: `useMutable`").
 
@@ -670,7 +670,7 @@ early. Members of a runtime handle parameter (`input.pointerX`) remain
 `flatMap`, `some`, `every`, `find`, `findIndex` (each takes a callback), `includes`,
 `indexOf`, `slice`, `concat`, `join` and the rest of the table. None changes its receiver. A mutating method
 (`push`, `splice`, `sort`, …) on a `useMutable` field is lowered to a copy (see "State: `useMutable`"), and on a value a
-handler made itself it is called as written ("Any expression in handlers"); anywhere else it is `RGE1301`, with the form to write.
+handler made itself it is called as written ("Any expression in handlers"); anywhere else it is `TSE1301`, with the form to write.
 A callback is an arrow consumed synchronously by the method, so it never escapes. Its parameters are `Contextual`: the array's
 element type provides them, so `(e) => e.hp > 0` needs no annotation.
 
@@ -699,7 +699,7 @@ return (
 );
 ```
 
-**Rules** (each `RGE1209` otherwise):
+**Rules** (each `TSE1209` otherwise):
 
 * The source is a state or prop array, optionally followed by
   `.filter((e) => …)` (a derived `const` that inlines to one counts).
@@ -713,7 +713,7 @@ return (
 * The element has a `key` that reads the item. A key that reads only the
   index compiles with a warning (instances then follow positions, not
   identities); a key that reads neither is an error, since every item would
-  share it. `key` anywhere else is `RGE1203`.
+  share it. `key` anywhere else is `TSE1203`.
 * A callback prop on the item may read the item but not the index, which
   changes when items move.
 
@@ -790,7 +790,7 @@ The callback may return `cond && <El key … />`, `cond ? <El key … /> : null`
 
 `KeyedListChildIR` gains `condition` and `alternate`. With no `alternate` the list is the source filtered by the condition
 (`source.filter((s) => s.live)`): an item whose condition is false has no instance. With one, the item's instance is `element` while the
-condition is true and `alternate` while it is false, and **both branches need the same `key` expression** (otherwise `RGE1209`). The
+condition is true and `alternate` while it is false, and **both branches need the same `key` expression** (otherwise `TSE1209`). The
 items map holds the union of the two classes, and a `#<field>Branches` map remembers which each key was built as. On render, a key whose
 branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`, with the item's current props; the
 reorder that follows uses the new instance. The branches in the generated code test the condition itself, not a stored flag, so that
@@ -898,8 +898,8 @@ needed in the IR, the generator or the runtime: a new key is a new item, which t
 As with list items, the new instance is added before the old one is removed, so its `useMount` runs before the old one's
 `useUnmount`. The list's dependencies are the key's and the condition's; props that read state are applied as on any list item.
 
-**Limits.** `key` on a component's root is `RGE1203` (it goes where the component is used). A keyed element inside a list
-item's children is `RGE1209` with the same wording as a list there (make the item a component), since it is one. Beside other
+**Limits.** `key` on a component's root is `TSE1203` (it goes where the component is used). A keyed element inside a list
+item's children is `TSE1209` with the same wording as a list there (make the item a component), since it is one. Beside other
 children passed to a component it is a list among them, which works since 2026-11-15 (see "Forwarding"). A key that never changes (`key="x"`) compiles and does
 nothing.
 
@@ -909,7 +909,7 @@ A parent passes elements to a component between its tags, and the component
 decides where they mount (M8):
 
 ```tsx
-import { type Child, Entity, Sprite } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite } from "@tsengine/runtime/jsx";
 
 interface PanelProps {
   title: string;
@@ -945,11 +945,11 @@ without `Panel` knowing, and `{score > 10 && …}` is a conditional child of
 `Scoreboard`. `Panel` only says where they mount, so a passed child's `transform` is
 relative to the container that holds `{children}`.
 
-**Receiving** (`RGE1208`/`RGE1202` otherwise):
+**Receiving** (`TSE1208`/`TSE1202` otherwise):
 
 * The props type declares `children: Child` (`import { type Child }`).
   `children` is not a value prop: it has no `PropDeclIR`, and cannot have a
-  default or be read as a value (`RGE1301`). `ComponentIR.acceptsChildren` is
+  default or be read as a value (`TSE1301`). `ComponentIR.acceptsChildren` is
   set, and the runtime props type becomes `Omit<PanelProps, "children">`, so
   `new Panel({ title })` needs no `children`.
 * `{children}` (or `{props.children}`) is a direct child of a container, once.
@@ -970,10 +970,10 @@ items' order is a path, the list's position and then the item's index (see
 "Forwarding"). A list inside a list item (`{row.cells.map(…)}`) keeps its
 state (instances by key, order, records) in the outer item's record, its
 source may read the outer item (a method taking it), and its callbacks read
-each item around them through that item's record. `children={…}` as an attribute is `RGE1203`. Whether
+each item around them through that item's record. `children={…}` as an attribute is `TSE1203`. Whether
 the receiver renders `{children}` is its own file's business: the source
 type-check catches `<Leaf>…</Leaf>` for a props type without `children`
-(`RGE9002`), and the runtime throws a clear error if a component that does not
+(`TSE9002`), and the runtime throws a clear error if a component that does not
 render `{children}` is given some.
 
 **Generated code.** The receiver records where passed children mount, in its
@@ -1033,7 +1033,7 @@ turn (`compareOrder`). A static passed child is its position (`2`); a list's ite
 among what it passes in front (`passedChildrenForwardAt`), so what it was given sorts between its own `<Title />` and `<Footer />`,
 through any number of forwards. Order ranges (`position × 2²⁰ + i`) were the other way; a path has no limit and needs no
 arithmetic across levels. Plain numbers stay numbers, so children of built-ins sort as before. A forwarding component must itself
-be always present (not in a condition or a list or another component's children): otherwise `RGE1202`, as before.
+be always present (not in a condition or a list or another component's children): otherwise `TSE1202`, as before.
 
 ## Prefabs and scenes
 
@@ -1068,9 +1068,9 @@ files (not only TSX) can place components in a world (M6). Three pieces:
   editors and validators). Both are written only when every file compiled: with a
   failure they would silently leave a component out, so the CLI skips them and
   says so (the files that did compile are still written, as before). It also
-  checks the whole project: an exported name used in two files is `RGE1206`
+  checks the whole project: an exported name used in two files is `TSE1206`
   (scenes refer to prefabs by name), and a static cycle through several files is
-  `RGE1205`. A flag that needs a value (`--scenes`, `--runtime`) without one, an
+  `TSE1205`. A flag that needs a value (`--scenes`, `--runtime`) without one, an
   unknown option, and a source or scenes directory that does not exist are usage
   errors (exit 2), not silent no-ops: CI must not pass without having checked the
   scenes it was told to check.
@@ -1079,7 +1079,7 @@ files (not only TSX) can place components in a world (M6). Three pieces:
   scene and stable across edits (for diffing and hot reload). `transform` is
   `x`, `y`, `z` (draw order), `rotation` (radians), `scaleX`, `scaleY`, `global`.
 
-**Validation.** `rge-compile <src> <out> --scenes <dir>` validates every
+**Validation.** `tse-compile <src> <out> --scenes <dir>` validates every
 `.json` in the directory against the compiled prefabs, after the project
 compiles (a broken project would only produce unknown-prefab noise). The scene
 is parsed into an AST (the JSON `ScriptKind`), so every diagnostic carries the
@@ -1088,15 +1088,15 @@ file, line and column of the offending value, and its JSON path in the message
 
 | Code | Meaning |
 | --- | --- |
-| `RGE1501` | not valid JSON (with the parser's position) |
-| `RGE1502` | not the scene format: version, missing or unknown keys, wrong container, no `id` or `prefab` |
-| `RGE1503` | unknown prefab (lists the known ones) |
-| `RGE1504` | unknown prop (says callbacks cannot be set) |
-| `RGE1505` | missing required prop |
-| `RGE1506` | wrong type: a prop value, an array element, a literal not in the union, a transform field |
-| `RGE1507` | a prop data cannot express |
-| `RGE1508` | duplicate `id` (nested entities included) |
-| `RGE1509` | Tiled import: an unreadable map, or an object or property it cannot turn into an entity |
+| `TSE1501` | not valid JSON (with the parser's position) |
+| `TSE1502` | not the scene format: version, missing or unknown keys, wrong container, no `id` or `prefab` |
+| `TSE1503` | unknown prefab (lists the known ones) |
+| `TSE1504` | unknown prop (says callbacks cannot be set) |
+| `TSE1505` | missing required prop |
+| `TSE1506` | wrong type: a prop value, an array element, a literal not in the union, a transform field |
+| `TSE1507` | a prop data cannot express |
+| `TSE1508` | duplicate `id` (nested entities included) |
+| `TSE1509` | Tiled import: an unreadable map, or an object or property it cannot turn into an entity |
 
 A problem does not stop the walk, so one run reports them all.
 
@@ -1106,7 +1106,7 @@ A problem does not stop the walk, so one run reports them all.
 only; tile layers are a renderer concern. Each object becomes an entity whose
 prefab is its `class` (older Tiled: `type`) and whose props are its custom
 properties (`bool`, `int`, `float`, `string`, `file`, `color`; `object` and
-`class` properties are `RGE1509`). Ids are `"<layer name>/<object id>"`, stable
+`class` properties are `TSE1509`). Ids are `"<layer name>/<object id>"`, stable
 across edits in Tiled; group layers flatten. `rotation` is converted from
 degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
@@ -1166,9 +1166,9 @@ into the surrounding text; comments are ignored. Whitespace follows React: each
 line is trimmed, blank lines are dropped and lines join with one space, so
 whitespace containing a line break disappears (`{n}` then `points` on the next
 line is `5points`; write `{n}{" "}` or keep them on one line for a space).
-HTML entities (`&amp;`) are `RGE1202`, since JSX would decode them and the
+HTML entities (`&amp;`) are `TSE1202`, since JSX would decode them and the
 compiler does not. Elements inside a `Text`, both forms at once, and neither
-form are errors (`RGE1202`, `RGE1203`, `RGE1202`). The generator needs
+form are errors (`TSE1202`, `TSE1203`, `TSE1202`). The generator needs
 nothing special: the content is an ordinary prop, so
 `this.text.text = \`Score: ${this.score}\`` is a plain assignment in
 `render()`, the `Text` keeps its identity, and a change costs the component's
@@ -1191,12 +1191,12 @@ and a component could not take text). Now a props type with `children: TextChild
 which also takes `string`) makes `children` an ordinary value prop rather than a slot. At a use site, `childrenKind` sorts what is
 between a component's tags: words, and `{expressions}` that hold no JSX and are not a forwarded `{children}` slot, are text, and
 `lowerTextContent` folds them into the `children` prop exactly as it folds a `<Text>`'s into `text`; elements are lowered as
-before; both at once is `RGE1202`, naming the two props types. Inside the wrapper `<Text>{children}</Text>` reads the prop, and
+before; both at once is `TSE1202`, naming the two props types. Inside the wrapper `<Text>{children}</Text>` reads the prop, and
 `<Button>{children}</Button>` passes it to a second wrapper the same way. Whether the component takes text is the type-check's to
 say. No inherited style (`<TextStyle>`) was added: a text's look does not depend on where it is in the tree.
 
 **Game-wide defaults.** `<Game textSize textColor>` set what a `<Text>` without its own `size` or `color` uses, as `font` sets its
-font: the player calls `setTextDefaults` from the root when it starts and on each reload (and `@rge/testing` clears them), and
+font: the player calls `setTextDefaults` from the root when it starts and on each reload (and `@tsengine/testing` clears them), and
 `Text.size` and `Text.color` are getters that fall back to them, then to 16 and white. `sized` counts the game's size as given,
 so a bitmap font is drawn at it. Literals, like the other settings.
 
@@ -1226,15 +1226,15 @@ the transform, so a misspelt kind is a compiler diagnostic that names the
 choices rather than a type error in generated code:
 
 ```
-<Shape kind> must be one of "rect", "circle", not 'rectangle' (did you mean "rect"?).   RGE1210
+<Shape kind> must be one of "rect", "circle", not 'rectangle' (did you mean "rect"?).   TSE1210
 ```
 
 The suggestion appears for a plausible typo: a prefix either way (`rectangle`,
 `circ`) or at most two edits (`circel`), case ignored. A non-string literal
 (`kind={3}`, a bare `kind`) is the same error. Any other expression
 (`kind={big ? "circle" : "rect"}`) is left to the type-check: `ShapeProps` types
-`kind` as the union, so a bad literal inside an expression is `RGE9002` in the
-source and `RGE9001` in generated code. The rule is not specific to `Shape`:
+`kind` as the union, so a bad literal inside an expression is `TSE9002` in the
+source and `TSE9001` in generated code. The rule is not specific to `Shape`:
 restricting another built-in's prop is a manifest edit (a test does it to
 `Sprite.image`).
 
@@ -1278,7 +1278,7 @@ is the game's resolution**, the size everything is drawn at before it is scaled 
 // Main.tsx
 export default function Main() {
   return (
-    <Game title="rge demo" width={960} height={540} background="#10131c" assets="assets">
+    <Game title="tse demo" width={960} height={540} background="#10131c" assets="assets">
       <Screen width={320} height={180}>
         <Ground />
         <Camera><Player /></Camera>
@@ -1302,17 +1302,17 @@ the defaults apply. A `<Game>` root overrides them, each prop only where it is w
 `undefined` on the object, which is how the player knows to fall back.
 
 **Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
-(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `RGE1210`. Two are exceptions (below):
+(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `TSE1210`. Two are exceptions (below):
 `timeScale` and `paused` are read every frame and may be state. `<Game>` is only ever a
-component's root: as a child it is `RGE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
-`RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
+component's root: as a child it is `TSE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
+`TSE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
 built-in's.
 
 **No `state` prop** (retired 2026-11-11). It used to hand the game state to the runtime, which never needed it: the player
 starts every game state in the process from its initial values (`resetGameState`), and components read it with selectors,
 with or without a `<Game>`, so `state` is simply not one of its props.
 
-A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
+A user component cannot be called `Game`: it is an intrinsic like `Entity` (`TSE1206`). The demo's root is `Main`.
 
 **Fast-forward and pause: `timeScale` and `paused`** (2026-11-13). Hearth's 2× speed used to run its rules
 twice per engine step, and its pause skipped them: both were the rules' business, and with the battle in components there is no
@@ -1512,27 +1512,27 @@ usual. `global` is an ordinary field, so it can come from state
 writes local fields.
 
 Every built-in element the runtime manifest lists in `transformIntrinsics`
-takes the attribute (today all eight); one left out gets `RGE1207`. On a
+takes the attribute (today all eight); one left out gets `TSE1207`. On a
 component element (`<Enemy transform={…} />`) it is placement by the parent,
 which composes with the child's own root transform (see "Placement" under
 "Props and callbacks"). Malformed objects (spreads,
-computed keys, unknown or duplicate fields) are `RGE1207`. `useTransform` was
-removed; calling it reports `RGE1102` with a pointer to the attribute
-(`RGE1105` is retired).
+computed keys, unknown or duplicate fields) are `TSE1207`. `useTransform` was
+removed; calling it reports `TSE1102` with a pointer to the attribute
+(`TSE1105` is retired).
 
 **Cost**: moving every frame is a state change every frame, so the component
 renders once per tick (one render however many writes there were). `render()`
 re-evaluates only the parts whose inputs changed (see "Dependency-scoped `render()`").
 
 **No `useRef`** (removed 2026-11-14; why is in "State: `useMutable`"). The IR lost `RefIR`, `RefRead` and the `RefCurrent`
-assignment target, and `RGE1304` (a `ref.current` read in JSX) is retired. `ref={…}` on any element is still `RGE1106`, and
-`useRef` is `RGE1102`.
+assignment target, and `TSE1304` (a `ref.current` read in JSX) is retired. `ref={…}` on any element is still `TSE1106`, and
+`useRef` is `TSE1102`.
 
 **useSound** (M15): `const playHit = useSound("hit.wav")` binds a sound, and
 `playHit()` as a statement in a handler (`useUpdate`, `useInput`, `useMount`,
 `onCollisionEnter`, `onPress`, a callback inside an `if`) plays it. It is a
 top-level hook like `useMutable`, with one binding per call, so two bindings of the
-same path are independent. The path is a string literal (`RGE1107` otherwise),
+same path are independent. The path is a string literal (`TSE1107` otherwise),
 so a missing asset can be reported at build time once there is an asset list.
 `SoundIR { id, name, path }` in `ComponentIR.sounds` compiles to a field
 (`readonly playHit: Sound = new Sound("hit.wav")`), and the call is a
@@ -1540,7 +1540,7 @@ so a missing asset can be reported at build time once there is an asset list.
 not state: it happens at once, not at the next render, and marks nothing
 dirty. Because it would play on every render, the function may only be called
 as a statement in a handler: in JSX, a derived `const`, an expression, as a
-value (`onCollisionEnter={play}`) or with arguments it is `RGE1305`. Sounds
+value (`onCollisionEnter={play}`) or with arguments it is `TSE1305`. Sounds
 are not placed, so they do not take `transform`. `Sound` has no
 audio of its own: `play()` counts calls in `plays`, so game logic can be tested, and reports to the
 `SoundSink` a player installs with `setSoundSink` (see "Player").
@@ -1582,11 +1582,11 @@ invariant and its side effects together, gives replays and debugging a named eve
 change `run`?". Calling an action marks the store dirty, and at the end of the action the store compares its draft with the
 committed state leaf by leaf and tells only the readers whose leaves changed, so nothing is added to the read path. Decided 2026-11-09 as a
 Zustand store changed through `set`; since 2026-11-15 the data-and-actions form below is the only one, and the `set` form is
-removed (`RGE1109` names what to write instead).
+removed (`TSE1109` names what to write instead).
 
 ```ts
 // GameState.ts, in the source directory. An ordinary module: the game runs it.
-import { createGameState } from "@rge/runtime";
+import { createGameState } from "@tsengine/runtime";
 
 export const useGame = createGameState(
   { coins: 0, player: { hp: 10, name: "Ada" } },        // the data: a plain object
@@ -1606,8 +1606,8 @@ const hp = useGame((s) => s.player.hp);          const { hurt } = useGame.action
 
 **Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
 store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
-`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. A **plain path** from its parameter
-subscribes to exactly that path; any other expression is a computed selector (below). A typo is `RGE1108`
+`TSE1108` otherwise) and calls it at the top level, bound with `const` to one name. A **plain path** from its parameter
+subscribes to exactly that path; any other expression is a computed selector (below). A typo is `TSE1108`
 with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
 `hp` is then a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
 
@@ -1619,7 +1619,7 @@ a derived value over them, inlined where it is read like any `const` in the body
 it reads changes, and works the value out again then: coarser than Zustand, which compares the selector's result, but the same
 answer. A trailing `.length` (`s.enemies.length`) reads the array's snapshot, since the store reports an array's items, not its
 length; before this, `useGame((s) => s.enemies.length)` subscribed to a path nothing ever reported. An action read inside a
-computed selector is `RGE1301` ("select it by itself"), and `(s) => s` alone is still `RGE1103`.
+computed selector is `TSE1301` ("select it by itself"), and `(s) => s` alone is still `TSE1103`.
 
 **Several values at once** (2026-11-11), as Zustand allows: `const { originX, room } = useGame((s) => s.run)` (a path,
 destructured), `const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }))` (an object literal of paths) and
@@ -1650,7 +1650,7 @@ inspector's history; an action that throws commits nothing. While an action runs
 actions, so plain code it calls (Bramble's save `pick`) reads what it has written so far.
 
 **Writes are actions' only.** A write into a selected value in a component (`run.time = 0`, `hp += 1` after
-`const { hp } = useGame((s) => s.player)`, `items.push(x)`) is `RGE1402` or `RGE1301`, with a message that spells the action to add
+`const { hp } = useGame((s) => s.player)`, `items.push(x)`) is `TSE1402` or `TSE1301`, with a message that spells the action to add
 (`name(s) { s.player.hp = …; }`). What a selector returns is typed `ReadonlyDeep<T>`, so a helper in a `.ts` file that takes a
 mutable `Item[]` or changes an item is a type error for a selected list (it takes `readonly Item[]`, or the action does the change).
 `useGame.getState()` is read-only too. `useGame.setState(partial | updater)` stays, shallow-merged as in Zustand, for code outside
@@ -1663,7 +1663,7 @@ compiler also *reads* it (it never runs it, `gamestate/schema.ts`) to know the s
 data must be an object literal (`as` and `satisfies` around it are fine), whose entries are number, string or boolean literals (a
 negative number is fine; a leaf's type is its literal's, so `0` is a `number`) and nested objects of those. Any other value (an array,
 `newRun()`, a constant) is kept as a *value*: the compiler checks paths down to it and leaves the rest to TypeScript. A function in
-the data, a name in both, spreads and computed keys are `RGE1109`; so are the removed `(set) => ({ … })` form and a call with no
+the data, a name in both, spreads and computed keys are `TSE1109`; so are the removed `(set) => ({ … })` form and a call with no
 actions argument. Keys have no dots. The actions are an object literal of functions (`name(s, …) { … }` or `name: (s, …) => …`).
 
 **Semantics.** Every commit compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
@@ -1706,7 +1706,7 @@ wrote and which reads like the Zustand anti-pattern it was an exception to.
 
 - The destructuring split (`hooks/inline.ts`, `storeSelectionEdits`) turns each name into `const collect = useGame.$actions((s) => s.collect)`,
   which `matchStoreStatement` reads as a selector with `via: "actions"`. An action binding subscribes to nothing, as it always did.
-- A name that is a value of the state is `RGE1108` and says how to read it (`const coins = useGame((s) => s.coins)`); a typo
+- A name that is a value of the state is `TSE1108` and says how to read it (`const coins = useGame((s) => s.coins)`); a typo
   names the nearest action. `useGame.actions()` must be destructured.
 - Names destructured from `useGame((s) => s)` are written `useGame.$wholeN(…)` (N tells the statements apart), and the actions
   among them get one warning per statement that spells the `useGame.actions()` line to write. Values destructured that way
@@ -1720,7 +1720,7 @@ A component may import functions from a relative `.ts` file (`import { fadeThrou
 
 **Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `transform={{ x: GEM_AT.x }}`, and a **method of an imported object** called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
 
-Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is still lowered as a handler as before. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `rge-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
+Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is still lowered as a handler as before. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `tse-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
 
 **`useUpdate` takes the input.** `useUpdate((dt, input) => { step(input, dt); })`: the polled input of that step (under a fixed timestep, the per-step copy with exactly-once key edges), the same object `useInput` gets, and it can be handed to a game-state action or a plain function, which reads the keys with loops and tables (Kite's `rules/controls.ts`). A canonical `onUpdate` override (several handlers, or a root that implements the hook) declares `input` only when it passes it on.
 
@@ -1744,7 +1744,7 @@ type error where the controls are written: `Type '"Spcae"' is not assignable to 
 Every `InputState` question (`pressed`, `down`, `released`) then takes an action name as well as a key name: `down` is any of
 its keys held, `pressed` is one of them going down this step, `released` is one going up with none still held. Rules in plain
 TypeScript read the same names (`input.down("left")`). `<Game controls>` must be an identifier imported from a `.ts` module
-(`RGE1210` otherwise), since the player reads it before the tree is built; `PlayerConfig.controls` does the same for a game
+(`TSE1210` otherwise), since the player reads it before the tree is built; `PlayerConfig.controls` does the same for a game
 without a `<Game>`. `createInputState(snapshot, controls)` gives tests the same answers, and `controls.bindings` is the shape
 an input script's `bindings` takes, so a script's `jump` can hold the game's own keys. An unknown name warns once and lists
 the actions. Not built: rebinding at run time, and axes (a stick's value rather than four directions).
@@ -1785,7 +1785,7 @@ fixed timestep it is deterministic. Its `position` is plain data (`{ index, step
 it, a `call` already made not made again; the closures are rebuilt by the code that makes the sequence, so a save keeps the position
 only. Building Bramble's cutscene found two things about writing one in a component: a field started at `null` cannot have its methods
 called (only an object a function made for the component, a "handle", can), so the cutscene field starts from `noCutscene()`; and
-`import type { Sequence } from "@rge/runtime"` is refused in a component, so `@rge/runtime/jsx` re-exports the type.
+`import type { Sequence } from "@tsengine/runtime"` is refused in a component, so `@tsengine/runtime/jsx` re-exports the type.
 
 ## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
 
@@ -1805,7 +1805,7 @@ React code writes `setTimeout` in a handler; before timers, each delay here was 
 
 ## Seeing inside a running game: the overlay and the inspector (2026-11-13)
 
-Both are development tools of `rge dev` only: the player takes `devtools` (which `playWithReload` sets),
+Both are development tools of `tse dev` only: the player takes `devtools` (which `playWithReload` sets),
 and without it neither exists.
 
 - **The layout overlay** (`player/src/overlay.ts`). With `devtools`, the root's `overlayKey` (F1) turns it on: the frame builder then
@@ -1814,7 +1814,7 @@ and without it neither exists.
   through the frame's views, an outline of each box and its padding, each collider (a colour per layer) and each `<Pointer>`, and
   a label for the box under the mouse (its components, `componentPath`; its size; the `width` and `height` it was given). Gaps are
   not outlined.
-- **The inspector** (`player-node/src/inspector.ts`): an HTTP server on 127.0.0.1 (a free port unless given) that `rge dev`
+- **The inspector** (`player-node/src/inspector.ts`): an HTTP server on 127.0.0.1 (a free port unless given) that `tse dev`
   starts and prints the address of. The page is plain HTML and script; it gets the tree, the selected object and the game states
   as server-sent events, a few times a second while it is open (`update()` from the dev loop, every tenth frame), and only what
   changed; it sends a selection or an edit as a POST. Server-sent events and a POST rather than the WebSocket the plan named:
@@ -1839,9 +1839,9 @@ and without it neither exists.
   Tried on Hearth's wave 10 under Node: `Tower` (16) 0.30 ms a frame, `Enemy` (110) 0.16, `Play` 0.10, collisions 0.41 of a
   1.35 ms frame: the towers' target queries, not the enemies, are the place to look.
 
-## Rewind in `rge dev` (2026-11-13)
+## Rewind in `tse dev` (2026-11-13)
 
-`player/src/rewind.ts`; `rge dev` turns it on.
+`player/src/rewind.ts`; `tse dev` turns it on.
 
 - **Recording.** `Rewind` wraps the backend the player is given (a `Proxy`): live, `frame()` draws and polls as usual and keeps a copy
   of the input it wrote, which is the next frame's. Each frame's state is hashed (`hashState`: the game states' values and the
@@ -1923,23 +1923,23 @@ override render(): void {
 - **Shorthand.** `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` are props of every built-in in the manifest's
   `transformIntrinsics` (`TRANSFORM_SHORTHAND`, `lowerTransform`): they lower to the same transform writes as `transform={{ … }}`,
   so nothing changes at run time and no member is reserved. `opacity` and `global` are not shorthand (`<Sprite>`, `<Flex>` and
-  `<Tilemap>` have an `opacity` prop of their own). A field written both ways is RGE1207, as is the shorthand on a built-in that
+  `<Tilemap>` have an `opacity` prop of their own). A field written both ways is TSE1207, as is the shorthand on a built-in that
   has no transform. The authoring types add `TransformShorthand` to those built-ins only.
 - **Not on components.** The compiler compiles one file at a time and does not know whether an imported component declares an `x`,
   so on a component `x` is always its own prop, and placement is `transform`. One rule, with no case that depends on another file.
 - **`<Flex>` in world space** needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and
   it draws the same pixels as the hand-placed version (its stories' screenshots did not change).
 
-## Diagnostics in the editor: `rge lsp` (2026-11-13)
+## Diagnostics in the editor: `tse lsp` (2026-11-13)
 
-`packages/language-server` (the server and the quick fixes), `rge lsp` (the command line starts it),
+`packages/language-server` (the server and the quick fixes), `tse lsp` (the command line starts it),
 `editors/vscode` (the extension, `npm run vscode:pack`).
 
-- **A server beside TypeScript's.** TypeScript's own server keeps the types, hovers and completions; this one adds the `RGE`
+- **A server beside TypeScript's.** TypeScript's own server keeps the types, hovers and completions; this one adds the `TSE`
   diagnostics only the engine's compiler knows. It speaks the few messages of the Language Server Protocol it needs (whole-text
   sync, diagnostics, code actions, shutdown) directly, with no dependency.
-- **One compiler per game.** A file belongs to the nearest folder above it whose package.json has an `"rge"` field or depends on
-  `@rge/runtime`; only a `.tsx` under its source folder is analysed. `GameProject.diagnose` runs `Compiler.compile` (custom hooks,
+- **One compiler per game.** A file belongs to the nearest folder above it whose package.json has an `"tse"` field or depends on
+  `@tsengine/runtime`; only a `.tsx` under its source folder is analysed. `GameProject.diagnose` runs `Compiler.compile` (custom hooks,
   analysis, the IR and generation, without type checking) on the text as the editor has it: 1 to 8 ms for a small component and
   about 20 ms for Hearth's `Play.tsx` once the TypeScript process is warm, so a document is analysed 150 ms after the last change.
   `GameState.ts` and hook files are read as the editor has them too, and a change to any file of a game analyses its other open
@@ -1949,16 +1949,16 @@ override render(): void {
   `<Text text>` to children (a self-closing `<Text>` only), a whole-state selector to `.actions()`, and a name the authoring module
   does not export. A fix that cannot be made with confidence (an effect with dependencies) is not offered; the message says what
   to do.
-- **The extension** runs the game's own `rge lsp` (the `@rge/cli` its folder resolves), so the messages match the engine the game
+- **The extension** runs the game's own `tse lsp` (the `@tsengine/cli` its folder resolves), so the messages match the engine the game
   is built with, and one server serves every game under one install. It has no dependencies either: no `vscode-languageclient`,
   and the `.vsix` is a zip written by `tools/pack-vscode.ts`.
-- **Packs.** `@rge/language-server` is packed (the command line depends on it) and installed as a dev dependency;
-  `check:outside` asks the packed `rge lsp` for a component's diagnostics.
+- **Packs.** `@tsengine/language-server` is packed (the command line depends on it) and installed as a dev dependency;
+  `check:outside` asks the packed `tse lsp` for a component's diagnostics.
 
-## Previews: stories and `rge preview` (2026-11-13)
+## Previews: stories and `tse preview` (2026-11-13)
 
 `player/src/stories.ts` (the format, and building a story's root), `player-node/src/preview.ts` (the
-window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `previews` step in `rge check`.
+window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `previews` step in `tse check`.
 
 - **Where stories live.** A `stories/` folder beside `test/`, not beside the component in `src/`: a stories file imports the
   generated class as a test does, and the compiler leaves plain `.ts` files in `src/` where they are, so `./HealthBar.tsx` there
@@ -1973,7 +1973,7 @@ window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `
   The label is drawn over the frame through a backend proxy, as rewind's bar is, so it is not part of the screenshot. Rewind and
   the inspector are off.
 - **Screenshots** go through `renderRun` (the headless build), one hidden window per story at its size times its scale, after the
-  story's input and one more step for the layout. `rge check` runs `rge preview --compare` in a process of its own; any pixel that
+  story's input and one more step for the layout. `tse check` runs `tse preview --compare` in a process of its own; any pixel that
   differs fails (`--tolerance` allows a difference per channel). The pictures are the software renderer's, and only the headless
   build is used for them: the OpenGL build blends a translucent colour (Hearth's end screen's shade) a little differently.
 - **Keys.** Rewind's "a second" keys were PageUp and PageDown, which are not in `KEY_NAMES`: `KEY_INDEX.get` gave `undefined` and
@@ -2029,7 +2029,7 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
   springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
   the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
   (`useMutable` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
-  from `@rge/runtime/jsx`, where it is declared for TypeScript.
+  from `@tsengine/runtime/jsx`, where it is declared for TypeScript.
 - **Per-instance objects.** A store in a module is global; an object that belongs to one entity is that component's own,
   made by a factory as a field's initial value: `const s = useMutable({ tally: makeTally() })`. The initial value is evaluated
   once per instance, typed `ReturnType<typeof makeTally>`, and a handler may call
@@ -2076,7 +2076,7 @@ cleared to the darkness, with the lights in it drawn with `childBlend="add"`, an
   tied to desktop GLSL. Not a shader on each sprite: a layer is already the off-screen picture a post-process needs, and a sprite with
   an effect is a layer with one child. The software renderer runs none and says so ([PLAYER.md](PLAYER.md), "ABI v11").
 - **Lights** (2026-11-15, ABI v12): `<Lighting ambient>` is a `Layer` subclass fixed to `multiply` over the world and `add` among its
-  children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`RGE_OP_LIGHT`), so a
+  children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`TSE_OP_LIGHT`), so a
   light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
   glow over what is under it, with normal blending (black at its edge, so it is meant for a lighting layer).
 
@@ -2110,7 +2110,7 @@ export function Player() { usePlatformerBody(); … }
 - **Names.** What the hook declares at its top level (its `const`s, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. The exception is a hook's own `useMutable` (`const b = useMutable(…)`), named after the hook, `useBody` → `body`, so its state is saved as `Comp.body.x`; a second call, or a name the component already uses, numbers it (`body2`), and a hook named for a keyword (`useDefault`) keeps the prefix. A mutable the hook returns (`return s`) takes the caller's name. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
 - **Parameters.** A literal argument (a string, number or boolean) is written into the hook where the parameter is used, so a parameter can be a `useSound` path; any other argument is bound with `const _useName3_p = (argument);`. A missing argument takes the parameter's default. A destructured parameter is a diagnostic.
 - **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A name the hook declares and returns as it is (`return s`, `return [count, step]`) is not copied: the hook's own declaration takes the caller's name, so a hook can hand back its `useMutable` for the caller to read and write (decided 2026-11-11, for setters then). Anything else returned is a value (a state-derived expression).
-- **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `RGE1101` with the hook's name.
+- **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `TSE1101` with the hook's name.
 - **What is left.** After expansion the hook's declaration and its import are removed, so a hooks-only file compiles to an empty module. Positions in later diagnostics are those of the expanded text. An unknown `use…` name is left alone, so the retired hooks keep their messages.
 
 The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useMutable` and friends, which throw only if actually run).
@@ -2129,7 +2129,7 @@ declares); what a function can do and a hook could not is closed:
   the component** (below), so `useEvery(1, () => setTicks(…))` works and the hook calls `fn()` in its handler.
 - **The recursion message names the chain** (`'useA' calls itself through useA → useB → useA`), and the depth limit is 12.
 
-**Functions in the component body.** `const add = (n: number) => { … }` was `RGE1301` ("an arrow function can only be…"). It is
+**Functions in the component body.** `const add = (n: number) => { … }` was `TSE1301` ("an arrow function can only be…"). It is
 now an `OwnFunctionIR`: lowered as a handler (setters, sounds, actions allowed) with the parameter types written on it
 (`paramTypes: "declared"`), and kept in a field, `readonly add = (n: number) => { … };`, written before the element fields so a
 child can be given it. A call in a handler or callback is `this.add(…)` (callee `Own`); passed to an element's callback prop it
@@ -2146,7 +2146,7 @@ A save picked from the game state, so state a component kept itself was lost on 
 the games kept everything in the store. `createSave({ …, tree: true })` keeps the tree too:
 
 - **The game's tree.** `gameTree.ts` holds the world and root the game runs: the player sets it when it mounts the root (and
-  again on a hot reload), and `@rge/testing` when it renders.
+  again on a hot reload), and `@tsengine/testing` when it renders.
 - **Writing.** The entry is `{ version, data, tree }`, `tree` being `captureHotState(root)` (each component's `saveHotState`
   by path) as JSON, without the values that are not plain data (said once, naming each path and field). `pick` and `apply` are
   optional with `tree`.
@@ -2159,7 +2159,7 @@ the games kept everything in the store. `createSave({ …, tree: true })` keeps 
 `version` and `migrate` apply to `data`; the tree is restored as it was saved, field by field where a value still fits
 (`hotFits`), as a hot reload restores across code changes.
 
-## Testing one component: `@rge/testing` (2026-11-13)
+## Testing one component: `@tsengine/testing` (2026-11-13)
 
 A rule is a function, so a test calls it; a component could be tested only by running the whole game
 from an input script and reading the game state or the draw records, which alone was a reason to keep logic out of components.
@@ -2167,7 +2167,7 @@ from an input script and reading the game state or the draw records, which alone
 
 - `render(Component, props, options)` resets the game state (`resetGameState`, unless `keepGameState`), registers
   `options.tilemaps`, makes the component and mounts it under a holder entity in a new `World`.
-- `step(n)` ticks with no input; `input(script)` parses the script with `@rge/player`'s `parseInputScript` (the games' replay
+- `step(n)` ticks with no input; `input(script)` parses the script with `@tsengine/player`'s `parseInputScript` (the games' replay
   format), using `options.controls.toJSON()` as its bindings, and ticks once per frame with `createInputState(frame, controls)`,
   so action names mean what they mean in the game.
 - `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
@@ -2222,7 +2222,7 @@ one-way platforms or slopes. Kite's `Runner` is written with it beside the rules
 
 `<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [PLAYER.md](PLAYER.md). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
 
-**Build-time asset check.** `rge-compile --assets <dir>` (`checkAssets`, `RGE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. The files of a `createSounds({ … })` (a plain `.ts` module, found by scanning the source folder; `checkSoundStores`) are checked the same way, as a name or `{ src }` written as a literal. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
+**Build-time asset check.** `tse-compile --assets <dir>` (`checkAssets`, `TSE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. The files of a `createSounds({ … })` (a plain `.ts` module, found by scanning the source folder; `checkSoundStores`) are checked the same way, as a name or `{ src }` written as a literal. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
 
 ## Props and callbacks
 
@@ -2252,7 +2252,7 @@ function Level() {
 ```
 
 **Declaring props.** One parameter, destructured, annotated with the name of
-an `interface` or `type` object type in the same file (`RGE1208` otherwise: no
+an `interface` or `type` object type in the same file (`TSE1208` otherwise: no
 rest, nesting, generics or `extends`). A prop may be renamed (`{ seed: firstSeed }`, 2026-11-15): the
 binding keeps both names (`PropBindingAnalysis.name` and `local`), the scope declares the local one and every read is
 the prop's (`PropRead`), so a prop and the state it seeds can share a word. Defaults in the destructuring make a
@@ -2267,7 +2267,7 @@ function or source text) so a scene schema (M6) needs no type checker.
 signature is a callback, anything else a value. A value reads as `this.props.x`
 (`PropRead`). A callback is only called (`onDefeated?.()`, `CalleeIR` `Prop`)
 or forwarded whole (`onDone={onDone}`); reading it as a value, or calling a
-value, is `RGE1301`.
+value, is `TSE1301`.
 
 **The child's class** extends `Entity<EnemyProps>`, so `this.props` is
 available to field initialisers, which run right after `super()` returns:
@@ -2303,7 +2303,7 @@ once in the field initialiser, so it reads state through `this` and never goes
 stale; it is therefore never re-sent. Its parameters are unannotated
 (`Contextual`), so TypeScript types them from the child's props type, which the
 parent (compiling one file at a time) cannot see. A function passed to a
-built-in, `key` and `children` are errors (`RGE1203`, `RGE1202`).
+built-in, `key` and `children` are errors (`TSE1203`, `TSE1202`).
 
 **Reads.** A prop may be read in JSX, conditions, derived values, handlers,
 `transform` fields, and the initial value of a `useMutable` field (read once,
@@ -2339,7 +2339,7 @@ a spread is among the props, `updateProps` carries every value prop, in order, s
 (callbacks are made once and are not re-sent). A spread in a list item reads the item and gets the `Item` dependency.
 
 Not supported: a spread onto a **built-in** (`<Shape {...p} />`): its render writes each prop to a field one by one, so a spread needs the
-keys, from the manifest's `intrinsicMembers`. It is `RGE1203` with that reason, until a game spreads onto a built-in (Hearth does not).
+keys, from the manifest's `intrinsicMembers`. It is `TSE1203` with that reason, until a game spreads onto a built-in (Hearth does not).
 `<Box x={5} {...o} />` is TypeScript's own error (`x` is overwritten) when `o` always has `x`.
 
 ### Constants, helpers and index reads beside components (2026-11-11)
@@ -2348,7 +2348,7 @@ A component file may hold top-level `const` values and lower-case `function` hel
 does: `const ROW = { bolt: 0, mortar: 1, frost: 2 } as const;`, `function labelOf(kind, n) { … }`. The analyzer keeps each as a
 `ModuleDeclaration` (its text and the names it mentions), the generator copies it into the module before the components (importing
 what it reads from a `.ts` file or the runtime), and components read it like a plain import, in JSX, lists, derived values and
-handlers. One that holds JSX or reads the game state is `RGE1001` (that belongs in a component); `let` is `RGE1001` (a value that
+handlers. One that holds JSX or reads the game state is `TSE1001` (that belongs in a component); `let` is `TSE1001` (a value that
 changes belongs in state). Render expressions may index (`ROW[kind] * 3 + level`, `pads[cursor]`, `found?.[i]`; `IndexRead`) and
 use TypeScript's `!` (`NonNull`, so the generated code type-checks as the source did). `Math.PI`, `Math.E` and `Math.SQRT2` are
 values, and `atan2`, `atan`, `tan`, `pow`, `hypot` and `trunc` join the allowed `Math` calls.
@@ -2399,12 +2399,12 @@ like any component. Details:
   state, ref or sound whose name is one of them is kept in a field named `$name` instead, and its setter in `$setName` when
   that is one (`claimField`, 2026-11-13): the author writes `name`, the generated code reads
   `this.$name`, and the entity's own `name` is untouched. Props never clashed: they live in `this.props`. Before, such a name
-  was `RGE1103`, a rule that followed from code the author never sees. `$` names are the compiler's own. Private fields
+  was `TSE1103`, a rule that followed from code the author never sees. `$` names are the compiler's own. Private fields
   (`#name`) were the plan's first idea; they would have hidden state from the tests and tools that read a component's state
   from outside, so only the names that clash are renamed.
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
-  anywhere, is `RGE1202`. A fragment nested as a child is an implicit `<Entity>`. A component, a condition or `null` as the
+  anywhere, is `TSE1202`. A fragment nested as a child is an implicit `<Entity>`. A component, a condition or `null` as the
   root is "Component, condition and null roots" below.
 
 ### A root named after its component (2026-11-13)
@@ -2419,7 +2419,7 @@ the template and the guide no longer write it. Only `Entity` and `Game` take a `
 ### Component, condition and null roots (2026-11-11)
 
 `return <Panel title="BUILD">…</Panel>`, `return on ? <Sprite …/> : null`, `return open && <Menu />` and `return null` are
-accepted (they were `RGE1003` / `RGE1002`; found by Hearth). The component's class extends the host
+accepted (they were `TSE1003` / `TSE1002`; found by Hearth). The component's class extends the host
 intrinsic (`Entity`), holds that one child (or the condition's children, as `{…}` children are), and sets
 `override readonly layoutContents = true`. `GameObject.layoutContents` is CSS's `display: contents` for `<Flex>` layout: a
 `Flex` lays out such a child's children as its own (`FlexBox.kids`, flattened in `#measureChildren`; when no child is see-through,
@@ -2457,9 +2457,9 @@ true), so the focus never leaves the menu by the keys; `back` (or Escape and Pad
 And focus taken by a modal is put aside (`#focusBeforeInert`) and given back when the element can take it again, before any
 `autoFocus`, as a browser does when a dialog closes: without it, Bramble's key prompt sent the settings cursor back to the top.
 
-Adding built-ins called `Button` and `Menu` would have broken every game with a component of either name (`RGE1206`), and so would
+Adding built-ins called `Button` and `Menu` would have broken every game with a component of either name (`TSE1206`), and so would
 any later built-in. So a name is now scoped as in React: a component declared in a file, or imported from another, shadows a
-built-in of that name, and `RGE1206` is only for a file that also imports the built-in (or names a component `Entity` or `Game`,
+built-in of that name, and `TSE1206` is only for a file that also imports the built-in (or names a component `Entity` or `Game`,
 whose tags the compiler always reads as the built-ins).
 
 **Inert and modal** (2026-11-12: nothing let a component own or consume the keys). Input stays polled;
@@ -2507,11 +2507,11 @@ collider's own callback (see "Collisions"). On a child element it is created in
 the field initialiser. On a root it is assigned after `super()`
 (`this.onCollisionEnter = …`), because an arrow that uses `this` cannot be made
 inside the call to `super`. A function on any other built-in, or an unknown
-callback name, is `RGE1203`.
+callback name, is `TSE1203`.
 
 **What `other` exposes** (decided 2026-11-09; `data` 2026-11-13). `other` is a `Contact`: handler
 code may read `other.tag` and `other.owner`, both strings, and `other.data`, and nothing else
-(`'Contact' has no readable property 'width'`, `RGE1301`). The compiler checks
+(`'Contact' has no readable property 'width'`, `TSE1301`). The compiler checks
 the comparison like any other string.
 
 * `data` is the `data` prop of the other `<Collider>` (any value; undefined when it has none), so a
@@ -2519,7 +2519,7 @@ the comparison like any other string.
   Its type: `Contact` is `BaseContact` (`data: unknown`) until a game declares
   the global interface `ColliderData` (`declare global { interface ColliderData { coin: { value: number } } }`),
   then a union with one member per declared tag, so `other.tag === "coin"` narrows `other.data` in the
-  generated code as in the source. A global interface rather than an augmentation of `@rge/runtime`, because
+  generated code as in the source. A global interface rather than an augmentation of `@tsengine/runtime`, because
   TypeScript does not merge an augmentation into an interface that a module only re-exports. The `Collider`
   class implements `BaseContact`; the world casts it when it calls a callback.
 
@@ -2629,7 +2629,7 @@ allowlist is language-level and stays in the compiler (`transform/handles.ts`).
 
 The analyzer records relative `.tsx` named imports; the transform resolves a
 tag to `Intrinsic`, `Local` or `Imported { name, module }` (name clashes between
-the three are `RGE1206`). The generator imports each name once per module and
+the three are `TSE1206`). The generator imports each name once per module and
 rewrites the specifier to the generated file (`./WarningIcon.tsx` →
 `./WarningIcon.ts`). The CLI compiles every file in a directory and type-checks
 all outputs together, so a broken cross-file reference is caught there. A
@@ -2637,7 +2637,7 @@ parent needs nothing about an imported child's props: it passes what it writes,
 and the project type-check validates it against the child's own props type (a
 missing or mistyped prop is `TS2741` / `TS2322` in the generated parent).
 Static cycles through several files (`A` contains `B` contains `A`) are found
-by the CLI's whole-project check, which follows imports (`RGE1205`); the
+by the CLI's whole-project check, which follows imports (`TSE1205`); the
 transform still reports the ones inside a file. Only static containment
 counts: a component that mounts the other conditionally is fine.
 
@@ -2655,11 +2655,11 @@ attached without a `World`.
 
 ## Player
 
-`@rge/player` ([PLAYER.md](PLAYER.md)) is the pure-TypeScript half of the native
+`@tsengine/player` ([PLAYER.md](PLAYER.md)) is the pure-TypeScript half of the native
 player. It draws nothing itself: it turns the object tree into one flat buffer of draw records per
 frame, hands it to a `Backend` (a window, or a test recorder) and feeds the backend's input back to the
 game. It imports nothing from Node, so it also runs in the embedded JavaScript engine of the shipped
-executable. The record layout and the input buffers are `native/include/rge.h`; `protocol.ts` mirrors
+executable. The record layout and the input buffers are `native/include/tse.h`; `protocol.ts` mirrors
 it and a test keeps them equal.
 
 ```ts
@@ -2672,7 +2672,7 @@ open (see "Game"). Sounds made while it is built only record their paths; once t
 through the backend, so a sound still never hitches on its first play. Then the window opens, the tree is mounted
 and the first frame is drawn. A root that throws opens no window, unless errors are shown in the window (below). Each setting
 is the `<Game>` prop where it is written, else the `PlayerConfig` field, else the default (640 × 360, title
-`"react-game-engine"`, background black, assets `"assets"`); `hidden` is the player's alone.
+`"tse"`, background black, assets `"assets"`); `hidden` is the player's alone.
 
 **Errors in the window** (2026-11-11). With `showErrors`, an error thrown while building the root, mounting it or in
 a step does not close the window: the player stops stepping the world and draws the error instead, on a dark red background in
@@ -2727,7 +2727,7 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
   not gets a new one, so `CollisionTracker` tests again only the colliders whose entry is new (see its doc comment). An entry must not be
   changed after it is handed over.
 - **Which boxes overlap is the host's to find, when it can.** A backend may implement `overlaps` (both native hosts do, with
-  `rge_overlaps` in `librge`); the tracker then hands it the boxes and applies the rules to the pairs that come back. Without
+  `tse_overlaps` in `libtse`); the tracker then hands it the boxes and applies the rules to the pairs that come back. Without
   it the tracker sweeps in script. The two find the same pairs, so a game cannot tell which ran.
 - **What changed is drawn the short way.** Under an object that changed this frame, a `<Shape>`, `<Sprite>` or `<Collider>` with no
   children, z, layout offset or placement is written by its parent's loop, not by a call of its own (most of a moving component is
@@ -2811,7 +2811,7 @@ into the window. `fit` picks the scale: `"integer"` (the default) is the largest
 game's corner on a whole window pixel, falling back to `"contain"` for a window smaller than the game;
 `"contain"` is the largest scale that fits; `"stretch"` fills each axis. The game is centred, and the window
 outside it is covered with `border`. `pixelPerfect` (the default) draws the game into a texture of the game's own
-size, through views in game pixels, and the first record of the frame, `RGE_OP_CANVAS`, says where in the window
+size, through views in game pixels, and the first record of the frame, `TSE_OP_CANVAS`, says where in the window
 the texture is shown and what colour is around it, so a game pixel is a whole block of window pixels whatever is
 turned or scaled inside. `pixelPerfect={false}` draws at the window's resolution: the camera's view in game pixels,
 then the screen's scale and position (`viewToWindow`), in one view, and the bars last as four rectangles through a
@@ -2821,7 +2821,7 @@ A `<Screen>` anywhere else is a plain container, with one warning; one whose
 size is not positive is ignored, with one warning. Without a `<Screen>` the frame is exactly what it was
 before: the game is the window.
 
-**The HUD.** A `<Hud>` is a layer drawn after the world through a second `RGE_OP_VIEW` that ignores the camera:
+**The HUD.** A `<Hud>` is a layer drawn after the world through a second `TSE_OP_VIEW` that ignores the camera:
 its contents are in game pixels under a `<Screen>` and in window pixels without one. The tree walk records each
 `Hud` and does not enter it; each is then walked on its own after the world, in tree order, from its own world
 transform, with `z` ordering the contents of that layer only (a high `z` inside one layer never lifts it over the
@@ -2853,7 +2853,7 @@ wrapping text), so in a real game nothing shrinks yet and overflow is visible. N
 (an `AnimatedSprite`'s first frame, so the size does not jitter; a texture that will not load measures as the
 16×16 square drawn instead), and null for containers. It asks the backend's optional `measureText` and
 `textureSize` once per string and once per texture and keeps the answers (text widths up to 1,024 strings,
-then the cache starts again). Both native hosts answer from librge (ABI v2). A backend without them gets text
+then the cache starts again). Both native hosts answer from libtse (ABI v2). A backend without them gets text
 widths estimated (`estimateTextWidth`: 0.6 × size per character, a line as tall as `size`) and textures that measure
 0 × 0, with one warning; `RecordingBackend` implements both deterministically for tests.
 
@@ -2886,13 +2886,13 @@ the time it plays) and plays by handle. A sound that cannot be loaded warns once
 runtime still counts the play. Closing the player removes the sink.
 
 **Hosts.** A game's entry file calls `run(hostBackend(), config)`. A host sets
-`globalThis.__rgeBackend` before it loads the game, so the same file runs under every host:
+`globalThis.__tseBackend` before it loads the game, so the same file runs under every host:
 
-* **Node** (`@rge/player-node`, for development): koffi loads `librge`; `npm run play:demo`.
+* **Node** (`@tsengine/player-node`, for development): koffi loads `libtse`; `npm run play:demo`.
 * **The Rust host** (`host/`, what ships): QuickJS-ng (an interpreter: no JIT, so it can go where a JIT is
-  banned) embedded with rquickjs, with `librge` and raylib linked in statically. `npm run bundle` turns the
+  banned) embedded with rquickjs, with `libtse` and raylib linked in statically. `npm run bundle` turns the
   entry into one ES module (esbuild, `platform: neutral`, ES2022) and refuses one that imports from Node or
-  koffi; `rge-host game.js [--root <dir>]` runs it, resolving the game's relative `assets/` against the root.
+  koffi; `tse-host game.js [--root <dir>]` runs it, resolving the game's relative `assets/` against the root.
   With no arguments it runs the `game.js` next to the executable in that folder, which is how
   `npm run package` ships a game: `dist/<name>/` holds the executable, `game.js` and `assets/`. The host
   provides `console` (QuickJS has none) and the backend; nothing else of Node is needed. An uncaught

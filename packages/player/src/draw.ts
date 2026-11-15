@@ -40,43 +40,43 @@ import {
   WIDGET_TEXT,
   type Slider,
   type Toggle,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
 import { borderRoom, Layouter, type MeasuredSize } from "./layout.ts";
 import {
-  RGE_BLEND_ADD,
-  RGE_BLEND_MULTIPLY,
-  RGE_BLEND_NORMAL,
-  RGE_BLEND_SCREEN,
-  RGE_OP_LAYER_BEGIN,
-  RGE_OP_LAYER_BEGIN_LEN,
-  RGE_OP_LAYER_END,
-  RGE_OP_LAYER_END_LEN,
-  RGE_OP_LIGHT,
-  RGE_OP_LIGHT_LEN,
-  RGE_OP_BOX,
-  RGE_OP_BOX_LEN,
-  RGE_OP_ELLIPSE,
-  RGE_OP_ELLIPSE_LEN,
-  RGE_OP_RECT,
-  RGE_OP_RECT_LEN,
-  RGE_OP_SPRITE,
-  RGE_OP_SPRITE_LEN,
-  RGE_OP_SPRITE_REGION,
-  RGE_OP_SPRITE_REGION_LEN,
-  RGE_SPRITE_FLIP_X,
-  RGE_SPRITE_FLIP_Y,
-  RGE_OP_TEXT,
-  RGE_OP_TEXT_LEN,
-  RGE_OP_VIEW,
-  RGE_OP_VIEW_LEN,
-  RGE_OP_SCISSOR,
-  RGE_OP_SCISSOR_END,
-  RGE_OP_CANVAS,
-  RGE_OP_SCISSOR_LEN,
-  RGE_OP_SCISSOR_END_LEN,
-  RGE_OP_CANVAS_LEN,
+  TSE_BLEND_ADD,
+  TSE_BLEND_MULTIPLY,
+  TSE_BLEND_NORMAL,
+  TSE_BLEND_SCREEN,
+  TSE_OP_LAYER_BEGIN,
+  TSE_OP_LAYER_BEGIN_LEN,
+  TSE_OP_LAYER_END,
+  TSE_OP_LAYER_END_LEN,
+  TSE_OP_LIGHT,
+  TSE_OP_LIGHT_LEN,
+  TSE_OP_BOX,
+  TSE_OP_BOX_LEN,
+  TSE_OP_ELLIPSE,
+  TSE_OP_ELLIPSE_LEN,
+  TSE_OP_RECT,
+  TSE_OP_RECT_LEN,
+  TSE_OP_SPRITE,
+  TSE_OP_SPRITE_LEN,
+  TSE_OP_SPRITE_REGION,
+  TSE_OP_SPRITE_REGION_LEN,
+  TSE_SPRITE_FLIP_X,
+  TSE_SPRITE_FLIP_Y,
+  TSE_OP_TEXT,
+  TSE_OP_TEXT_LEN,
+  TSE_OP_VIEW,
+  TSE_OP_VIEW_LEN,
+  TSE_OP_SCISSOR,
+  TSE_OP_SCISSOR_END,
+  TSE_OP_CANVAS,
+  TSE_OP_SCISSOR_LEN,
+  TSE_OP_SCISSOR_END_LEN,
+  TSE_OP_CANVAS_LEN,
 } from "./protocol.ts";
 import { borderRects, fitScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
 import { stepTransition, type ShownColors } from "./transition.ts";
@@ -176,32 +176,32 @@ function walk(
 /** How many doubles the record starting with this op takes. */
 function recordLength(op: number): number {
   switch (op) {
-    case RGE_OP_VIEW:
-      return RGE_OP_VIEW_LEN;
-    case RGE_OP_SPRITE:
-      return RGE_OP_SPRITE_LEN;
-    case RGE_OP_SPRITE_REGION:
-      return RGE_OP_SPRITE_REGION_LEN;
-    case RGE_OP_RECT:
-      return RGE_OP_RECT_LEN;
-    case RGE_OP_ELLIPSE:
-      return RGE_OP_ELLIPSE_LEN;
-    case RGE_OP_BOX:
-      return RGE_OP_BOX_LEN;
-    case RGE_OP_TEXT:
-      return RGE_OP_TEXT_LEN;
-    case RGE_OP_SCISSOR:
-      return RGE_OP_SCISSOR_LEN;
-    case RGE_OP_SCISSOR_END:
-      return RGE_OP_SCISSOR_END_LEN;
-    case RGE_OP_CANVAS:
-      return RGE_OP_CANVAS_LEN;
-    case RGE_OP_LAYER_BEGIN:
-      return RGE_OP_LAYER_BEGIN_LEN;
-    case RGE_OP_LAYER_END:
-      return RGE_OP_LAYER_END_LEN;
-    case RGE_OP_LIGHT:
-      return RGE_OP_LIGHT_LEN;
+    case TSE_OP_VIEW:
+      return TSE_OP_VIEW_LEN;
+    case TSE_OP_SPRITE:
+      return TSE_OP_SPRITE_LEN;
+    case TSE_OP_SPRITE_REGION:
+      return TSE_OP_SPRITE_REGION_LEN;
+    case TSE_OP_RECT:
+      return TSE_OP_RECT_LEN;
+    case TSE_OP_ELLIPSE:
+      return TSE_OP_ELLIPSE_LEN;
+    case TSE_OP_BOX:
+      return TSE_OP_BOX_LEN;
+    case TSE_OP_TEXT:
+      return TSE_OP_TEXT_LEN;
+    case TSE_OP_SCISSOR:
+      return TSE_OP_SCISSOR_LEN;
+    case TSE_OP_SCISSOR_END:
+      return TSE_OP_SCISSOR_END_LEN;
+    case TSE_OP_CANVAS:
+      return TSE_OP_CANVAS_LEN;
+    case TSE_OP_LAYER_BEGIN:
+      return TSE_OP_LAYER_BEGIN_LEN;
+    case TSE_OP_LAYER_END:
+      return TSE_OP_LAYER_END_LEN;
+    case TSE_OP_LIGHT:
+      return TSE_OP_LIGHT_LEN;
     default:
       throw new Error(`Unknown draw op ${op}.`);
   }
@@ -212,12 +212,12 @@ const NO_PARAMS: readonly number[] = [];
 /** A `<Layer>`'s blend mode as the native side takes it. */
 function blendCode(mode: BlendMode): number {
   return mode === "add"
-    ? RGE_BLEND_ADD
+    ? TSE_BLEND_ADD
     : mode === "multiply"
-      ? RGE_BLEND_MULTIPLY
+      ? TSE_BLEND_MULTIPLY
       : mode === "screen"
-        ? RGE_BLEND_SCREEN
-        : RGE_BLEND_NORMAL;
+        ? TSE_BLEND_SCREEN
+        : TSE_BLEND_NORMAL;
 }
 
 /**
@@ -262,9 +262,9 @@ const CLIP_STRIDE = 9;
 const CLIP_PARENT = 7;
 const CLIP_INSET = 8;
 /** The most doubles of clip records a record can need ahead of it: a clip record is the longest. */
-const CLIP_RECORD_ROOM = RGE_OP_SCISSOR_LEN;
+const CLIP_RECORD_ROOM = TSE_OP_SCISSOR_LEN;
 
-/** A growable frame of draw records (see `native/include/rge.h`) and the strings its text records refer to. */
+/** A growable frame of draw records (see `native/include/tse.h`) and the strings its text records refer to. */
 export class DrawList {
   records = new Float64Array(1024);
   length = 0;
@@ -365,7 +365,7 @@ export class DrawList {
 
   /**
    * `sortByZ` for a layer with clipping: the same order, then a clip record wherever the records' boxes change. `view` is the
-   * layer's view (the one its view record carries), which takes a box's corners to the pixels `RGE_OP_SCISSOR` is in.
+   * layer's view (the one its view record carries), which takes a box's corners to the pixels `TSE_OP_SCISSOR` is in.
    */
   #sortClipped(from: number, view: ViewTransform): void {
     const zRuns = this.#zRuns;
@@ -405,16 +405,16 @@ export class DrawList {
       const length = recordLength(records[start] as number);
       const wanted = clips[k] as number;
       if (wanted !== current) {
-        if (wanted === 0) scratch[write++] = RGE_OP_SCISSOR_END;
+        if (wanted === 0) scratch[write++] = TSE_OP_SCISSOR_END;
         else {
           // A later clip record replaces the one before it, so going from one box to another needs no end between.
           const r = (wanted - 1) * 4;
-          scratch[write] = RGE_OP_SCISSOR;
+          scratch[write] = TSE_OP_SCISSOR;
           scratch[write + 1] = rects[r] as number;
           scratch[write + 2] = rects[r + 1] as number;
           scratch[write + 3] = rects[r + 2] as number;
           scratch[write + 4] = rects[r + 3] as number;
-          write += RGE_OP_SCISSOR_LEN;
+          write += TSE_OP_SCISSOR_LEN;
         }
         current = wanted;
       }
@@ -422,7 +422,7 @@ export class DrawList {
       write += length;
     }
     // A clip does not carry over into the next layer (the next layer's view would not map it).
-    if (current !== 0) scratch[write++] = RGE_OP_SCISSOR_END;
+    if (current !== 0) scratch[write++] = TSE_OP_SCISSOR_END;
     if (from + write > this.records.length) this.grow(from + write - this.length);
     this.records.set(scratch.subarray(0, write), from);
     this.length = from + write;
@@ -571,15 +571,15 @@ export class DrawList {
     if (!hasText) return;
     const end = at + count;
     for (let p = at; p < end; p += recordLength(r[p] as number)) {
-      if (r[p] === RGE_OP_TEXT) r[p + 6] = (r[p + 6] as number) + textShift;
+      if (r[p] === TSE_OP_TEXT) r[p + 6] = (r[p + 6] as number) + textShift;
     }
   }
 
   /** The canvas record, which must be first in the frame: draw into a `width` × `height` texture, shown in the window at `dest`. */
   canvas(width: number, height: number, dest: WindowRect, border: PackedColor): void {
-    const at = this.#reserve(RGE_OP_CANVAS_LEN);
+    const at = this.#reserve(TSE_OP_CANVAS_LEN);
     const r = this.records;
-    r[at] = RGE_OP_CANVAS;
+    r[at] = TSE_OP_CANVAS;
     r[at + 1] = width;
     r[at + 2] = height;
     r[at + 3] = dest.x;
@@ -590,14 +590,14 @@ export class DrawList {
   }
 
   view(v: ViewTransform): void {
-    const at = this.#reserve(RGE_OP_VIEW_LEN);
+    const at = this.#reserve(TSE_OP_VIEW_LEN);
     this.setView(at, v);
   }
 
   /** Overwrite the view record at `at` (the first record, written before the camera is known). */
   setView(at: number, v: ViewTransform): void {
     const r = this.records;
-    r[at] = RGE_OP_VIEW;
+    r[at] = TSE_OP_VIEW;
     r[at + 1] = v.a;
     r[at + 2] = v.b;
     r[at + 3] = v.c;
@@ -609,11 +609,11 @@ export class DrawList {
   sprite(world: WorldTransform, texture: number): void {
     // In two steps: `this.records[this.#header(…)] = …` reads `records` before the header is written, so a record that made
     // the buffer grow had its texture written into the old one, and was drawn with texture 0 for that frame.
-    const at = this.#header(RGE_OP_SPRITE, RGE_OP_SPRITE_LEN, world);
+    const at = this.#header(TSE_OP_SPRITE, TSE_OP_SPRITE_LEN, world);
     this.records[at] = texture;
   }
 
-  /** One region of a texture (a frame of a sheet), with its origin, mirroring and tint: the record `RGE_OP_SPRITE_REGION`. */
+  /** One region of a texture (a frame of a sheet), with its origin, mirroring and tint: the record `TSE_OP_SPRITE_REGION`. */
   spriteRegion(
     world: WorldTransform,
     texture: number,
@@ -665,9 +665,9 @@ export class DrawList {
       if (this.alpha === 0) return;
       tint = fadeColor(tint, this.alpha);
     }
-    const base = this.#reserve(RGE_OP_SPRITE_REGION_LEN);
+    const base = this.#reserve(TSE_OP_SPRITE_REGION_LEN);
     const r = this.records;
-    r[base] = RGE_OP_SPRITE_REGION;
+    r[base] = TSE_OP_SPRITE_REGION;
     r[base + 1] = x;
     r[base + 2] = y;
     r[base + 3] = rotation;
@@ -690,7 +690,7 @@ export class DrawList {
       if (this.alpha === 0) return;
       color = fadeColor(color, this.alpha);
     }
-    const at = this.#header(RGE_OP_RECT, RGE_OP_RECT_LEN, world);
+    const at = this.#header(TSE_OP_RECT, TSE_OP_RECT_LEN, world);
     this.records[at] = width;
     this.records[at + 1] = height;
     this.records[at + 2] = color;
@@ -701,27 +701,27 @@ export class DrawList {
       if (this.alpha === 0) return;
       color = fadeColor(color, this.alpha);
     }
-    const at = this.#header(RGE_OP_ELLIPSE, RGE_OP_ELLIPSE_LEN, world);
+    const at = this.#header(TSE_OP_ELLIPSE, TSE_OP_ELLIPSE_LEN, world);
     this.records[at] = width;
     this.records[at + 1] = height;
     this.records[at + 2] = color;
   }
 
-  /** A light (`RGE_OP_LIGHT`): `color` (its alpha the strength) at `world`, falling off to black at `radius`. */
+  /** A light (`TSE_OP_LIGHT`): `color` (its alpha the strength) at `world`, falling off to black at `radius`. */
   light(world: WorldTransform, radius: number, color: PackedColor): void {
     if (this.alpha === 0) return;
-    const at = this.#header(RGE_OP_LIGHT, RGE_OP_LIGHT_LEN, world);
+    const at = this.#header(TSE_OP_LIGHT, TSE_OP_LIGHT_LEN, world);
     this.records[at] = radius;
     this.records[at + 1] = this.alpha === 1 ? color : fadeColor(color, this.alpha);
   }
 
   /**
    * Draw what is written from now on into a layer, until the matching `layerEnd`: cleared to `clear`, each drawable blended with
-   * `childBlend` (an `RGE_BLEND_*`). What is inside is drawn at full opacity; the opacity it is at goes on the layer as a whole.
+   * `childBlend` (an `TSE_BLEND_*`). What is inside is drawn at full opacity; the opacity it is at goes on the layer as a whole.
    */
   layerBegin(clear: PackedColor, childBlend: number): void {
-    const at = this.#reserve(RGE_OP_LAYER_BEGIN_LEN);
-    this.records[at] = RGE_OP_LAYER_BEGIN;
+    const at = this.#reserve(TSE_OP_LAYER_BEGIN_LEN);
+    this.records[at] = TSE_OP_LAYER_BEGIN;
     this.records[at + 1] = clear;
     this.records[at + 2] = childBlend;
     this.#alphas.push(this.alpha);
@@ -736,9 +736,9 @@ export class DrawList {
   layerEnd(blend: number, opacity: number, shader = -1, time = 0, params: readonly number[] = NO_PARAMS): void {
     this.#layerDepth--;
     this.alpha = this.#alphas.pop() as number;
-    const at = this.#reserve(RGE_OP_LAYER_END_LEN);
+    const at = this.#reserve(TSE_OP_LAYER_END_LEN);
     const r = this.records;
-    r[at] = RGE_OP_LAYER_END;
+    r[at] = TSE_OP_LAYER_END;
     r[at + 1] = blend;
     r[at + 2] = fadeColor(0xffffffff, Math.min(1, Math.max(0, opacity)) * this.alpha);
     r[at + 3] = shader;
@@ -749,7 +749,7 @@ export class DrawList {
     }
   }
 
-  /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
+  /** A box with a border inside its edge and rounded corners: the record `TSE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
   box(
     world: WorldTransform,
     width: number,
@@ -764,7 +764,7 @@ export class DrawList {
       fill = fadeColor(fill, this.alpha);
       border = fadeColor(border, this.alpha);
     }
-    const at = this.#header(RGE_OP_BOX, RGE_OP_BOX_LEN, world);
+    const at = this.#header(TSE_OP_BOX, TSE_OP_BOX_LEN, world);
     const r = this.records;
     r[at] = width;
     r[at + 1] = height;
@@ -779,7 +779,7 @@ export class DrawList {
       if (this.alpha === 0) return;
       color = fadeColor(color, this.alpha);
     }
-    const at = this.#header(RGE_OP_TEXT, RGE_OP_TEXT_LEN, world);
+    const at = this.#header(TSE_OP_TEXT, TSE_OP_TEXT_LEN, world);
     this.records[at] = this.texts.length;
     this.records[at + 1] = size;
     this.records[at + 2] = color;
@@ -1038,7 +1038,7 @@ function styledSprite(node: Sprite | AnimatedSprite): boolean {
 }
 
 /** A rect and an ellipse are records of one length, which the walk relies on when it writes a shape in place: this line stops compiling if they ever differ. */
-const SHAPE_LEN: typeof RGE_OP_RECT_LEN & typeof RGE_OP_ELLIPSE_LEN = RGE_OP_RECT_LEN;
+const SHAPE_LEN: typeof TSE_OP_RECT_LEN & typeof TSE_OP_ELLIPSE_LEN = TSE_OP_RECT_LEN;
 
 /** What `FrameBuilder`'s world walk says about a subtree (see there). */
 const WALK_CLEAN = 0;
@@ -1641,16 +1641,16 @@ export class FrameBuilder {
                   // Nothing to draw, a texture not asked for yet, or one that could not be loaded: the general way.
                   if (handle === undefined || handle < 0) this.#sprite(image, world);
                   else {
-                    if (o + RGE_OP_SPRITE_LEN > list.records.length) list.grow(RGE_OP_SPRITE_LEN);
+                    if (o + TSE_OP_SPRITE_LEN > list.records.length) list.grow(TSE_OP_SPRITE_LEN);
                     const r = list.records;
-                    r[o] = RGE_OP_SPRITE;
+                    r[o] = TSE_OP_SPRITE;
                     r[o + 1] = world.x;
                     r[o + 2] = world.y;
                     r[o + 3] = world.rotation;
                     r[o + 4] = world.scaleX;
                     r[o + 5] = world.scaleY;
                     r[o + 6] = handle;
-                    list.length = o + RGE_OP_SPRITE_LEN;
+                    list.length = o + TSE_OP_SPRITE_LEN;
                   }
                 } else {
                   const css = (child as Shape).color;
@@ -1658,7 +1658,7 @@ export class FrameBuilder {
                   if (color === undefined) color = this.#color(css);
                   if (o + SHAPE_LEN > list.records.length) list.grow(SHAPE_LEN);
                   const r = list.records;
-                  r[o] = (child as Shape).kind === "circle" ? RGE_OP_ELLIPSE : RGE_OP_RECT;
+                  r[o] = (child as Shape).kind === "circle" ? TSE_OP_ELLIPSE : TSE_OP_RECT;
                   r[o + 1] = world.x;
                   r[o + 2] = world.y;
                   r[o + 3] = world.rotation;
@@ -1778,9 +1778,9 @@ export class FrameBuilder {
                   r[to + 4] = world.scaleX;
                   r[to + 5] = world.scaleY;
                   r[to + 6] = prevTree[from + 6] as number;
-                  if (op === RGE_OP_SPRITE) {
-                    to += RGE_OP_SPRITE_LEN;
-                    from += RGE_OP_SPRITE_LEN;
+                  if (op === TSE_OP_SPRITE) {
+                    to += TSE_OP_SPRITE_LEN;
+                    from += TSE_OP_SPRITE_LEN;
                   } else {
                     r[to + 7] = prevTree[from + 7] as number;
                     r[to + 8] = prevTree[from + 8] as number;
@@ -1860,7 +1860,7 @@ export class FrameBuilder {
 
     // Draw order: by z, tree order among equals (and the clip records of what is clipped, which need the view). A pointer that is
     // drawn on top is pressed first, so the pointers move with it.
-    list.sortByZ(worldStart + RGE_OP_VIEW_LEN, pixelPerfect ? cameraView : view);
+    list.sortByZ(worldStart + TSE_OP_VIEW_LEN, pixelPerfect ? cameraView : view);
     if (anyZ) {
       const order = orderByZ(pointerZs);
       if (order !== null) pointers = order.map((i) => pointers[i] as Pressable);
@@ -2345,7 +2345,7 @@ export class FrameBuilder {
 
   /**
    * A `<Flex>`'s background image, cut into nine by its slices: the four corners keep their size, the four edges stretch along
-   * one axis and the middle stretches along both. Each part is a `RGE_OP_SPRITE_REGION` of the image, scaled to fill its place
+   * one axis and the middle stretches along both. Each part is a `TSE_OP_SPRITE_REGION` of the image, scaled to fill its place
    * (a record's own scale does the stretching, so this needs nothing of the native side), under the box's own transform. A slice
    * past the image's size is cut down to fit it. A box smaller than its corners shrinks them all in proportion, as CSS does.
    * A part with nothing in it (a middle of no width) is not drawn. An image that is missing is a magenta box, once warned of.
@@ -2907,7 +2907,7 @@ export class FrameBuilder {
       frameHeight,
       originX,
       originY,
-      (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0),
+      (flipX ? TSE_SPRITE_FLIP_X : 0) | (flipY ? TSE_SPRITE_FLIP_Y : 0),
       tint
     );
   }
@@ -3082,15 +3082,15 @@ export class FrameBuilder {
             oy = sth / 2;
             const h = (flip & TILE_FLIP_H) !== 0;
             const v = (flip & TILE_FLIP_V) !== 0;
-            if ((flip & TILE_FLIP_D) === 0) flags = (h ? RGE_SPRITE_FLIP_X : 0) | (v ? RGE_SPRITE_FLIP_Y : 0);
+            if ((flip & TILE_FLIP_D) === 0) flags = (h ? TSE_SPRITE_FLIP_X : 0) | (v ? TSE_SPRITE_FLIP_Y : 0);
             else if (!h && !v) {
               rotation += Math.PI / 2;
-              flags = RGE_SPRITE_FLIP_Y;
+              flags = TSE_SPRITE_FLIP_Y;
             } else if (h && !v) rotation += Math.PI / 2;
             else if (!h && v) rotation += (3 * Math.PI) / 2;
             else {
               rotation += (3 * Math.PI) / 2;
-              flags = RGE_SPRITE_FLIP_Y;
+              flags = TSE_SPRITE_FLIP_Y;
             }
           }
           const px = at.x + cos * lx * sx - sin * ly * sy;

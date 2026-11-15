@@ -889,7 +889,7 @@ export class ElementLowering extends HookLowering {
   /**
    * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`), and
    * `controls={controls}` the game's actions, imported from a .ts module. Anything else (a state read, an expression)
-   * would not exist yet, so it is `RGE1210`.
+   * would not exist yet, so it is `TSE1210`.
    */
   protected lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
     if (name === "controls") {

@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 /**
- * `@rge/testing` (DESIGN.md, "Testing one component: `@rge/testing`"): a component's own logic tested as a component, the way a rule is tested as a function.
- * The components are compiled here, as `rge` would compile a game's.
+ * `@tsengine/testing` (DESIGN.md, "Testing one component: `@tsengine/testing`"): a component's own logic tested as a component, the way a rule is tested as a function.
+ * The components are compiled here, as `tse` would compile a game's.
  */
 import { after, before, describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { Compiler, formatDiagnostic } from "@rge/compiler";
-import { createControls, Pointer, type GameObject, type TilemapData } from "@rge/runtime";
+import { Compiler, formatDiagnostic } from "@tsengine/compiler";
+import { createControls, Pointer, type GameObject, type TilemapData } from "@tsengine/runtime";
 
 import { render } from "../src/index.ts";
 
@@ -30,7 +30,7 @@ const fields = (t: { state(): Record<string, unknown> }) => t.state().s as Recor
 let counter = 0;
 /** Compile a component file and import the generated module. */
 async function build<T>(source: string): Promise<T> {
-  const imports = `import { Collider, Entity, Pointer, Text, Tilemap, useBody, useMutable, useUpdate, useInput } from "@rge/runtime/jsx";\n`;
+  const imports = `import { Collider, Entity, Pointer, Text, Tilemap, useBody, useMutable, useUpdate, useInput } from "@tsengine/runtime/jsx";\n`;
   const result = compiler.compile("Test.tsx", imports + source);
   if (!result.ok) throw new Error(result.diagnostics.map(formatDiagnostic).join("\n"));
   const file = join(OUT, String(++counter), "Test.ts");

@@ -43,7 +43,7 @@ export interface SourceAnalysis {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
-/** `import { Name } from "./Name.tsx"` (a component in another source file) or `import { useState } from "@rge/runtime/jsx"`. */
+/** `import { Name } from "./Name.tsx"` (a component in another source file) or `import { useState } from "@tsengine/runtime/jsx"`. */
 export interface ImportAnalysis {
   readonly name: string;
   /** `import Enemy from "./Enemy.tsx"`: the module's default export, under a local name. */
@@ -51,7 +51,7 @@ export interface ImportAnalysis {
   /** The specifier as written, e.g. `./WarningIcon.tsx`. */
   readonly module: string;
   /**
-   * `import { type Child } from "@rge/runtime/jsx"` or `import type { Tower } from "./rules/battle.ts"`: a type. One from the
+   * `import { type Child } from "@tsengine/runtime/jsx"` or `import type { Tower } from "./rules/battle.ts"`: a type. One from the
    * authoring module is erased; one from a `.ts` file is imported by the generated module as a type.
    */
   readonly isTypeOnly: boolean;

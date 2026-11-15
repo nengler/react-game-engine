@@ -16,15 +16,15 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - **The body's calls are an allowlist.** Array methods that make a new value (`reduce` included), string and number
   methods, `Math` and the engine's helpers; handlers also have the standard library on values they made. A refused call says so in one
   short line.
-- **No generic components** (`function List<T>(…)`, `RGE1001`, reported at the type parameter): a component is one class.
+- **No generic components** (`function List<T>(…)`, `TSE1001`, reported at the type parameter): a component is one class.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
 - **`useReducer` does not exist.** A reducer is a plain function in a `.ts` file that a handler calls (`s.n = reducer(s.n, action)`).
 
 ## 2. Refs on elements are missing on purpose
 
-- **No `ref={…}`**: there is no handle on a node (`RGE1106`).
+- **No `ref={…}`**: there is no handle on a node (`TSE1106`).
 - **`useMount` / `useUnmount`** stand in for `useEffect(…, [])`, with an unusual order (mount runs children first, unmount runs the
-  parent first). `useMount` may return a cleanup. A field cannot be written in `useUnmount` (`RGE1402`): tell the parent instead.
+  parent first). `useMount` may return a cleanup. A field cannot be written in `useUnmount` (`TSE1402`): tell the parent instead.
 
 ## 3. Game-engine semantics on React concepts
 
@@ -39,7 +39,7 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 
 ## 4. Game state
 
-- `GameState.ts` must call `createGameState` with an object literal for the data (no spreads or computed keys, `RGE1109`).
+- `GameState.ts` must call `createGameState` with an object literal for the data (no spreads or computed keys, `TSE1109`).
 - Only actions change it: a write to a selected value is an error that names the action to add, and selected values are typed
   read-only. An action per small write (`point(s, pad) { s.cursor = pad; }`) is boilerplate; Kite has 8 actions, Hearth 10,
   Bramble 14, and none wanted a shortcut yet.
@@ -48,7 +48,7 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 ## 5. Smaller gotchas
 
 - **Keys.** A key reading only the index warns; a callback on a list item cannot read the index.
-- **Side-effect imports** are refused in component files (`RGE1001`), and the message says to put them in a `.ts` file such as the game
+- **Side-effect imports** are refused in component files (`TSE1001`), and the message says to put them in a `.ts` file such as the game
   state.
 - **The manifest gates the API.** A new runtime method compiles in plain TypeScript but fails in a component until
   `runtime/src/manifest.ts` lists it.
@@ -57,7 +57,8 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 
 ## 6. Tooling and getting started
 
-- **Nothing is published.** A checkout and `npm run dist` (about two minutes, most of it building raylib) come before `rge create`.
+- **Linux x64 only.** The packs a release publishes to npm carry native binaries for Linux x64; elsewhere a checkout and
+  `npm run dist` (about two minutes, most of it building raylib) come before `tse create`.
   Only Node is needed to write, test and check a game; the window, screenshots and the Rust host need more, and `dist` says what.
 - **The Rust host (`--engine quickjs`) reports errors in the bundled `game.js`**, not the `.tsx` line; Node and the V8 package map
   them back.

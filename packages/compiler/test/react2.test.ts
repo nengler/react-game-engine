@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { createInputState, Entity, Flex, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
+import { createInputState, Entity, Flex, Pointer, Shape, Sprite, Text, World } from "@tsengine/runtime";
 
 import { checkAssets, DiagnosticCode } from "../src/index.ts";
 import {

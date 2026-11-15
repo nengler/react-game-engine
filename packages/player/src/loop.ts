@@ -22,7 +22,7 @@ import {
   type SoundSink,
   type StorageSink,
   type ViewTransform,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import type { Backend, WindowConfig } from "./backend.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -35,22 +35,22 @@ import { borderRoom } from "./layout.ts";
 import { drawOverlay } from "./overlay.ts";
 import {
   KEYS,
-  RGE_IN_DT,
-  RGE_IN_HEIGHT,
-  RGE_IN_MOUSE_X,
-  RGE_IN_MOUSE_Y,
-  RGE_IN_QUIT,
-  RGE_IN_WHEEL,
-  RGE_IN_WIDTH,
-  RGE_KEY_DOWN,
-  RGE_KEY_PRESSED,
+  TSE_IN_DT,
+  TSE_IN_HEIGHT,
+  TSE_IN_MOUSE_X,
+  TSE_IN_MOUSE_Y,
+  TSE_IN_QUIT,
+  TSE_IN_WHEEL,
+  TSE_IN_WIDTH,
+  TSE_KEY_DOWN,
+  TSE_KEY_PRESSED,
   KEY_INDEX,
 } from "./protocol.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
 import { Warner } from "./warn.ts";
 
 /** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
-export const DEFAULT_WINDOW = { width: 640, height: 360, title: "react-game-engine" } as const;
+export const DEFAULT_WINDOW = { width: 640, height: 360, title: "tse" } as const;
 
 /**
  * What the player is configured with. Everything but `root` is optional, and is the fallback for what the root's own
@@ -75,7 +75,7 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   /** How a pixel-perfect screen is scaled up at a scale that is not a whole number, as the `<Game>` prop `upscale`. */
   readonly upscale?: "nearest" | "sharp";
   /**
-   * Development tools: the layout overlay, toggled by `<Game overlayKey>` (F1 by default). `rge dev` turns it on; a packaged build
+   * Development tools: the layout overlay, toggled by `<Game overlayKey>` (F1 by default). `tse dev` turns it on; a packaged build
    * never has it. Default false.
    */
   readonly devtools?: boolean;
@@ -257,8 +257,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   // With a fixed timestep a handler sees a copy of the key flags per step, made by the driver (`fixed.ts`): a press between
   // steps is never lost and never seen twice, and one made in a freeze reaches `onUpdate` in the first step after it.
   const driver = stepHz === undefined ? null : new FixedDriver(stepHz, KEYS.length);
-  input.values[RGE_IN_WIDTH] = width;
-  input.values[RGE_IN_HEIGHT] = height;
+  input.values[TSE_IN_WIDTH] = width;
+  input.values[TSE_IN_HEIGHT] = height;
   const builder = new FrameBuilder({
     loadTexture: (path) => backend.loadTexture(path),
     loadShader: (path) => backend.loadShader?.(path) ?? -2,
@@ -328,15 +328,15 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   /** The full-screen key (or Alt + Enter) was pressed last frame: switch, and keep the switch only if the window did. */
   const toggleFullscreen = (): void => {
     if (!backend.setFullscreen) return;
-    const pressed = (index: number | undefined): boolean => index !== undefined && ((input.keys[index] as number) & RGE_KEY_PRESSED) !== 0;
-    const altEnter = pressed(ENTER_KEY) && ((input.keys[ALT_KEY] as number) & RGE_KEY_DOWN) !== 0;
+    const pressed = (index: number | undefined): boolean => index !== undefined && ((input.keys[index] as number) & TSE_KEY_PRESSED) !== 0;
+    const altEnter = pressed(ENTER_KEY) && ((input.keys[ALT_KEY] as number) & TSE_KEY_DOWN) !== 0;
     if (!pressed(fullscreenKey) && !altEnter) return;
     if (backend.setFullscreen(!fullscreen)) fullscreen = !fullscreen;
   };
 
   // The frame-rate counter: the frame rate from the time the backend measures between frames, and what the script cost (the step, without the backend's draw and wait), each smoothed.
   let showFps = game?.showFps ?? config.showFps ?? false;
-  // The development overlay: only with `devtools` (rge dev), toggled by its key.
+  // The development overlay: only with `devtools` (tse dev), toggled by its key.
   const overlaySetting = config.devtools === true ? (game?.overlayKey ?? "F1") : false;
   const overlayKey = overlaySetting === false ? undefined : KEY_INDEX.get(overlaySetting);
   let overlay = false;
@@ -400,8 +400,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
 
   const dispatchPress = (): void => {
     // The button is up (or was let go since the last step): nothing is pressed any more. A press this step sets it again below.
-    if (((input.keys[LEFT_BUTTON] as number) & (RGE_KEY_DOWN | RGE_KEY_PRESSED)) === 0) world.reportRelease();
-    if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_PRESSED) === 0) return;
+    if (((input.keys[LEFT_BUTTON] as number) & (TSE_KEY_DOWN | TSE_KEY_PRESSED)) === 0) world.reportRelease();
+    if (((input.keys[LEFT_BUTTON] as number) & TSE_KEY_PRESSED) === 0) return;
     if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
     const at = input.worldPoint(input.screenX, input.screenY);
     const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
@@ -433,7 +433,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
    * else left and right); one already at its end passes the wheel on to the box around it, as a browser does.
    */
   const dispatchWheel = (): void => {
-    const wheel = input.values[RGE_IN_WHEEL] as number;
+    const wheel = input.values[TSE_IN_WHEEL] as number;
     if (!(wheel !== 0) || scrollers.length === 0) return;
     if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
     const at = input.worldPoint(input.screenX, input.screenY);
@@ -462,7 +462,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const dispatchDrag = (): void => {
     const held = world.pressed;
     if (held === null || held.onDrag === undefined) return;
-    if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_DOWN) === 0) return;
+    if (((input.keys[LEFT_BUTTON] as number) & TSE_KEY_DOWN) === 0) return;
     const index = pointers.indexOf(held);
     if (index < 0) return;
     const point =
@@ -599,14 +599,14 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       if (closed) throw new Error("The player is closed.");
       if (failure !== null) {
         drawError(failure);
-        return input.values[RGE_IN_QUIT] === 0;
+        return input.values[TSE_IN_QUIT] === 0;
       }
       if (!showErrors) return stepGame();
       try {
         return stepGame();
       } catch (error) {
         drawError(fail(error));
-        return input.values[RGE_IN_QUIT] === 0;
+        return input.values[TSE_IN_QUIT] === 0;
       }
     },
     close,
@@ -615,13 +615,13 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   function stepGame(): boolean {
     const started = clock();
     toggleFullscreen();
-    if (fpsKey !== undefined && ((input.keys[fpsKey] as number) & RGE_KEY_PRESSED) !== 0) showFps = !showFps;
-    if (overlayKey !== undefined && ((input.keys[overlayKey] as number) & RGE_KEY_PRESSED) !== 0) {
+    if (fpsKey !== undefined && ((input.keys[fpsKey] as number) & TSE_KEY_PRESSED) !== 0) showFps = !showFps;
+    if (overlayKey !== undefined && ((input.keys[overlayKey] as number) & TSE_KEY_PRESSED) !== 0) {
       overlay = !overlay;
       builder.inspecting = overlay;
       stale = true; // draw this frame again, with the boxes listed
     }
-    const realDt = input.values[RGE_IN_DT] as number;
+    const realDt = input.values[TSE_IN_DT] as number;
     if (realDt > 0) smoothDt = smoothDt === 0 ? realDt : smoothDt * 0.9 + realDt * 0.1;
     dispatchPress();
     dispatchDrag();
@@ -631,7 +631,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const live = current instanceof Game ? current : null;
     const scale = live?.timeScale ?? 1;
     world.paused = live?.paused === true;
-    const dt = (input.values[RGE_IN_DT] as number) * (scale > 0 ? scale : 0);
+    const dt = (input.values[TSE_IN_DT] as number) * (scale > 0 ? scale : 0);
     // What was typed since the last frame goes to this frame's first step only.
     input.typed = input.typedNext;
     input.typedNext = "";
@@ -673,8 +673,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
         built.list,
         built,
         builder.inspected,
-        input.values[RGE_IN_MOUSE_X] as number,
-        input.values[RGE_IN_MOUSE_Y] as number,
+        input.values[TSE_IN_MOUSE_X] as number,
+        input.values[TSE_IN_MOUSE_Y] as number,
         input.width
       );
     if (showFps) {
@@ -696,7 +696,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       profiler.phase("draw", profiler.now() - drawStarted);
       profiler.frame();
     }
-    return input.values[RGE_IN_QUIT] === 0;
+    return input.values[TSE_IN_QUIT] === 0;
   }
 }
 

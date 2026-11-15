@@ -3,24 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "rge": {
+  "tse": {
     "name": "bramble"
   },
   "dependencies": {
-    "@rge/native": "0.0.0",
-    "@rge/player": "0.0.0",
-    "@rge/player-node": "0.0.0",
-    "@rge/runtime": "0.0.0"
+    "@tsengine/native": "0.0.0",
+    "@tsengine/player": "0.0.0",
+    "@tsengine/player-node": "0.0.0",
+    "@tsengine/runtime": "0.0.0"
   },
   "devDependencies": {
-    "@rge/cli": "0.0.0",
+    "@tsengine/cli": "0.0.0",
     "@types/node": "^22.10.0"
   },
   "scripts": {
-    "build": "rge build",
-    "dev": "rge dev",
-    "check": "rge check",
-    "package": "rge package",
+    "build": "tse build",
+    "dev": "tse dev",
+    "check": "tse check",
+    "package": "tse package",
     "assets": "node tools/make-assets.ts"
   }
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, Music, Sound } from "@rge/runtime";
+import { Entity, Music, Sound } from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, type PlayerConfig } from "../src/index.ts";
 

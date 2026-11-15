@@ -6,19 +6,19 @@ import { fileURLToPath } from "node:url";
 
 import { KEYS, PROTOCOL } from "../src/protocol.ts";
 
-const header = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../native/include/rge.h"), "utf8");
+const header = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../native/include/tse.h"), "utf8");
 
-/** Every `#define RGE_NAME <integer>` in the header. Function-like macros (`RGE_KEYS(X)`) have no value and are skipped. */
+/** Every `#define TSE_NAME <integer>` in the header. Function-like macros (`TSE_KEYS(X)`) have no value and are skipped. */
 function headerConstants(): Map<string, number> {
   const out = new Map<string, number>();
-  for (const match of header.matchAll(/^#define\s+(RGE_[A-Z0-9_]+)\s+(\d+)\b/gm)) out.set(match[1] as string, Number(match[2]));
+  for (const match of header.matchAll(/^#define\s+(TSE_[A-Z0-9_]+)\s+(\d+)\b/gm)) out.set(match[1] as string, Number(match[2]));
   return out;
 }
 
-/** The names in the `RGE_KEYS` X-macro, in order, with their kind. */
+/** The names in the `TSE_KEYS` X-macro, in order, with their kind. */
 function headerKeys(): { kind: string; code: string; name: string }[] {
-  const start = header.indexOf("#define RGE_KEYS(X)");
-  assert.ok(start >= 0, "RGE_KEYS is missing from rge.h");
+  const start = header.indexOf("#define TSE_KEYS(X)");
+  assert.ok(start >= 0, "TSE_KEYS is missing from tse.h");
   const end = header.indexOf("\n\n", start);
   const block = header.slice(start, end);
   return [...block.matchAll(/X\((K|M|G|S),\s*(\w+),\s*"([^"]+)"\)/g)].map((m) => ({
@@ -28,19 +28,19 @@ function headerKeys(): { kind: string; code: string; name: string }[] {
   }));
 }
 
-describe("protocol.ts mirrors native/include/rge.h", () => {
+describe("protocol.ts mirrors native/include/tse.h", () => {
   it("has every constant the header defines, with the same value", () => {
     const constants = headerConstants();
     assert.ok(constants.size >= 25, "the header should define the protocol constants");
     for (const [name, value] of constants) {
-      assert.ok(Object.hasOwn(PROTOCOL, name), `${name} is in rge.h but not in protocol.ts`);
+      assert.ok(Object.hasOwn(PROTOCOL, name), `${name} is in tse.h but not in protocol.ts`);
       assert.equal((PROTOCOL as Record<string, number>)[name], value, `${name} differs`);
     }
   });
 
   it("defines no constant the header lacks", () => {
     const constants = headerConstants();
-    for (const name of Object.keys(PROTOCOL)) assert.ok(constants.has(name), `${name} is in protocol.ts but not in rge.h`);
+    for (const name of Object.keys(PROTOCOL)) assert.ok(constants.has(name), `${name} is in protocol.ts but not in tse.h`);
   });
 
   it("lists the same keys in the same order", () => {
@@ -60,10 +60,10 @@ describe("protocol.ts mirrors native/include/rge.h", () => {
   });
 
   it("keeps each op's length consistent with its record layout", () => {
-    assert.equal(PROTOCOL.RGE_OP_VIEW_LEN, 7);
-    assert.equal(PROTOCOL.RGE_OP_SPRITE_LEN, 7);
-    assert.equal(PROTOCOL.RGE_OP_RECT_LEN, 9);
-    assert.equal(PROTOCOL.RGE_OP_ELLIPSE_LEN, 9);
-    assert.equal(PROTOCOL.RGE_OP_TEXT_LEN, 9);
+    assert.equal(PROTOCOL.TSE_OP_VIEW_LEN, 7);
+    assert.equal(PROTOCOL.TSE_OP_SPRITE_LEN, 7);
+    assert.equal(PROTOCOL.TSE_OP_RECT_LEN, 9);
+    assert.equal(PROTOCOL.TSE_OP_ELLIPSE_LEN, 9);
+    assert.equal(PROTOCOL.TSE_OP_TEXT_LEN, 9);
   });
 });

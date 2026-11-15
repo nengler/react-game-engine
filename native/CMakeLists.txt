@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
-project(rge C)
+project(tse C)
 
-# librge: the only drawing code in the engine. It wraps raylib and executes the draw records
-# described in include/rge.h. Two libraries are built from the same sources:
-#   rge         shared, loaded by the Node host (koffi)
-#   rge_static  static, linked into the Rust host
+# libtse: the only drawing code in the engine. It wraps raylib and executes the draw records
+# described in include/tse.h. Two libraries are built from the same sources:
+#   tse         shared, loaded by the Node host (koffi)
+#   tse_static  static, linked into the Rust host
 #
-# RGE_PLATFORM picks raylib's platform:
+# TSE_PLATFORM picks raylib's platform:
 #   Desktop  a real window (OpenGL). Needs the X11 and GL development packages on Linux.
 #   Memory   raylib's software renderer into a memory buffer: no window, no GPU, no system libraries.
 #            For tests and CI. There is no keyboard or mouse input, and audio may be unavailable.
-set(RGE_PLATFORM "Desktop" CACHE STRING "raylib platform: Desktop or Memory")
-set_property(CACHE RGE_PLATFORM PROPERTY STRINGS Desktop Memory)
+set(TSE_PLATFORM "Desktop" CACHE STRING "raylib platform: Desktop or Memory")
+set_property(CACHE TSE_PLATFORM PROPERTY STRINGS Desktop Memory)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 include(FetchContent)
-set(PLATFORM "${RGE_PLATFORM}" CACHE STRING "" FORCE)
+set(PLATFORM "${TSE_PLATFORM}" CACHE STRING "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
@@ -33,35 +33,35 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-set(RGE_SOURCES src/rge.c src/assets.c src/keys.c src/overlaps.c src/storage.c)
+set(TSE_SOURCES src/tse.c src/assets.c src/keys.c src/overlaps.c src/storage.c)
 
-add_library(rge SHARED ${RGE_SOURCES})
-target_include_directories(rge PUBLIC include PRIVATE src)
-target_link_libraries(rge PRIVATE raylib)
+add_library(tse SHARED ${TSE_SOURCES})
+target_include_directories(tse PUBLIC include PRIVATE src)
+target_link_libraries(tse PRIVATE raylib)
 
-add_library(rge_static STATIC ${RGE_SOURCES})
-target_include_directories(rge_static PUBLIC include PRIVATE src)
-target_link_libraries(rge_static PUBLIC raylib)
+add_library(tse_static STATIC ${TSE_SOURCES})
+target_include_directories(tse_static PUBLIC include PRIVATE src)
+target_link_libraries(tse_static PUBLIC raylib)
 
 # raylib's Memory platform does not pull in the system libraries its audio and maths code uses.
 if(UNIX AND NOT APPLE)
-  target_link_libraries(rge PRIVATE m pthread dl)
-  target_link_libraries(rge_static PUBLIC m pthread dl)
+  target_link_libraries(tse PRIVATE m pthread dl)
+  target_link_libraries(tse_static PUBLIC m pthread dl)
 endif()
 
 if(MSVC)
-  target_compile_options(rge PRIVATE /W4)
-  target_compile_options(rge_static PRIVATE /W4)
+  target_compile_options(tse PRIVATE /W4)
+  target_compile_options(tse_static PRIVATE /W4)
 else()
-  target_compile_options(rge PRIVATE -Wall -Wextra)
-  target_compile_options(rge_static PRIVATE -Wall -Wextra)
+  target_compile_options(tse PRIVATE -Wall -Wextra)
+  target_compile_options(tse_static PRIVATE -Wall -Wextra)
 endif()
 
 enable_testing()
-add_executable(rge_smoke test/smoke.c)
-target_link_libraries(rge_smoke PRIVATE rge_static)
-target_include_directories(rge_smoke PRIVATE src)
-if(RGE_PLATFORM STREQUAL "Memory")
-  target_compile_definitions(rge_smoke PRIVATE RGE_SMOKE_SOFTWARE)
+add_executable(tse_smoke test/smoke.c)
+target_link_libraries(tse_smoke PRIVATE tse_static)
+target_include_directories(tse_smoke PRIVATE src)
+if(TSE_PLATFORM STREQUAL "Memory")
+  target_compile_definitions(tse_smoke PRIVATE TSE_SMOKE_SOFTWARE)
 endif()
-add_test(NAME smoke COMMAND rge_smoke WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+add_test(NAME smoke COMMAND tse_smoke WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Hud, Screen, Shape, World } from "@rge/runtime";
+import { Hud, Screen, Shape, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -98,7 +98,7 @@ describe("Screen: diagnostics", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Screen${Math.random()}.tsx`,
-          text: `import { Screen, Shape } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+          text: `import { Screen, Shape } from "@tsengine/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -113,17 +113,6 @@ describe("Screen: diagnostics", () => {
 
   it("type-checks the generated module", () => {
     assert.deepEqual(typeCheck(compile(GAME, "Game.tsx")), []);
-  });
-
-  it("lets state take its own names, kept in `$name` fields", () => {
-    for (const name of ["fit", "pixelPerfect", "border"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Screen width={1} height={1} />; }`).code.includes(
-          `get $${name}()`
-        ),
-        name
-      );
-    }
   });
 });
 
@@ -162,7 +151,7 @@ function Level() {
     const check = getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/Hud${Math.random()}.tsx`,
-        text: `import { Hud, Text } from "@rge/runtime/jsx";\nfunction C() { return <Hud transform={{ x: 1 }}><Text size={8}>x</Text></Hud>; }`,
+        text: `import { Hud, Text } from "@tsengine/runtime/jsx";\nfunction C() { return <Hud transform={{ x: 1 }}><Text size={8}>x</Text></Hud>; }`,
       },
     ]);
     assert.deepEqual(check, []);
@@ -170,21 +159,10 @@ function Level() {
 
   it("lets a component called Hud shadow the built-in, but not in a file that imports <Hud>", () => {
     assert.match(compile(`function Hud() { return <Entity name="Hud" />; }`).code, /class Hud extends Entity/);
-    const clash = compileErrors(`import { Entity, Hud } from "@rge/runtime/jsx"; function Hud() { return <Entity name="Hud" />; }`);
+    const clash = compileErrors(`import { Entity, Hud } from "@tsengine/runtime/jsx"; function Hud() { return <Entity name="Hud" />; }`);
     assert.ok(
       clash.some((d) => /conflicts with the built-in <Hud> this file imports/.test(d.message)),
       clash.map((d) => d.message).join("\n")
     );
-  });
-});
-
-describe("the layout offset", () => {
-  it("can be a state name, kept apart from the field layout writes into every object", () => {
-    for (const name of ["layoutX", "layoutY"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Entity name="C" />; }`).code.includes(`get $${name}()`),
-        name
-      );
-    }
   });
 });

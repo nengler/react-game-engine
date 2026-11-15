@@ -1,11 +1,11 @@
-/* rge_overlaps: which boxes overlap, for the player's collisions. It touches no window and no raylib, so it runs
- * before rge_open and after rge_close. The same sweep as the script's own (packages/player/src/collide.ts), which a
+/* tse_overlaps: which boxes overlap, for the player's collisions. It touches no window and no raylib, so it runs
+ * before tse_open and after tse_close. The same sweep as the script's own (packages/player/src/collide.ts), which a
  * backend without this function still uses: the two must find the same pairs. */
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "rge.h"
+#include "tse.h"
 
 /* The most bands the sweep is cut into, and how many mean box heights tall a band is. */
 #define BAND_LIMIT 1024
@@ -62,7 +62,7 @@ static int32_t band_of(double y, double top, double inverse, int32_t last) {
   return f > 0 ? (int32_t)f : 0;
 }
 
-int32_t rge_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity) {
+int32_t tse_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity) {
   if (boxes == NULL || order == NULL || count <= 0) return 0;
   if (pairs == NULL || capacity < 0) capacity = 0;
 

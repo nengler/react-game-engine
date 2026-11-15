@@ -1,4 +1,4 @@
-import { createParticles, createSounds, freeze, type Vector2 } from "@rge/runtime";
+import { createParticles, createSounds, freeze, type Vector2 } from "@tsengine/runtime";
 
 import type { GameEvent } from "./rules/events.ts";
 import { freezeFor } from "./rules/freeze.ts";

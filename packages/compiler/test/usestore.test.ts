@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 /** `useStore(store, read)`: a value from a store outside the game state, kept up to date (DESIGN.md, "`useStore`"). */
 import { after, describe, it } from "node:test";
 
-import { Entity, Text, World, keepIfEqual, sameData } from "@rge/runtime";
+import { Entity, Text, World, keepIfEqual, sameData } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 

@@ -1,4 +1,4 @@
-import { Entity, Text, useMount } from "@rge/runtime/jsx";
+import { Entity, Text, useMount } from "@tsengine/runtime/jsx";
 
 import { Choices } from "./Choices.tsx";
 import { useGame } from "./GameState.ts";

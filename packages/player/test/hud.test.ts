@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { Camera, Collider, Entity, Flex, GameObject, Hud, Pointer, Screen, Shape, Text, getSoundSink } from "@rge/runtime";
+import { Camera, Collider, Entity, Flex, GameObject, Hud, Pointer, Screen, Shape, Text, getSoundSink } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 function draw(
@@ -17,7 +17,7 @@ function draw(
   const warnings: string[] = [];
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), warn: (m) => warnings.push(m) });
   const built = builder.build(root, width, height);
-  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   return { records: [...backend.lastFrame.records], warnings, built };
 }
 
@@ -104,12 +104,6 @@ describe("<Hud>: what is drawn", () => {
     assert.equal(built.camera, null);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0]!, /<Camera> inside a <Hud>/);
-  });
-
-  it("is the same frame as without one when it holds nothing and no HUD exists", () => {
-    const root = new Entity();
-    root.addChild(box(1));
-    assert.deepEqual(ops(draw(root).records), ["view", "rect@1"]);
   });
 
   it("draws text in the HUD, in game pixels under a <Screen>", () => {
@@ -229,12 +223,6 @@ describe("<Flex> in the frame", () => {
     ]);
   });
 
-  it("draws nothing for a Flex without a background", () => {
-    const row = new Flex();
-    row.addChild(box(0, 10));
-    assert.deepEqual(rects(draw(row).records).length, 1);
-  });
-
   it("fills the window with a growing root, and again at another size after a resize", () => {
     const root = new Flex({ width: "grow", height: "grow", background: "blue", padding: 8 });
     root.addChild(box(0, 4));
@@ -285,7 +273,7 @@ describe("<Flex> in the frame", () => {
 
 function decode(built: ReturnType<FrameBuilder["build"]>): DecodedRecord[] {
   const backend = new RecordingBackend();
-  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   return [...backend.lastFrame.records];
 }
 

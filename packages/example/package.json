@@ -1,10 +1,10 @@
 {
-  "name": "@rge/example",
+  "name": "@tsengine/example",
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@rge/runtime": "0.0.0"
+    "@tsengine/runtime": "0.0.0"
   }
 }

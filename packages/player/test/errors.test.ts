@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Text, getSoundSink, type GameObject } from "@rge/runtime";
+import { Entity, Text, getSoundSink, type GameObject } from "@tsengine/runtime";
 
 import { estimateTextWidth } from "../src/draw.ts";
 import { HOST_RUN_KEY } from "../src/host.ts";
@@ -114,10 +114,10 @@ describe("errors in the window", () => {
   it("shows an error a host reports, with its own note", () => {
     const backend = new RecordingBackend();
     const player = createPlayer(backend, { ...WINDOW, root: () => new Entity() });
-    player.showError("src/Main.tsx(3,1): error RGE1001: something\nsecond line", "Save a file to try again.");
+    player.showError("src/Main.tsx(3,1): error TSE1001: something\nsecond line", "Save a file to try again.");
     player.step();
     const shown = texts(backend.frames[0]);
-    assert.deepEqual(shown.slice(1, 3), ["src/Main.tsx(3,1): error RGE1001: something", "second line"]);
+    assert.deepEqual(shown.slice(1, 3), ["src/Main.tsx(3,1): error TSE1001: something", "second line"]);
     assert.equal(shown.at(-1), "Save a file to try again.");
     player.close();
   });

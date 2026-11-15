@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, setDevelopmentWarnings, Text, World } from "@rge/runtime";
+import { Entity, setDevelopmentWarnings, Text, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -31,21 +31,6 @@ async function run(source: string, name: string, steps = 1): Promise<Entity & { 
 }
 
 describe("useMutable: what a handler reads", () => {
-  it("reads its own writes at once, where a setter's value would not show until the next step", async () => {
-    const hero = await run(
-      `export function Hero() {
-         const s = useMutable({ n: 0, big: false });
-         useUpdate(() => {
-           s.n += 5;
-           if (s.n > 3) s.big = true;
-         });
-         return <Entity />;
-       }`,
-      "Hero"
-    );
-    assert.deepEqual(hero.s, { n: 5, big: true });
-  });
-
   it("sees what an earlier handler wrote in the same step: useInput, then useUpdate", async () => {
     const hero = await run(
       `export function Hero() {

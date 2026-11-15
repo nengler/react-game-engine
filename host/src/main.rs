@@ -1,6 +1,6 @@
-//! rge-host: run a bundled game (one ES module) in QuickJS-ng, drawing through librge (raylib).
+//! tse-host: run a bundled game (one ES module) in QuickJS-ng, drawing through libtse (raylib).
 //!
-//!     rge-host [<game.js>] [--root <dir>]
+//!     tse-host [<game.js>] [--root <dir>]
 //!
 //! `--root` is the folder the game's relative paths (its `assets/`) are resolved against; the default is
 //! the current directory. With no arguments it runs the `game.js` next to the executable, in that folder:
@@ -13,7 +13,7 @@ mod ffi;
 use rquickjs::{CatchResultExt, Context, Module, Runtime};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: rge-host [<game.js>] [--root <dir>]   (no arguments: run game.js next to this executable)";
+const USAGE: &str = "usage: tse-host [<game.js>] [--root <dir>]   (no arguments: run game.js next to this executable)";
 
 fn main() -> ExitCode {
     let mut game: Option<String> = None;

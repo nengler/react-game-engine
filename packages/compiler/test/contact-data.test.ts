@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 /** Contacts carry data (DESIGN.md, "What `other` exposes"): `<Collider data>` reaches `other.data`, typed by tag through `ColliderData`. */
 import { after, describe, it } from "node:test";
 
-import { Collider, Entity, Text, World } from "@rge/runtime";
+import { Collider, Entity, Text, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, getCompiler, load } from "./helpers.ts";
 

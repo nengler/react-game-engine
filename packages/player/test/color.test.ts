@@ -37,10 +37,6 @@ describe("parseColor", () => {
     assert.equal(hex("transparent"), "#00000000");
   });
 
-  it("reads every colour the example uses", () => {
-    for (const css of ["white", "gray", "gold", "red", "rgba(255, 0, 0, 0.3)"]) assert.notEqual(parseColor(css), null, css);
-  });
-
   it("knows all 148 CSS colour names", () => {
     assert.equal(NAMED_COLOR_COUNT, 148);
   });

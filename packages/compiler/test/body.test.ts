@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, World, captureHotState, registerTilemaps, restoreHotState, type TilemapData } from "@rge/runtime";
+import { Entity, World, captureHotState, registerTilemaps, restoreHotState, type TilemapData } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 

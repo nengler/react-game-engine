@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, World } from "@rge/runtime";
+import { Entity, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
@@ -299,7 +299,7 @@ describe("key on any element", () => {
       [DiagnosticCode.UnsupportedAttribute]
     );
     assert.match(root[0]!.message, /where the component is used, not on its root/);
-    const passed = `import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
+    const passed = `import { type Child, Entity, Sprite, useMutable } from "@tsengine/runtime/jsx";
 interface PanelProps { children: Child }
 function Panel({ children }: PanelProps) { return <Entity name="P">{children}</Entity>; }
 export function A() { const s = useMutable({ k: 1 }); return <Panel><Sprite key={s.k} image="a.png" /><Sprite image="b.png" /></Panel>; }`;

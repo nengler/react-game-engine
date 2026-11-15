@@ -1,4 +1,4 @@
-import { Text } from "@rge/runtime/jsx";
+import { Text } from "@tsengine/runtime/jsx";
 
 interface LabelProps {
   text: string;

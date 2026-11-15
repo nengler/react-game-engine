@@ -1,4 +1,4 @@
-import { Game, Music, Route, Router, Screen } from "@rge/runtime/jsx";
+import { Game, Music, Route, Router, Screen } from "@tsengine/runtime/jsx";
 
 import { End } from "./End.tsx";
 import { useGame } from "./GameState.ts";

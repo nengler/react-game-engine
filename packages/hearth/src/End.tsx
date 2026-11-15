@@ -1,4 +1,4 @@
-import { Hud } from "@rge/runtime/jsx";
+import { Hud } from "@tsengine/runtime/jsx";
 
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";

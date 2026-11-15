@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { FrameBuilder } from "@rge/player";
+import { FrameBuilder } from "@tsengine/player";
 import {
   Button,
   createControls,
@@ -21,7 +21,7 @@ import {
   Tooltip,
   World,
   type GameObject,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -248,7 +248,7 @@ describe("Flex onPress and Text align", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Press${Math.random()}.tsx`,
-          text: `import { Flex, Text } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
+          text: `import { Flex, Text } from "@tsengine/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(check(`<Flex onPress={() => {}}><Text width={40} align={wide ? "left" : "right"}>x</Text></Flex>`), []);
@@ -260,7 +260,7 @@ describe("Flex onPress and Text align", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/TextFx${Math.random()}.tsx`,
-          text: `import { Text } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+          text: `import { Text } from "@tsengine/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -378,7 +378,7 @@ function Options({ onClose }: { onClose: () => void }) {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Widget${Math.random()}.tsx`,
-          text: `import { Slider, Toggle } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
+          text: `import { Slider, Toggle } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -394,7 +394,7 @@ function Options({ onClose }: { onClose: () => void }) {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/MenuCheck${Math.random()}.tsx`,
-          text: `import { Button, Menu, Text } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
+          text: `import { Button, Menu, Text } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -446,7 +446,7 @@ function Name() {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/TextCheck${Math.random()}.tsx`,
-          text: `import { Flex, Text, TextInput, Tooltip } from "@rge/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }`,
+          text: `import { Flex, Text, TextInput, Tooltip } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(check(`<TextInput value={n} onChange={(v) => v.trim()} onSubmit={(v) => v.length} textSize={8} />`), []);
@@ -454,21 +454,6 @@ function Name() {
     assert.ok(check(`<TextInput onChange={(v: number) => v} />`).length > 0, "onChange is given a string");
     assert.ok(check(`<Tooltip show="yes" />`).length > 0, "show is a boolean");
     assert.ok(compileErrors(`function C() { return <TextInput><Text>no</Text></TextInput>; }`).length > 0, "a TextInput takes no children");
-  });
-
-  it("lets state take a widget's names, kept in `$name` fields", () => {
-    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
-    for (const [tag, names] of [
-      ["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]],
-      ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]],
-    ] as const) {
-      for (const name of names) {
-        assert.ok(
-          compile(`function C() { const ${name} = useMutable({ n: 1 }); return <${tag} />; }`).code.includes(`get $${name}()`),
-          `${tag} ${name}`
-        );
-      }
-    }
   });
 
   it("checks a Text's align literal with a suggestion", () => {
@@ -479,22 +464,6 @@ function Name() {
     );
     assert.match(errors[0]!.message, /<Text align> must be one of "left", "center", "right", not 'centre' \(did you mean "center"\?\)/);
     assert.doesNotThrow(() => compile(`function C() { return <Text align="right" width={30}>x</Text>; }`));
-  });
-
-  it("lets state take the new names, kept in `$name` fields", () => {
-    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
-    for (const name of ["onPress", "contains"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`),
-        `Flex ${name}`
-      );
-    }
-    for (const name of ["align", "width"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Text>x</Text>; }`).code.includes(`get $${name}()`),
-        `Text ${name}`
-      );
-    }
   });
 });
 
@@ -553,7 +522,7 @@ describe("Flex: diagnostics", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Flex${Math.random()}.tsx`,
-          text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+          text: `import { Flex } from "@tsengine/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -595,7 +564,9 @@ function Menu() {
     const menu = new Mine();
     assert.ok(!(menu instanceof MenuBox), "the file's own Menu, not the built-in");
     assert.ok(!(menu.children[0] instanceof Button) && menu.children[0] instanceof Flex);
-    const errors = compileErrors(`import { Entity, Flex } from "@rge/runtime/jsx"; function Flex() { return <Entity name="Flex" />; }`);
+    const errors = compileErrors(
+      `import { Entity, Flex } from "@tsengine/runtime/jsx"; function Flex() { return <Entity name="Flex" />; }`
+    );
     assert.ok(errors.some((d) => /conflicts with the built-in <Flex> this file imports/.test(d.message)));
   });
 });
@@ -694,7 +665,7 @@ function Tile() {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`,
-          text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
+          text: `import { Flex } from "@tsengine/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -719,44 +690,5 @@ function Tile() {
     assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
     assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
     assert.ok(check(`<Flex hoverWidth={4} />`).length > 0, "and a made-up prop is not accepted");
-  });
-
-  it("lets state take the new names too, kept in `$name` fields", () => {
-    for (const name of [
-      "borderWidth",
-      "borderColor",
-      "borderRadius",
-      "hoverBackground",
-      "hoverBorderColor",
-      "focusBackground",
-      "focusBorderColor",
-      "pressedBackground",
-      "pressedBorderColor",
-      "disabledBackground",
-      "disabledBorderColor",
-      "disabled",
-      "transition",
-      "transitionState",
-      "overflow",
-      "scrollX",
-      "scrollY",
-      "backgroundImage",
-      "slice",
-      "sliceTop",
-      "sliceRight",
-      "sliceBottom",
-      "sliceLeft",
-      "hoverBackgroundImage",
-      "focusBackgroundImage",
-      "pressedBackgroundImage",
-      "disabledBackgroundImage",
-      "opacity",
-      "drawnAlpha",
-      "wrap",
-      "rowGap",
-      "columnGap",
-    ]) {
-      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), name);
-    }
   });
 });

@@ -1,4 +1,4 @@
-import { getTilemap, registerTilemaps, type TileGrid } from "@rge/runtime";
+import { getTilemap, registerTilemaps, type TileGrid } from "@tsengine/runtime";
 
 import { tilemaps } from "../../generated/tilemaps.ts";
 import { heightOf } from "./body/step.ts";
