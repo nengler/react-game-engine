@@ -4,40 +4,48 @@ import type { GameObject } from "./GameObject.ts";
 export type GameStateValue = number | string | boolean;
 
 /**
- * `set`, as in Zustand: a partial state, or a function from the state to one. It is **shallow-merged**, so a nested
- * object is replaced as a whole: `set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } }))`.
+ * A selected value, as components and plain code read it: read-only all the way down. Only the game state's actions change it,
+ * so a value read from it is never written in place (`run.items.push(…)` is a type error, as `run.time = 0` is).
  */
-export type SetGameState<S> = (partial: Partial<S> | ((state: S) => Partial<S>)) => void;
-
-export type GetGameState<S> = () => S;
-
-/** What you write: given `set` and `get`, return the state with its actions in it. */
-export type GameStateCreator<S> = (set: SetGameState<S>, get: GetGameState<S>) => S;
+export type ReadonlyDeep<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends readonly (infer I)[]
+    ? readonly ReadonlyDeep<I>[]
+    : T extends object
+      ? { readonly [K in keyof T]: ReadonlyDeep<T[K]> }
+      : T;
 
 /**
- * The game's state, shaped like a Zustand store. Create it once, in `GameState.ts`:
+ * The game's state. Create it once, in `GameState.ts`, from its data and the actions that change it:
  *
- *     export const useGame = createGameState<State>()((set) => ({
- *       coins: 0,
- *       player: { hp: 10 },
- *       collect: () => set((s) => ({ coins: s.coins + 1 })),
- *     }));
+ *     export const useGame = createGameState(
+ *       { coins: 0, player: { hp: 10 } },
+ *       {
+ *         collect(s, n: number) { s.coins += n; },
+ *         hurt(s) { s.player.hp -= 1; },
+ *       }
+ *     );
  *
  * A component reads with a selector, which returns the value: `const hp = useGame((s) => s.player.hp)`, and takes the
- * actions it calls in handlers with `const { collect } = useGame.actions()`. Calling `useGame`
- * is compile-time only (the compiler turns the selector into that one path); `getState` and `setState` work
- * as in Zustand, for code that is not a compiled component.
+ * actions it calls in handlers with `const { collect } = useGame.actions()`. Calling `useGame` is compile-time only (the
+ * compiler turns the selector into that one path). What a selector returns is read-only: only actions change the state.
  */
 export interface GameState<S> {
-  <T>(selector: (state: S) => T): T;
+  <T>(selector: (state: ReadonlyDeep<S>) => T): ReadonlyDeep<T>;
   readonly store: GameStore<S>;
   /**
    * The store's actions, and nothing else: `const { collect, hurt } = useGame.actions()` in a component (actions never change,
    * so this subscribes to nothing and never renders it), or `useGame.actions().collect()` in plain code.
    */
   actions(): ActionsOf<S>;
-  getState(): S;
-  setState(partial: Partial<S> | ((state: S) => Partial<S>)): void;
+  /** The whole state, read-only, with its actions: for plain code (a test, a tool) that reads it. */
+  getState(): ReadonlyDeep<S>;
+  /**
+   * Replace part of the state from outside the game: a test, a story's `setup`, a tool. Shallow-merged, as Zustand's
+   * `setState` is (`useGame.setState({ run: { ...newRun(), time: 754 } })`). Game code changes the state through its actions;
+   * calling this while an action runs is an error, since the action's changes would overwrite it.
+   */
+  setState(partial: Partial<S> | ((state: ReadonlyDeep<S>) => Partial<S>)): void;
 }
 
 /** The functions of a state: its actions. */
@@ -45,7 +53,8 @@ export type ActionsOf<S> = { readonly [K in keyof S as S[K] extends (...args: ne
 
 /**
  * An action of `createGameState(data, actions)`: it takes the state, writable, then its own arguments, and changes the state
- * in place (`select(s, pad: number) { s.cursor = pad; }`). What it returns is returned to the caller.
+ * in place (`select(s, pad: number) { s.cursor = pad; }`). What it returns is returned to the caller. An action may call
+ * another (`useGame.actions().begin()`): they share one draft, committed when the outermost returns.
  */
 export type GameAction<D> = (state: D, ...args: any[]) => unknown;
 
@@ -55,27 +64,19 @@ export type BoundActions<A> = {
 };
 
 /**
- * Create the game's state.
- *
- * - **`createGameState(data, actions)`**, the form to write: the data is a plain object, and each action takes the state as its
- *   first argument and writes it directly (`select(s, pad: number) { s.cursor = pad; s.open = true; }`). A component calls it
- *   without the state (`const { select } = useGame.actions(); select(3)`). Only actions change the state.
- * - **`createGameState<State>()(creator)` and `createGameState(creator)`**, the Zustand form with `set` and `get`, kept while games
- *   move to the form above.
+ * Create the game's state from its data, a plain object, and its actions: each takes the state as its first argument and
+ * writes it directly (`select(s, pad: number) { s.cursor = pad; s.open = true; }`). A component calls an action without the
+ * state (`const { select } = useGame.actions(); select(3)`). Only actions change the state.
  */
 export function createGameState<D extends object, A extends Record<string, GameAction<D>>>(
   data: D,
   actions: A
-): GameState<D & BoundActions<A>>;
-export function createGameState<S extends object>(): (creator: GameStateCreator<S>) => GameState<S>;
-export function createGameState<S extends object>(creator: GameStateCreator<S>): GameState<S>;
-export function createGameState<S extends object>(
-  creator?: GameStateCreator<S> | object,
-  actions?: Record<string, GameAction<object>>
-): GameState<S> | ((creator: GameStateCreator<S>) => GameState<S>) {
-  if (actions !== undefined) return wrap(GameStore.fromActions(creator as object, actions)) as unknown as GameState<S>;
-  const make = (creator: GameStateCreator<S>): GameState<S> => wrap(new GameStore<S>(creator));
-  return creator ? make(creator as GameStateCreator<S>) : make;
+): GameState<D & BoundActions<A>> {
+  if (typeof data === "function" || actions === undefined || typeof actions !== "object")
+    throw new Error(
+      "createGameState takes the data and the actions: `createGameState({ coins: 0 }, { collect(s) { s.coins += 1; } })`. The `(set) => ({ … })` form was removed."
+    );
+  return wrap(GameStore.fromActions(data, actions)) as unknown as GameState<D & BoundActions<A>>;
 }
 
 function wrap<S>(store: GameStore<S>): GameState<S> {
@@ -95,13 +96,13 @@ function wrap<S>(store: GameStore<S>): GameState<S> {
 }
 
 /**
- * The state behind a `createGameState`. `setState` shallow-merges, then compares the old and new state leaf by leaf and
- * marks dirty every mounted object that reads a leaf that changed (and only those). Those objects copy the new value
- * into their own field when they next render, so within a frame every handler sees the same snapshot, as with
- * `useState`. A `set` that changes no leaf renders nothing. A function in the state (an action) is not a leaf.
+ * The state behind a `createGameState`. An action runs on a draft; when it returns, the store compares the old and new state
+ * leaf by leaf and marks dirty every mounted object that reads a leaf that changed (and only those). Those objects copy the new
+ * value into their own field when they next render, so within a frame every handler sees the same snapshot. An action that
+ * changes no leaf renders nothing. A function in the state (an action) is not a leaf.
  */
 export class GameStore<S = object> {
-  readonly #initial: S;
+  #initial: S;
   #state: S;
   readonly #subscribers = new Map<string, Set<GameObject>>();
 
@@ -109,7 +110,7 @@ export class GameStore<S = object> {
    * The store of `createGameState(data, actions)`. An action runs on a draft, a copy of the state it may change in place (an
    * action called from inside another shares its draft); when the outermost one returns, the draft is compared with the state leaf
    * by leaf, what did not change keeps its object (so a reader comparing by `===` sees no change), and the readers of what did are
-   * told, as `setState` tells them. The data is the state's values; the bound actions sit beside them, as the creator form's do.
+   * told. The data is the state's values; the bound actions sit beside them.
    */
   static fromActions<D extends object>(data: D, actions: Record<string, GameAction<D>>): GameStore<D> {
     for (const [key, value] of Object.entries(data)) {
@@ -117,55 +118,42 @@ export class GameStore<S = object> {
         throw new Error(`The game state's data holds a function at '${key}': actions go in the second argument of createGameState.`);
       if (key in actions) throw new Error(`'${key}' is both a value and an action of the game state.`);
     }
-    let store: GameStore<D> | null = null;
-    store = new GameStore<D>(() => {
-      const bound: Record<string, unknown> = {};
-      for (const [name, action] of Object.entries(actions))
-        bound[name] = (...args: unknown[]) => store!.#act(action as GameAction<unknown>, args);
-      return { ...(cloneData(data) as object), ...bound } as D;
-    });
+    const store = new GameStore<D>(cloneData(data) as D);
+    const bound: Record<string, unknown> = {};
+    for (const [name, action] of Object.entries(actions)) {
+      // Each action says its name while it runs, so the development inspector can show what it changed (only when recording).
+      const named = (...args: unknown[]): unknown => store.#act(name, action as GameAction<unknown>, args);
+      Object.defineProperty(named, "name", { value: name });
+      bound[name] = named;
+    }
+    store.#initial = { ...(store.#initial as object), ...bound } as D;
+    store.#state = store.#initial;
     return store;
+  }
+
+  private constructor(initial: S) {
+    this.#initial = initial;
+    this.#state = initial;
+    stores.add(this);
   }
 
   /** The draft the running actions write, or null between actions. */
   #draft: Record<string, unknown> | null = null;
 
-  #act(action: GameAction<unknown>, args: readonly unknown[]): unknown {
+  #act(name: string, action: GameAction<unknown>, args: readonly unknown[]): unknown {
     if (this.#draft !== null) return action(this.#draft, ...args);
     const draft = cloneData(this.values()) as Record<string, unknown>;
     this.#draft = draft;
-    let result: unknown;
+    this.#acting = name;
     try {
-      result = action(draft, ...args);
+      const result = action(draft, ...args);
+      this.#draft = null;
+      this.#commit(shareUnchanged(this.values(), draft) as Partial<S>);
+      return result;
     } finally {
       this.#draft = null;
+      this.#acting = null;
     }
-    this.setState(shareUnchanged(this.values(), draft) as Partial<S>);
-    return result;
-  }
-
-  constructor(creator: GameStateCreator<S>) {
-    const set: SetGameState<S> = (partial) => this.setState(partial);
-    const made = creator(set, () => this.#state) as Record<string, unknown>;
-    // Each action says its name while it runs, so the development inspector can show what it changed (only when recording).
-    for (const [name, value] of Object.entries(made)) {
-      if (typeof value !== "function") continue;
-      const action = value as (...args: unknown[]) => unknown;
-      const named = (...args: unknown[]): unknown => {
-        const outer = this.#acting;
-        this.#acting = name;
-        try {
-          return action(...args);
-        } finally {
-          this.#acting = outer;
-        }
-      };
-      Object.defineProperty(named, "name", { value: name });
-      made[name] = named;
-    }
-    this.#initial = made as S;
-    this.#state = this.#initial;
-    stores.add(this);
   }
 
   /** The action running now, if any. */
@@ -182,15 +170,28 @@ export class GameStore<S = object> {
   /** Keep `history`. Off by default: a game pays nothing for it. */
   recording = false;
 
-  /** The whole state, with its actions. */
+  /**
+   * The whole state, with its actions. While an action runs, it is the action's draft as it stands (with the actions), so plain
+   * code an action calls (a save's `pick`) reads what the action has written so far.
+   */
   getState(): S {
-    return this.#state;
+    if (this.#draft === null) return this.#state;
+    const actions = Object.entries(this.#state as Record<string, unknown>).filter(([, v]) => typeof v === "function");
+    return { ...this.#draft, ...Object.fromEntries(actions) } as S;
   }
 
-  /** Zustand's `setState`: a partial state or an updater, shallow-merged. */
+  /** Replace part of the state from outside the game (a test, a story, a tool): shallow-merged. See `GameState.setState`. */
   setState(partial: Partial<S> | ((state: S) => Partial<S>)): void {
+    if (this.#draft !== null)
+      throw new Error(
+        `setState was called while the action '${this.#acting}' runs: write the state it was given instead, or call another action.`
+      );
     const next = typeof partial === "function" ? partial(this.#state) : partial;
     if (next === null || next === undefined) return;
+    this.#commit(next);
+  }
+
+  #commit(next: Partial<S>): void {
     const before = this.#state;
     this.#state = { ...before, ...next };
     const changed = changedPaths(before as Tree, this.#state as Tree, "", []);
@@ -206,7 +207,7 @@ export class GameStore<S = object> {
 
   /**
    * The latest value at a dotted path (`"player.hp"`, `"player"`, `"enemies"`): a leaf, or an object or array as the state
-   * holds it. What a compiled component's snapshot reads. Treat an object you get as read-only: change it with `set`.
+   * holds it. What a compiled component's snapshot reads. Treat an object you get as read-only: actions change the state.
    */
   get<T = unknown>(path: string): T {
     let at: unknown = this.#state;
@@ -247,7 +248,7 @@ export class GameStore<S = object> {
     return Object.fromEntries(Object.entries(this.#state as Record<string, unknown>).filter(([, v]) => typeof v !== "function"));
   }
 
-  /** Back to the state the creator returned, telling every reader. The player does this at start. */
+  /** Back to the state's initial data, telling every reader. The player does this at start. */
   reset(): void {
     const before = this.#state;
     this.#state = this.#initial;

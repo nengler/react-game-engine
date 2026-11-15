@@ -174,9 +174,9 @@ import { createSounds } from &quot;@rge/runtime&quot;;
 export const sfx = createSounds({ beep: &quot;beep.wav&quot; });
 
 // src/GameState.ts: call it from a game-state action
-step: () =&gt; {
+step(s) {
   sfx.play(&quot;beep&quot;);
-  set((s) =&gt; ({ steps: s.steps + 1 }));
+  s.steps += 1;
 },</code></pre>
 <p>Put <code>beep.wav</code> in <code>assets/</code>. A sound is an effect, not state: playing it renders nothing and is counted, so a test can check it.</p>
 
@@ -189,7 +189,7 @@ step: () =&gt; {
   &lt;/Route&gt;
 &lt;/Router&gt;
 
-// src/GameState.ts: screen: &quot;title&quot; | &quot;play&quot;, start: () =&gt; set({ screen: &quot;play&quot; })</code></pre>
+// src/GameState.ts: in the data, screen: &quot;title&quot; as &quot;title&quot; | &quot;play&quot;; in the actions, start(s) { s.screen = &quot;play&quot;; }</code></pre>
 <p><code>Title</code> is a component in <code>src/Title.tsx</code> that calls <code>start()</code> when Enter is pressed (<code>useInput</code>). Only the screen the router shows is in the world.</p>
 
 <h2>6. A test</h2>

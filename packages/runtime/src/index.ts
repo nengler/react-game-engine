@@ -9,9 +9,9 @@ export {
   resetGameState,
   type GameState,
   type ActionsOf,
-  type GameStateCreator,
-  type GetGameState,
-  type SetGameState,
+  type BoundActions,
+  type GameAction,
+  type ReadonlyDeep,
   type GameStateValue,
 } from "./GameState.ts";
 export type { Child } from "./jsx-runtime.ts";

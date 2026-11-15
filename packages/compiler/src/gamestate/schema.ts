@@ -3,7 +3,6 @@ import type { CallExpression, Expression, ObjectLiteralExpression, SourceFile } 
 import {
   isArrowFunction,
   isAsExpression,
-  isBlock,
   isCallExpression,
   isFunctionExpression,
   isIdentifier,
@@ -13,7 +12,6 @@ import {
   isParenthesizedExpression,
   isPrefixUnaryExpression,
   isPropertyAssignment,
-  isReturnStatement,
   isShorthandPropertyAssignment,
   isSatisfiesExpression,
   isStringLiteral,
@@ -72,11 +70,11 @@ const SHAPE =
   "GameState.ts must contain `export const useGame = createGameState({ coins: 0, player: { hp: 10 } }, { collect(s) { s.coins += 1; } });`";
 
 /**
- * Reads `GameState.ts`: `createGameState(creator)` or `createGameState<State>()(creator)`, exported under a name
- * components import. The creator is an arrow or function whose result is an object literal: the state. Its leaves are
- * number, string or boolean literals (a negative number is fine; a leaf's type is its literal's: `0` is a `number`),
- * objects of those nested as deep as you like, and, at the top level, functions: the actions. Any other value (an array,
- * a call such as `newRun()`) is a `GameStateValue`: its type comes from TypeScript. Spreads and computed keys are `RGE1109`.
+ * Reads `GameState.ts`: `createGameState(data, actions)`, exported under a name components import. The data is an object
+ * literal: its leaves are number, string or boolean literals (a negative number is fine; a leaf's type is its literal's: `0`
+ * is a `number`), and objects of those nested as deep as you like. Any other value (an array, a call such as `newRun()`) is a
+ * `GameStateValue`: its type comes from TypeScript. The actions are an object literal of functions. Spreads and computed keys
+ * are `RGE1109`, and so is the removed `(set) => ({ … })` form, with what to write instead.
  */
 export function parseGameState(parser: TsxParser, fileName: string, text: string): GameStateSchemaResult {
   const parsed = parser.parse(fileName, text);
@@ -93,8 +91,18 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
       for (const declaration of statement.declarationList.declarations) {
         const init = declaration.initializer ? unwrap(declaration.initializer) : undefined;
         const split = init && isCallExpression(init) ? dataAndActions(init) : undefined;
-        const creatorCall = split ? split.data : init && isCallExpression(init) ? creatorOf(init) : undefined;
-        if (!creatorCall) continue;
+        const removed = !split && init && isCallExpression(init) ? creatorOf(init) : undefined;
+        if (removed) {
+          found++;
+          fail(
+            isObjectLiteralExpression(removed)
+              ? `createGameState takes the actions as its second argument, even when there are none (\`{}\`). ${SHAPE}`
+              : `The \`(set) => ({ … })\` form of createGameState was removed: pass the data and the actions, each action writing the state it is given. ${SHAPE}`,
+            removed
+          );
+          continue;
+        }
+        if (!split) continue;
         found++;
         if (found > 1) {
           fail("A project has one game state: `createGameState` is called more than once.", declaration);
@@ -105,38 +113,23 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
           fail(`${SHAPE}: export it, under a name (\`useGame\`) components import.`, declaration);
           continue;
         }
-        if (split) {
-          const before = diagnostics.length;
-          if (!isObjectLiteralExpression(split.data)) {
-            fail(
-              `The game state's data is an object literal: \`createGameState({ coins: 0, player: { hp: 10 } }, { … })\`. ${SHAPE}`,
-              split.data
-            );
-            continue;
-          }
-          if (!isObjectLiteralExpression(split.actions)) {
-            fail(
-              `The game state's actions are an object literal of functions: \`{ collect(s) { s.coins += 1; } }\`. ${SHAPE}`,
-              split.actions
-            );
-            continue;
-          }
-          const tree = readNode(split.data, fail, null, "data");
-          const actions = readActions(split.actions, fail, tree);
-          if (diagnostics.length === before) result = { name: declaration.name.text, tree, actions };
-          continue;
-        }
-        const object = stateObject(creatorCall);
-        if (!object) {
+        const before = diagnostics.length;
+        if (!isObjectLiteralExpression(split.data)) {
           fail(
-            `The creator must be an arrow function (or function) that returns the state as an object literal: \`(set) => ({ coins: 0, … })\`. ${SHAPE}`,
-            creatorCall
+            `The game state's data is an object literal: \`createGameState({ coins: 0, player: { hp: 10 } }, { … })\`. ${SHAPE}`,
+            split.data
           );
           continue;
         }
-        const before = diagnostics.length;
-        const actions: string[] = [];
-        const tree = readNode(object, fail, actions);
+        if (!isObjectLiteralExpression(split.actions)) {
+          fail(
+            `The game state's actions are an object literal of functions: \`{ collect(s) { s.coins += 1; } }\`. ${SHAPE}`,
+            split.actions
+          );
+          continue;
+        }
+        const tree = readNode(split.data, fail);
+        const actions = readActions(split.actions, fail, tree);
         if (diagnostics.length === before) result = { name: declaration.name.text, tree, actions };
       }
     }
@@ -150,7 +143,7 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
 
 type Fail = (message: string, node: { getStart(sf: SourceFile): number; getEnd(): number }) => void;
 
-/** The creator argument of `createGameState(creator)` or `createGameState<State>()(creator)`; undefined if the call is neither. */
+/** The argument of the removed `createGameState(creator)` or `createGameState<State>()(creator)`, to say what to write instead. */
 function creatorOf(call: CallExpression): Expression | undefined {
   const callee = unwrap(call.expression);
   if (isIdentifier(callee) && callee.text === "createGameState") return call.arguments[0] ? unwrap(call.arguments[0]) : undefined;
@@ -192,27 +185,7 @@ function readActions(object: ObjectLiteralExpression, fail: Fail, tree: GameStat
   return names;
 }
 
-/** The object literal a creator returns: an arrow's expression body, or the one `return` of a block. */
-function stateObject(creator: Expression): ObjectLiteralExpression | null {
-  if (!isArrowFunction(creator) && !isFunctionExpression(creator)) return null;
-  const body = creator.body;
-  if (!body) return null;
-  if (!isBlock(body)) {
-    const expression = unwrap(body);
-    return isObjectLiteralExpression(expression) ? expression : null;
-  }
-  const returns = body.statements.filter(isReturnStatement);
-  const only = body.statements.length === 1 ? returns[0] : undefined;
-  const expression = only?.expression ? unwrap(only.expression) : undefined;
-  return expression && isObjectLiteralExpression(expression) ? expression : null;
-}
-
-function readNode(
-  object: ObjectLiteralExpression,
-  fail: Fail,
-  actions: string[] | null,
-  form: "creator" | "data" = "creator"
-): GameStateNode {
+function readNode(object: ObjectLiteralExpression, fail: Fail): GameStateNode {
   const children: Record<string, GameStateEntry> = {};
   for (const p of object.properties) {
     const named =
@@ -221,7 +194,7 @@ function readNode(
         ? p.name.text
         : null;
     if (named === null) {
-      fail("Each state entry is `key: value` or an action `name() {}`: no spreads or computed keys.", p);
+      fail("Each entry of the data is `key: value`: no spreads or computed keys.", p);
       continue;
     }
     const key = named;
@@ -229,7 +202,7 @@ function readNode(
       fail(`'${key}': a state key cannot contain a dot (paths are written with dots).`, p);
       continue;
     }
-    if (Object.hasOwn(children, key) || actions?.includes(key)) {
+    if (Object.hasOwn(children, key)) {
       fail(`'${key}' is declared twice.`, p);
       continue;
     }
@@ -239,18 +212,14 @@ function readNode(
     }
     const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
     if (value === null || isArrowFunction(value) || isFunctionExpression(value)) {
-      if (form === "data")
-        fail(
-          `'${key}' is a function in the game state's data: actions go in the second argument, \`createGameState(data, { ${key}(s) { … } })\`.`,
-          p
-        );
-      else if (actions === null)
-        fail(`'${key}' is a function inside a nested object: actions live at the top level of the state, next to the objects.`, p);
-      else actions.push(key);
+      fail(
+        `'${key}' is a function in the game state's data: actions go in the second argument, \`createGameState(data, { ${key}(s) { … } })\`.`,
+        p
+      );
       continue;
     }
     if (isObjectLiteralExpression(value)) {
-      children[key] = readNode(value, fail, null, form);
+      children[key] = readNode(value, fail);
       continue;
     }
     children[key] = literalLeaf(value) ?? { kind: "value" };

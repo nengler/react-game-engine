@@ -853,9 +853,11 @@ export class ExpressionLowering extends LoweringBase {
         );
         return null;
       }
+      const store = this.storeWrite(receiver, name);
       this.report(
         code,
-        `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,
+        store ??
+          `\`${name}\` changes the array in place, which never re-renders. Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}, or keep the list in a \`useMutable\` field, where \`s.items.${name}(…)\` works.`,
         callee.name
       );
       return null;
@@ -925,6 +927,23 @@ export class ExpressionLowering extends LoweringBase {
     return this.lowerNode(node);
   }
 
+  /**
+   * The message for a write into a value read from the game state (`run.time = 0`, `items.push(x)`), or null when `node` is not
+   * one: only its actions change it, so the message names the action to add.
+   */
+  protected storeWrite(node: Expression, method?: string): string | null {
+    let root: Expression = unwrapParens(node);
+    while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root))
+      root = unwrapParens(root.expression);
+    if (!isIdentifier(root) || this.scope.get(root.text)?.kind !== "state") return null;
+    const path = this.storeNames.get(root.text);
+    if (path === undefined) return null;
+    const written = node.getText(this.sourceFile);
+    const inState = `s.${path}${written.slice(root.text.length)}`;
+    const write = method === undefined ? `${inState} = …;` : `${inState}.${method}(…);`;
+    return `'${root.text}' is read from the game state, which only its actions change: add an action to GameState.ts that writes it (\`name(s) { ${write} }\`) and call that here (\`const { name } = useGame.actions();\`).`;
+  }
+
   lowerAssignTarget(node: Expression): AssignTargetIR | null {
     // `best.hits = 0`, `grid[y]![x] = 1`: into a value the handler made.
     if ((isPropertyAccessExpression(node) || isElementAccessExpression(node)) && this.ownsValue(node)) {
@@ -942,6 +961,11 @@ export class ExpressionLowering extends LoweringBase {
     while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root))
       root = unwrapParens(root.expression);
     if (isIdentifier(root) && !this.scope.has(root.text) && this.declaredAfterError(root.text)) return null;
+    const store = this.storeWrite(node);
+    if (store !== null) {
+      this.report(DiagnosticCode.UnsupportedStatement, store, node);
+      return null;
+    }
     this.report(
       DiagnosticCode.UnsupportedStatement,
       "Only `let` locals and the members of a handler's own values can be assigned. To change state, write through its `useMutable` field (`s.foes[i].hp = 0`, `s.pos.x = 3`) or give the field a new value (`s.foes = s.foes.map(…)`): a name for one of its items (`const e = s.foes[0]`) or a loop variable is a read, not a way to write.",

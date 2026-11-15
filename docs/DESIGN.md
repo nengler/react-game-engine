@@ -37,7 +37,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | `useMutable` (2026-11-14, #121; it replaces `useState`, whose React snapshot semantics were decided 2026-11-08): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. "Every handler in a frame sees the same state" becomes "every handler sees the latest writes, in the order handlers run; render sees the frame's committed state". See [MUTABLE_STATE.md](MUTABLE_STATE.md) |
-| Global state | **Since 2026-11-15:** `createGameState(data, actions)`: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). The form below still works while the games move (see "Global state"). Before: one nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
+| Global state | `createGameState(data, actions)` in `GameState.ts`, real code the game runs: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (paths the compiler checks and subscribes to), read-only; **update** by calling an action from `useGame.actions()` in a handler. Per process, reset by the player. Decided 2026-11-09 as a Zustand store changed with `set`; that form was removed 2026-11-15. See "Global state" |
 | Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`RGE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
@@ -1537,46 +1537,29 @@ now"); with game code moving into components (section A), a parent sharing its s
 
 ## Global state (`createGameState`)
 
-**`createGameState(data, actions)`, since 2026-11-15** (MUTABLE_STATE.md, "The game state: actions write, readers read"). The data is
-a plain object; the actions are an object of functions, each taking the state as its first argument (`collect(s, n: number) { s.coins += n; }`)
-and bound when a component takes it (`const { collect } = useGame.actions(); collect(2)`). `GameStore.fromActions` builds the store:
-an action runs on a draft (`structuredClone` of the values), may change it in place, and when the outermost action returns the draft is
-compared with the state, objects whose values did not change keep their identity (`shareUnchanged`), and `setState` tells the readers of
-each changed path, as before. An action called from another shares its draft and the commit happens once, under the outer action's
-name in the inspector's history; an action that throws commits nothing. The compiler reads the form in `gamestate/schema.ts`: the data's
-tree as before (a function in it is `RGE1109`), and each action's name. What is not done yet: a handler still reads the store as its
-component's last render saw it (rule 2's live read), and Kite, Hearth and Bramble still use the creator form below, which stays until
-they move.
-
-
-`useState` is one component's own state. The **game state** belongs to the game: a score, hit points, a mute switch,
-shared by every component. It is one nested object, shaped like a **Zustand store**: you read it with a selector that
-returns the value, and you change it with actions that call `set` (decided 2026-11-09, after two attempts that
-were not Zustand's own way).
+A component's own state is `useMutable`. The **game state** belongs to the game: a score, hit points, a mute switch, the screen,
+shared by every component. It is one nested object: **data**, read with selectors that return the value, as in Zustand, and
+**actions**, which write it directly (MUTABLE_STATE.md, "The game state: actions write, readers read"). Decided 2026-11-09 as a
+Zustand store changed through `set`; since 2026-11-15 the data-and-actions form below is the only one, and the `set` form is
+removed (`RGE1109` names what to write instead).
 
 ```ts
 // GameState.ts, in the source directory. An ordinary module: the game runs it.
 import { createGameState } from "@rge/runtime";
 
-interface State {
-  coins: number;
-  player: { hp: number; name: string };
-  collect: () => void;
-  hurt: () => void;
-}
-
-export const useGame = createGameState<State>()((set, get) => ({
-  coins: 0,
-  player: { hp: 10, name: "Ada" },
-  collect: () => set((s) => ({ coins: s.coins + 1 })),
-  hurt: () => set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } })),
-}));
+export const useGame = createGameState(
+  { coins: 0, player: { hp: 10, name: "Ada" } },        // the data: a plain object
+  {
+    collect(s, n: number) { s.coins += n; },             // an action takes the state, then its own arguments
+    hurt(s) { s.player.hp -= 1; },
+  }
+);
 ```
 
 ```tsx
 // CoinCounter.tsx: access                    // Player.tsx: update
 import { useGame } from "./GameState.ts";
-const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.hurt);
+const hp = useGame((s) => s.player.hp);          const { hurt } = useGame.actions();
                                                   useUpdate(() => { if (hit) hurt(); });
 ```
 
@@ -1585,8 +1568,7 @@ store (`import { useGame } from "./GameState.ts"`; the only thing it may import 
 `RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. A **plain path** from its parameter
 subscribes to exactly that path; any other expression is a computed selector (below). A typo is `RGE1108`
 with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
-`hp` then behaves as `useState` state does: a snapshot of the last render, usable in JSX and handlers, with the leaf's
-type.
+`hp` is then a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
 
 **Computed selectors** (2026-11-11, second-game finding 7). The selector may be any expression of the state:
 `const selected = useGame((s) => s.cursor === id)`, `const focus = useGame((s) => focusOf(s.battle, s.cursor))`,
@@ -1610,39 +1592,51 @@ reads, which is finer than Zustand's `useShallow`.
 written into the generated code as `ReturnType<typeof useGame.getState>["player"]`, so a wrong member is a type error.
 The component re-renders when **any value under the path** changes (the store tells the reader of `player` when
 `player.hp` changes), and not when an equal copy is set: values are still compared leaf by leaf, arrays by index.
-Treat what you select as read-only, and change it with `set`, as with `useState`.
+What a selector returns is **read-only** (`ReadonlyDeep<T>`; see "Writes are actions' only" below).
 
-**Update.** The way Zustand updates is `set`, inside the store: `set(partial)` or `set((state) => partial)`, and, as in
-Zustand, the partial is **shallow-merged**, so a nested object is replaced as a whole (spread the rest, as `hurt`
-does). A component picks an action with a selector, `const hurt = useGame((s) => s.hurt)`, and calls it as a statement
-in a handler, like a sound's play function: not in JSX or a derived value (it would run on every render), not in a
-state updater, not as a value. The compiler lowers `hurt(1)` to `useGame.getState().hurt(1)`, so TypeScript checks the
-arguments in the generated code as well as in your source. The action's body is plain TypeScript that the game runs;
-the compiler never lowers it. `get` is Zustand's too. `useGame.getState()` and `useGame.setState(partial | updater)`
-exist, as in Zustand, for code that is not a compiled component (tests, tools).
+**Update: actions.** A component takes the actions it calls with `const { hurt } = useGame.actions()` and calls one as a
+statement in a handler, like a sound's play function: not in JSX or a derived value (it would run on every render), not as a value
+other than passed whole (`onPress={resume}`). The compiler lowers `hurt(1)` to `useGame.getState().hurt(1)`, so TypeScript checks
+the arguments in the generated code as well as in your source. The action's body is plain TypeScript that the game runs; the
+compiler never lowers it.
+
+`GameStore.fromActions` builds the store. An action runs on a **draft**, a deep copy of the values (`cloneData`; QuickJS has no
+`structuredClone`), and may change it in place, nested objects and lists included (`s.run.time += dt`, `s.gems.push(id)`). When the
+outermost action returns, the draft is compared with the state, objects whose values did not change keep their identity
+(`shareUnchanged`, so a reader comparing by `===` sees no change), and the readers of each changed path are told. An action called
+from another (`useGame.actions().begin()`) shares the draft and the commit happens once, under the outer action's name in the
+inspector's history; an action that throws commits nothing. While an action runs, `useGame.getState()` returns the draft with the
+actions, so plain code it calls (Bramble's save `pick`) reads what it has written so far.
+
+**Writes are actions' only.** A write into a selected value in a component (`run.time = 0`, `hp += 1` after
+`const { hp } = useGame((s) => s.player)`, `items.push(x)`) is `RGE1402` or `RGE1301`, with a message that spells the action to add
+(`name(s) { s.player.hp = …; }`). What a selector returns is typed `ReadonlyDeep<T>`, so a helper in a `.ts` file that takes a
+mutable `Item[]` or changes an item is a type error for a selected list (it takes `readonly Item[]`, or the action does the change).
+`useGame.getState()` is read-only too. `useGame.setState(partial | updater)` stays, shallow-merged as in Zustand, for code outside
+the game: tests, a story's `setup`, the inspector's edits. Called while an action runs it throws, since the action's commit would
+overwrite it.
 
 **The schema is real code.** `GameState.ts` is imported by the generated files and runs in the game, under Node and
-under QuickJS, so TypeScript infers every type from it, and there is no separate declaration to keep in step. Both
-`createGameState<State>()(creator)` (as Zustand recommends with TypeScript) and `createGameState(creator)` work. The
-compiler also *reads* it (it never runs it) to know the state tree and the action names. For that, the creator must be
-an arrow function or function that returns an object literal, whose entries are number, string or boolean literals
-(a negative number is fine; a leaf's type is its literal's, so `0` is a `number`), nested objects of those, and, at the
-top level, functions (the actions). Any other value (an array, `newRun()`, a constant) is kept as a *value*: the
-compiler checks paths down to it and leaves the rest to TypeScript. Spreads and computed keys are `RGE1109`. Keys have
-no dots.
+under QuickJS, so TypeScript infers every type from it, and there is no separate declaration to keep in step. The
+compiler also *reads* it (it never runs it, `gamestate/schema.ts`) to know the state tree and the action names. For that, the
+data must be an object literal (`as` and `satisfies` around it are fine), whose entries are number, string or boolean literals (a
+negative number is fine; a leaf's type is its literal's, so `0` is a `number`) and nested objects of those. Any other value (an array,
+`newRun()`, a constant) is kept as a *value*: the compiler checks paths down to it and leaves the rest to TypeScript. A function in
+the data, a name in both, spreads and computed keys are `RGE1109`; so are the removed `(set) => ({ … })` form and a call with no
+actions argument. Keys have no dots. The actions are an object literal of functions (`name(s, …) { … }` or `name: (s, …) => …`).
 
-**Semantics.** Every `set` compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
+**Semantics.** Every commit compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
 mounted component that reads a leaf that changed, and only those: a replaced `player` object does not re-render the
 reader of `player.name` when only `hp` differs. Those components copy the new value into their own field in
 `commitState`, in the same flush, so a HUD shows a coin on the frame it was picked up, while every handler in that
-frame still saw the old snapshot. A `set` that changes no leaf renders nothing. A component joins the subscribers when it
+frame still saw the old snapshot. An action that changes no leaf renders nothing. A component joins the subscribers when it
 joins a world and leaves when it leaves, and is refreshed once on joining, so it cannot miss a change made between its
 construction and its mounting. A component that only binds actions reads nothing, so it keeps no copy and is never
 told of a change.
 
 **Where it lives.** `createGameState` makes a `GameStore` (also `useGame.store`); calling `useGame(...)` itself is
 compile-time only and throws, like the authoring hooks. `createPlayer` calls `resetGameState()`, which puts every store
-in the process back to the state its creator returned, so each game starts fresh; tests that build components without a
+in the process back to its initial data, so each game starts fresh; tests that build components without a
 player call it between cases. Generated output for a reader and an action:
 
 ```ts
@@ -1660,9 +1654,8 @@ export class CoinCounter extends Text {
 The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` statement. `gameStateStore` and
 `gameStateKeys` are reserved member names, like the other `GameObject` fields.
 
-**Not yet.** Zustand's `subscribe`, middleware and `replace`; `setState` inside a compiled handler (writes go through
-actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
-and more than one store per project (one store per process, one `createGameState` call per project).
+**Not yet.** Zustand's `subscribe` and middleware; a handler reading the store live (it reads what its component's last render
+saw, rule 2 of MUTABLE_STATE.md); and more than one store per project (one `createGameState` call per project).
 
 ### Actions: `useGame.actions()` (2026-11-13)
 

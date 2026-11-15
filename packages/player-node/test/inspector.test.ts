@@ -19,12 +19,6 @@ class Enemy extends Entity {
   }
 }
 
-interface State {
-  coins: number;
-  player: { hp: number };
-  collect: () => void;
-}
-
 /** Read server-sent events from the page's stream until `want` has a value for each name it asks for. */
 async function events(url: string, until: (seen: Map<string, unknown>) => boolean): Promise<Map<string, unknown>> {
   const controller = new AbortController();
@@ -62,7 +56,14 @@ describe("the inspector", () => {
     root.addChild(enemy);
     world.mount(root);
     world.flush();
-    const game = createGameState<State>()((set) => ({ coins: 0, player: { hp: 5 }, collect: () => set((s) => ({ coins: s.coins + 1 })) }));
+    const game = createGameState(
+      { coins: 0, player: { hp: 5 } },
+      {
+        collect(s) {
+          s.coins += 1;
+        },
+      }
+    );
     const stores = new Map([["/game/src/GameState.ts#useGame", game.store]]);
     const logged: string[] = [];
     const inspector = await startInspector({ root: () => root, stores: () => stores, log: (m) => logged.push(m) });

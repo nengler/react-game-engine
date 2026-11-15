@@ -246,8 +246,8 @@ export class Settings<S extends EngineSettings> {
 
   /**
    * Be told each time the settings change (`set`, `reset`, or a reload when storage is installed), after they are applied, so the
-   * controls already have their new keys. The way to show them: copy them into the game state, where components select them
-   * (`settings.subscribe((values) => useGame.setState({ settings: values }))`). Returns the function that stops it.
+   * controls already have their new keys. A component shows them with `useStore(settings, view)`; plain code can hand them to a
+   * game-state action (`settings.subscribe((values) => useGame.actions().settingsChanged(values))`). Returns the function that stops it.
    */
   subscribe(listener: (values: Readonly<S>) => void): () => void {
     this.#listeners.add(listener);
