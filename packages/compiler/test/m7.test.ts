@@ -72,6 +72,23 @@ function Hero() {
     assert.doesNotThrow(() => compile(source));
   });
 
+  it("types a list field so the in-place forms type-check and a helper that takes `T[]` does not", () => {
+    const component = (body: string) => `${IMPORTS}
+interface Foe { id: number; hp: number }
+function hurt(list: Foe[]) { list[0]!.hp = 0; }
+function count(list: readonly Foe[]) { return list.length; }
+function Hero() {
+  const s = useMutable({ foes: [] as Foe[], hp: [3, 3] as number[], n: 0 });
+  useUpdate(() => { ${body} });
+  return <Entity name="H" />;
+}`;
+    const forms = "s.foes.push({ id: 1, hp: 2 }); s.foes.splice(0, 1); s.foes.sort((a, b) => a.hp - b.hp); s.foes[0]!.hp -= 1; s.hp[0]! -= 1; s.hp[1] = 5; s.n = count(s.foes) + s.foes.length; s.foes = s.foes.filter((f) => f.hp > 0);";
+    assert.deepEqual(checkSource(component(forms)), [], "the forms the compiler turns into a copy");
+    const helper = checkSource(component("hurt(s.foes);"));
+    assert.equal(helper.length, 1);
+    assert.match(JSON.stringify(helper), /MutableList|not assignable/);
+  });
+
   it("types a useMutable field from its initial value, not as a literal", () => {
     assert.deepEqual(
       checkSource(`${IMPORTS}

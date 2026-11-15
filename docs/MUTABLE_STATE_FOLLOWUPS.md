@@ -47,7 +47,11 @@ closed, and the decision here is to keep the copy model and not add versions. Wh
 1. **A helper or alias changes a list in place and nothing warns.** The compiler refuses the forms it can see (an alias,
    `const e = s.list[0]; e.hp = 0`, a loop variable, the result of `push` used as a value) with what to write instead. It cannot see
    `damage(s.enemies, 3)` in a plain `.ts` file, which allows anything, and render compares by `===`, so the screen shows nothing
-   and nothing says why. `readonly Foe[]` and `Readonly<Foe>` on the field catch it in the editor; they are not required. Two cheap
+   and nothing says why. `readonly Foe[]` and `Readonly<Foe>` on the field catch it in the editor; they are not required. **First fix done 2026-11-15:** `useMutable` gives each array field the type `MutableList<T>`
+   (`packages/runtime/src/jsx.ts`): the in-place forms the compiler lowers (`push`, `splice`, `sort`, an index write) type-check, but it is not
+   assignable to `T[]`, so a helper that takes `Foe[]` is an error in the editor. It takes `readonly Foe[]` to read, or returns the new
+   list; the games needed no change. Items of a list are still plain `T`, so a helper may change an item in place (use `Readonly<Foe>`).
+   Still open: the development warning. Two cheap
    fixes, in order: make `readonly` the inferred type of an array or record field of `useMutable`, so a helper taking `Foe[]` does
    not type-check; and a development warning when a slot's contents differ from the committed copy that rewind already takes while
    its reference is the same.

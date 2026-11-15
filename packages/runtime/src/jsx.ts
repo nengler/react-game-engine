@@ -197,9 +197,28 @@ export function Provider<T>(_props: { context: Context<T>; value: T; children?: 
  * earlier handler's in the step); render, and the props and context it hands down, see what the frame committed. Fields are
  * written in handlers only. A list or record may be changed in place (`s.list.push(x)`, `s.list[i].hp -= 1`): the field is given the copy. It replaces React's `useState`.
  */
-export function useMutable<T extends Record<string, unknown>>(_initial: T): T {
+export function useMutable<T extends Record<string, unknown>>(_initial: T): Fields<T> {
   return compileTimeOnly("useMutable");
 }
+
+/**
+ * A list field, as the author sees it: the methods the compiler turns into a copy (`push`, `splice`, `sort`, …) and writes to an
+ * index, but not assignable to `T[]`. A helper that takes `Foe[]` therefore does not accept `s.foes`: it would change the list in
+ * place, which render, comparing by `===`, would never see. Take `readonly Foe[]` to read it, or return the new list.
+ */
+export interface MutableList<T> extends ReadonlyArray<T> {
+  [index: number]: T;
+  push(...items: T[]): number;
+  pop(): T | undefined;
+  shift(): T | undefined;
+  unshift(...items: T[]): number;
+  splice(start: number, deleteCount?: number, ...items: T[]): T[];
+  sort(compare?: (a: T, b: T) => number): this;
+  reverse(): this;
+}
+
+/** What `useMutable` gives back: each array field as a `MutableList`, and the rest as written. */
+export type Fields<T> = { [K in keyof T]: T[K] extends (infer U)[] ? (number extends T[K]["length"] ? MutableList<U> : T[K]) : T[K] };
 
 // -- per-frame hooks ----------------------------------------------------------
 
