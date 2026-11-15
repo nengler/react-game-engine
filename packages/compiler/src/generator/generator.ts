@@ -439,6 +439,7 @@ class ComponentGenerator extends ElementEmitter {
           if ("forward" in slot) {
             // The children this component is given are passed on, whole, to the component that renders them.
             w.line(`this.passedChildrenForward = ${slot.forward};`);
+            if (slot.at !== 0) w.line(`this.passedChildrenForwardAt = ${slot.at};`);
           } else {
             // Where a parent's children mount: the container holding `{children}`, and the slot's position among its children.
             w.line(`this.passedChildrenHost = ${slot.host};`);

@@ -863,8 +863,8 @@ As with list items, the new instance is added before the old one is removed, so 
 `useUnmount`. The list's dependencies are the key's and the condition's; props that read state are applied as on any list item.
 
 **Limits.** `key` on a component's root is `RGE1203` (it goes where the component is used). A keyed element inside a list
-item's children, or beside other children passed to a component, is `RGE1209` with the same wording as a list there (wrap it
-in an `<Entity>`, or make the item a component), since it is one. A key that never changes (`key="x"`) compiles and does
+item's children is `RGE1209` with the same wording as a list there (make the item a component), since it is one. Beside other
+children passed to a component it is a list among them, which works since 2026-11-15 (see "Forwarding"). A key that never changes (`key="x"`) compiles and does
 nothing.
 
 ## Children
@@ -929,9 +929,9 @@ relative to the container that holds `{children}`.
 
 **Passing.** The children of a component element are lowered into its
 `ElementIR.children` as static children, conditional children, or a keyed
-list, owned by the parent. A list must be the only child of the block (its
-items and other children would share positions); children on a list item are
-not supported yet, and `children={…}` as an attribute is `RGE1203`. Whether
+list, owned by the parent. A list may sit among other passed children: its
+items' order is a path, the list's position and then the item's index (see
+"Forwarding"); a list inside a list item is not supported yet, and `children={…}` as an attribute is `RGE1203`. Whether
 the receiver renders `{children}` is its own file's business: the source
 type-check catches `<Leaf>…</Leaf>` for a props type without `children`
 (`RGE9002`), and the runtime throws a clear error if a component that does not
@@ -985,13 +985,16 @@ say `passedChildrenHost` / `passedChildrenSlot`, and `GameObject`'s four passed-
 it is set (`acceptsPassedChildren` is true for either). The parent's `attachPassedChild`, queued adds, removals and reorders all end up
 in the innermost container, so static, conditional and list children all work through it.
 
-**The forwarded `{children}` must be the only child passed to the inner component** (decided 2026-11-11, option A of the plan's
-"Forwarded `{children}` beside other passed children"). `<Panel title={title}>{children}</Panel>` is allowed;
-`<Panel><Title/>{children}<Footer/></Panel>` is `RGE1202` ("must be the only child passed to it"). Why: all of a receiver's passed
-children share one slot and are sorted by one number (`order`), so a whole forwarded list cannot sit between two siblings. If a game
-needs it: first, allow `{children}` inside a wrapper `<Flex>` that is passed (a compiler-only change, no runtime cost), then order
-ranges (`position × 2²⁰ + i`) in `GameObject`. A forwarding component must itself be always present (not in a condition or a list or
-another component's children): otherwise `RGE1202`, as before.
+**A forwarded `{children}` may sit beside other passed children, and so may a list** (2026-11-15; until then each had to be the
+only child passed, option A of 2026-11-11). `<Card><Title />{children}<Footer /></Card>` and `<Panel><Head />{items.map(…)}</Panel>`
+are the everyday way to build a reusable panel, and refusing them pushed authors to wrappers. All of a receiver's passed children
+share one slot, so what decides their order is `order`, which is now a `ChildOrder`: a number, or a path of numbers compared in
+turn (`compareOrder`). A static passed child is its position (`2`); a list's items are the list's position and then their index
+(`[1, 0]`, `[1, 1]`; `queueReorderPassedChildren(items, [1])`); and a component that forwards puts the position of its `{children}`
+among what it passes in front (`passedChildrenForwardAt`), so what it was given sorts between its own `<Title />` and `<Footer />`,
+through any number of forwards. Order ranges (`position × 2²⁰ + i`) were the other way; a path has no limit and needs no
+arithmetic across levels. Plain numbers stay numbers, so children of built-ins sort as before. A forwarding component must itself
+be always present (not in a condition or a list or another component's children): otherwise `RGE1202`, as before.
 
 ## Prefabs and scenes
 

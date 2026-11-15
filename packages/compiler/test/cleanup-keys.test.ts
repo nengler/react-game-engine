@@ -246,16 +246,24 @@ describe("key on any element", () => {
     assert.deepEqual(book.children.map((c: { name: string; image?: string }) => c.image ?? c.name.split(":")[0]), ["Tc", "openc", "right.png"]);
   });
 
-  it("refuses key on a component's root, a keyed element beside other passed children, and one inside a list item", () => {
+  it("refuses key on a component's root and one inside a list item, and passes a keyed element beside other children", async () => {
     const root = compileErrors(`function A() { return <Entity name="A" key="x" />; }`);
     assert.deepEqual(root.map((d) => d.code), [DiagnosticCode.UnsupportedAttribute]);
     assert.match(root[0]!.message, /where the component is used, not on its root/);
-    const passed = compileErrors(`import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
+    const passed = `import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
 interface PanelProps { children: Child }
 function Panel({ children }: PanelProps) { return <Entity name="P">{children}</Entity>; }
-function A() { const s = useMutable({ k: 1 }); return <Panel><Sprite key={s.k} image="a.png" /><Sprite image="b.png" /></Panel>; }`);
-    assert.deepEqual(passed.map((d) => d.code), [DiagnosticCode.InvalidList]);
-    assert.match(passed[0]!.message, /A keyed element passed to <Panel> must be its only child/);
+export function A() { const s = useMutable({ k: 1 }); return <Panel><Sprite key={s.k} image="a.png" /><Sprite image="b.png" /></Panel>; }`;
+    const { A } = await load<{ A: new () => Entity & { s: { k: number } } }>(compile(passed, "KeyedPassed.tsx"));
+    const a = new A();
+    const world = new World();
+    world.mount(a);
+    world.flush();
+    const images = (): string[] => (a.children[0]!.children as unknown as { image: string }[]).map((c) => c.image);
+    assert.deepEqual(images(), ["a.png", "b.png"]);
+    a.s.k = 2;
+    world.flush();
+    assert.deepEqual(images(), ["a.png", "b.png"], "the keyed element starts over in its own place");
     const nested = compileErrors(`interface Item { id: string }
 function A() { const s = useMutable({ items: [] as Item[], k: 1 });
   return <Entity name="A">{s.items.map((i) => <Entity key={i.id}><Sprite key={s.k} image="a.png" /></Entity>)}</Entity>; }`);

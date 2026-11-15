@@ -5,11 +5,30 @@ import type { World } from "./World.ts";
 import { developmentWarning } from "./develop.ts";
 
 type StructureOp =
-  | { readonly kind: "add"; readonly child: GameObject; readonly slot: number; readonly order: number }
+  | { readonly kind: "add"; readonly child: GameObject; readonly slot: number; readonly order: ChildOrder }
   | { readonly kind: "remove"; readonly child: GameObject }
-  | { readonly kind: "reorder"; readonly slot: number; readonly children: readonly GameObject[] };
+  | { readonly kind: "reorder"; readonly slot: number; readonly children: readonly GameObject[]; readonly prefix: readonly number[] };
 
 /** What decides whether a subtree hears input, on the containers (`<Entity>`, `<Flex>`, `<Hud>`): see `GameObject.inert` and `modal`. */
+/**
+ * Where a child sits within its slot: a number (an item's index in a keyed list), or, among a component's passed children, a path of
+ * numbers compared in turn (`[1, 4]` is the fifth item of the list passed second, after `[1, 3]` and before `[2]`).
+ */
+export type ChildOrder = number | readonly number[];
+
+/** Negative, zero or positive as `a` sorts before, with or after `b`: numbers as they are, paths in turn, a number as a path of one. */
+export function compareOrder(a: ChildOrder, b: ChildOrder): number {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const x = typeof a === "number" ? [a] : a;
+  const y = typeof b === "number" ? [b] : b;
+  for (let i = 0; i < x.length && i < y.length; i++) if (x[i] !== y[i]) return x[i]! - y[i]!;
+  return x.length - y.length;
+}
+
+function prependOrder(first: number, order: ChildOrder): readonly number[] {
+  return typeof order === "number" ? [first, order] : [first, ...order];
+}
+
 export interface InputScopeProps {
   /** The subtree hears no input, as the HTML attribute `inert`. */
   inert?: boolean;
@@ -158,8 +177,8 @@ export class GameObject<P extends object = {}> {
   #pending: StructureOp[] = [];
   /** Source position among the parent's children (see `addChild`); `Infinity` for unslotted children. */
   #slot = Infinity;
-  /** Position within the slot: the item's index in a keyed list (see `queueReorder`); 0 otherwise. */
-  #order = 0;
+  /** Position within the slot: the item's index in a keyed list (see `queueReorder`), or a path of positions for passed children; 0 otherwise. */
+  #order: ChildOrder = 0;
   /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
   #mounted = false;
   /** It was mounted and has since left its World (and not come back): what a `useMutable`'s object checks before a write. */
@@ -189,15 +208,25 @@ export class GameObject<P extends object = {}> {
     return this.passedChildrenHost !== null || this.passedChildrenForward !== null;
   }
 
-  /** Immediately attach a passed child, at `order` among the passed children (the slot of `{children}` is fixed). */
-  attachPassedChild(child: GameObject, order: number): void {
-    if (this.passedChildrenForward !== null) return this.passedChildrenForward.attachPassedChild(child, order);
+  /**
+   * Where this component's `{children}` sit among the children it passes on to `passedChildrenForward`
+   * (`<Card><Title />{children}<Footer /></Card>` sets 1): what it was given goes between its own.
+   */
+  protected passedChildrenForwardAt = 0;
+
+  /**
+   * Immediately attach a passed child, at `order` among the passed children (the slot of `{children}` is fixed). An order is the
+   * child's position as its parent wrote it, or a path (`[2, 5]`: the sixth item of the list written third); a component that forwards
+   * its children puts its own position of `{children}` in front, so they sort between the children it passes itself.
+   */
+  attachPassedChild(child: GameObject, order: ChildOrder): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.attachPassedChild(child, prependOrder(this.passedChildrenForwardAt, order));
     this.#passedHost().addChild(child, this.passedChildrenSlot, order);
   }
 
   /** Queue a passed child to be attached when structure is next committed. */
-  queueAttachPassedChild(child: GameObject, order: number): void {
-    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueAttachPassedChild(child, order);
+  queueAttachPassedChild(child: GameObject, order: ChildOrder): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueAttachPassedChild(child, prependOrder(this.passedChildrenForwardAt, order));
     this.#passedHost().queueAddChild(child, this.passedChildrenSlot, order);
   }
 
@@ -207,10 +236,10 @@ export class GameObject<P extends object = {}> {
     this.#passedHost().queueRemoveChild(child);
   }
 
-  /** Queue a new order for the passed children (a keyed list passed as the whole of the children), see `queueReorder`. */
-  queueReorderPassedChildren(children: readonly GameObject[]): void {
-    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueReorderPassedChildren(children);
-    this.#passedHost().queueReorder(this.passedChildrenSlot, children);
+  /** Queue a new order for the items of a keyed list among the passed children, see `queueReorder`; `prefix` is the list's own position. */
+  queueReorderPassedChildren(children: readonly GameObject[], prefix: readonly number[] = []): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueReorderPassedChildren(children, [this.passedChildrenForwardAt, ...prefix]);
+    this.#passedHost().queueReorder(this.passedChildrenSlot, children, prefix);
   }
 
   #passedHost(): GameObject {
@@ -237,7 +266,7 @@ export class GameObject<P extends object = {}> {
    * keyed list share one slot and are ordered within it by `order`, their
    * index in the list, so children are always sorted by `(slot, order)`.
    */
-  addChild(child: GameObject, slot: number = Infinity, order: number = 0): void {
+  addChild(child: GameObject, slot: number = Infinity, order: ChildOrder = 0): void {
     if (child.parent !== null) {
       throw new Error("GameObject already has a parent");
     }
@@ -248,10 +277,10 @@ export class GameObject<P extends object = {}> {
     // Children are sorted, so a child that sorts after the last one (the usual case: building a tree in
     // source order, or spawning into a list) is appended without a scan; mounting n children stays linear.
     const last = this.children[this.children.length - 1];
-    if (last === undefined || last.#slot < slot || (last.#slot === slot && last.#order <= order)) {
+    if (last === undefined || last.#slot < slot || (last.#slot === slot && compareOrder(last.#order, order) <= 0)) {
       this.children.push(child);
     } else {
-      const index = this.children.findIndex((sibling) => sibling.#slot > slot || (sibling.#slot === slot && sibling.#order > order));
+      const index = this.children.findIndex((sibling) => sibling.#slot > slot || (sibling.#slot === slot && compareOrder(sibling.#order, order) > 0));
       this.children.splice(index, 0, child);
     }
     this.markChanged();
@@ -276,7 +305,7 @@ export class GameObject<P extends object = {}> {
   }
 
   /** Queue a child to be attached (at `slot` and `order`, see `addChild`) when structure is next committed. */
-  queueAddChild(child: GameObject, slot: number = Infinity, order: number = 0): void {
+  queueAddChild(child: GameObject, slot: number = Infinity, order: ChildOrder = 0): void {
     this.#pending.push({ kind: "add", child, slot, order });
     this.world?.scheduleCommit(this);
   }
@@ -285,10 +314,11 @@ export class GameObject<P extends object = {}> {
    * Queue a new order for the items of a keyed list (the children in `slot`):
    * when structure is next committed, each child's order becomes its index in
    * `children`, and the slot is re-sorted. Children in other slots keep their
-   * positions. Queue it after the list's adds and removals.
+   * positions. Queue it after the list's adds and removals. With a `prefix` (a list among passed children), each order is the
+   * prefix and then the index.
    */
-  queueReorder(slot: number, children: readonly GameObject[]): void {
-    this.#pending.push({ kind: "reorder", slot, children });
+  queueReorder(slot: number, children: readonly GameObject[], prefix: readonly number[] = []): void {
+    this.#pending.push({ kind: "reorder", slot, children, prefix });
     this.world?.scheduleCommit(this);
   }
 
@@ -311,18 +341,18 @@ export class GameObject<P extends object = {}> {
       } else if (op.kind === "remove") {
         this.removeChild(op.child);
       } else {
-        this.#reorder(op.slot, op.children);
+        this.#reorder(op.slot, op.children, op.prefix);
       }
     }
   }
 
-  #reorder(slot: number, children: readonly GameObject[]): void {
+  #reorder(slot: number, children: readonly GameObject[], prefix: readonly number[]): void {
     children.forEach((child, index) => {
-      if (child.parent === this && child.#slot === slot) child.#order = index;
+      if (child.parent === this && child.#slot === slot) child.#order = prefix.length === 0 ? index : [...prefix, index];
     });
     this.markChanged();
     // Children are kept sorted by (slot, order), and the sort is stable, so only this slot's range can move.
-    this.children.sort((a, b) => (a.#slot === b.#slot ? a.#order - b.#order : a.#slot < b.#slot ? -1 : 1));
+    this.children.sort((a, b) => (a.#slot === b.#slot ? compareOrder(a.#order, b.#order) : a.#slot < b.#slot ? -1 : 1));
     this.world?.orderChanged();
   }
 

@@ -210,7 +210,7 @@ export const runtimeManifest: RuntimeManifest = {
     "name", "props", "applyProps", "updateProps", "transform", "placement", "layoutX", "layoutY", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys", "layoutContents",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
-    "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
+    "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "passedChildrenForwardAt", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "after", "every", "cancelTimers", "pendingTimers", "stepTimers", "renderCount", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup", "inert", "modal",
     "attachToWorld", "detachFromWorld", "ownedHandles", "hotKey", "$memo", "$mayWrite", "propGetters", "liveProp", "withPropGetters",
