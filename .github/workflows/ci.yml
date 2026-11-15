@@ -1,7 +1,8 @@
 name: CI
 
 # Actions minutes are limited, so this workflow tries not to spend them twice:
-# - a change that only touches markdown or docs/ runs nothing (no test reads them);
+# - a change that only touches markdown runs nothing (no test reads it). The guide in docs/*.html is not skipped:
+#   tests check it covers every built-in and hook, and that each page's search index is current;
 # - a new push to a pull request cancels the run still going for the old one;
 # - the native jobs cache their raylib and QuickJS builds, which are most of their time. A cache is keyed on
 #   the compiler versions and the files that decide what gets built, so a toolchain upgrade or a change to
@@ -10,9 +11,9 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md", "docs/**"]
+    paths-ignore: ["**.md"]
   pull_request:
-    paths-ignore: ["**.md", "docs/**"]
+    paths-ignore: ["**.md"]
 
 permissions:
   contents: read
@@ -31,8 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.18"
           cache: npm
@@ -52,8 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.18"
           cache: npm
@@ -63,7 +64,7 @@ jobs:
         id: toolchain
         run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Cache the librge build (raylib is most of it)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: native/build-headless
           key: librge-headless-${{ steps.toolchain.outputs.id }}-${{ hashFiles('native/CMakeLists.txt') }}
@@ -96,8 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.18"
           cache: npm
@@ -107,7 +108,7 @@ jobs:
         id: toolchain
         run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Cache librge and the host build (raylib and QuickJS are most of it)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -126,8 +127,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.18"
           cache: npm
@@ -141,13 +142,13 @@ jobs:
         id: toolchain
         run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Cache the librge build (raylib is most of it)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: native/build
           key: librge-desktop-${{ steps.toolchain.outputs.id }}-${{ hashFiles('native/CMakeLists.txt') }}
           restore-keys: librge-desktop-${{ steps.toolchain.outputs.id }}-
       - name: Cache cargo and the host build (raylib and QuickJS are most of it)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -188,8 +189,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.18"
           cache: npm
@@ -199,7 +200,7 @@ jobs:
         id: toolchain
         run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Cache cargo and the host build (raylib and QuickJS are most of it)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
