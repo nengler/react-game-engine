@@ -340,3 +340,62 @@ export function A() {
     assert.match(errors[0]!.message, /also changes `s\.foes` itself/);
   });
 });
+
+describe("a `let` declared with its type and no value", () => {
+  it("is assigned by a switch after it, as in TypeScript", async () => {
+    const SOURCE = `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+type Screen = "title" | "play" | "over";
+export function Banner() {
+  const s = useMutable({ screen: "title" as Screen });
+  useInput((input) => {
+    if (input.pressed("confirm")) s.screen = s.screen === "title" ? "play" : "over";
+  });
+  let msg: string;
+  switch (s.screen) {
+    case "title":
+      msg = "Press start";
+      break;
+    case "play":
+      msg = "Go";
+      break;
+    default:
+      msg = "Game over";
+  }
+  return <Text>{msg}</Text>;
+}`;
+    assert.deepEqual(sourceErrors(SOURCE), [], "the source as written");
+    const compiled = compile(SOURCE);
+    assert.match(compiled.code, /let msg: string;/);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Banner } = await load<{ Banner: new () => Entity }>(compiled);
+    const world = new World();
+    const banner = new Banner();
+    world.mount(banner);
+    world.flush();
+    assert.deepEqual(texts(banner), ["Press start"]);
+    world.tick(1 / 60, { pressed: (k: string) => k === "confirm", down: () => false, released: () => false } as never);
+    world.flush();
+    assert.deepEqual(texts(banner), ["Go"]);
+  });
+
+  it("asks for the type when it has none", () => {
+    const errors = compileErrors(`import { Text } from "@rge/runtime/jsx";
+export function A() {
+  let msg;
+  msg = "x";
+  return <Text>{msg}</Text>;
+}`);
+    assert.match(errors[0]!.message, /`let msg;` needs its type/);
+  });
+
+  it("is reported by the type-check when a path reads it unassigned", () => {
+    const compiled = compile(`import { Text, useMutable } from "@rge/runtime/jsx";
+export function A() {
+  const s = useMutable({ n: 0 });
+  let msg: string;
+  if (s.n > 0) msg = "some";
+  return <Text>{msg}</Text>;
+}`);
+    assert.ok(typeCheck(compiled).some((d) => /used before being assigned/.test(d.message)));
+  });
+});

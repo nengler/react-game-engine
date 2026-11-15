@@ -412,11 +412,29 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const decl = list.declarations[0]!;
     const mutable = (list.flags & NodeFlags.Let) !== 0;
     const isConst = (list.flags & NodeFlags.Const) !== 0;
+    // `let label: string;`, assigned by the statements after it: as TypeScript allows, with the type written.
+    if (mutable && list.declarations.length === 1 && isIdentifier(decl.name) && !decl.initializer) {
+      if (!decl.type) {
+        ctx.error(
+          ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement,
+          `\`let ${decl.name.text};\` needs its type, as TypeScript would otherwise make it \`any\`: \`let ${decl.name.text}: string;\`.`,
+          statement
+        );
+        return null;
+      }
+      const name = decl.name.text;
+      if (!checkFreshName(ctx, name, decl.name)) return null;
+      const type = ctx.typeFromNode(decl.type);
+      if (!type) return null;
+      const id = localId(ctx.componentName, name, ctx.nextSerial());
+      ctx.scope.declare(name, { kind: "local", id, name, mutable: true, owned: false });
+      return { kind: "LocalConst", id, name, value: { kind: "PlainRef", name: "undefined" }, mutable: true, type, uninitialized: true };
+    }
     if ((!isConst && !mutable) || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
       const where = ctx.inRenderBlock() ? "in statements of the component body" : "in handlers";
       ctx.error(
         ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement,
-        `Only \`const name = expression;\` and \`let name = expression;\` declarations (one name, with a value) are supported ${where}.`,
+        `Only \`const name = expression;\`, \`let name = expression;\` and \`let name: Type;\` declarations (one name) are supported ${where}.`,
         statement
       );
       return null;
