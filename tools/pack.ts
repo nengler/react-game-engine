@@ -220,8 +220,11 @@ export function stagePackage(name: string, staging: string): string {
       Object.entries(pkg.bin as Record<string, string>).map(([bin, file]) => [bin, builtPath(file, ".js")]),
     );
   }
-  built.files = name === "native" ? ["dist", "lib", "bin"] : name === "cli" ? ["dist", "template"] : ["dist"];
-  if (name === "cli") cpSync(join(source, "template"), join(stage, "template"), { recursive: true });
+  built.files = name === "native" ? ["dist", "lib", "bin"] : name === "cli" ? ["dist", "template", "templates"] : ["dist"];
+  if (name === "cli") {
+    cpSync(join(source, "template"), join(stage, "template"), { recursive: true });
+    cpSync(join(source, "templates"), join(stage, "templates"), { recursive: true });
+  }
   writeFileSync(join(stage, "package.json"), `${JSON.stringify(built, null, 2)}\n`);
   return stage;
 }

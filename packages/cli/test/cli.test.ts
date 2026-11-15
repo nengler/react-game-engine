@@ -51,6 +51,25 @@ test("create --packs writes file: dependencies on the tarballs", () => {
   assert.equal(pkg.devDependencies["@rge/language-server"], `file:${join(packs, "rge-language-server-0.0.0.tgz")}`, "the editor's server too");
 });
 
+for (const template of ["menu", "platformer"]) {
+  test(`create --template ${template} makes a starter that passes rge check`, { timeout: 180_000 }, () => {
+    const folder = join(root, template);
+    const made = rge(["create", folder, "--template", template]);
+    assert.equal(made.status, 0, made.stderr);
+    assert.match(made.stdout, new RegExp(`\\(${template}\\)`));
+    assert.match(readFileSync(join(folder, "src/Main.tsx"), "utf8"), new RegExp(`title="${template}"`));
+    const checked = rge(["check", folder]);
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+    assert.match(checked.stdout, /0 failed/);
+  });
+}
+
+test("create refuses a template it does not have, and names the ones it has", () => {
+  const made = rge(["create", join(root, "nope"), "--template", "rpg"]);
+  assert.equal(made.status, 2);
+  assert.match(made.stderr, /blank, menu, platformer/);
+});
+
 test("build compiles src to generated", () => {
   const built = rge(["build"], game);
   assert.equal(built.status, 0, built.stdout + built.stderr);

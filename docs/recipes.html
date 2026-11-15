@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recipes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: sticky searchable sidebar + one reading column; reference tables scroll inside their own wrappers. */
+:root {
+  --bg: #f6f6f2;
+  --panel: #ffffff;
+  --fg: #1c2430;
+  --muted: #5b6676;
+  --line: #dcdcd2;
+  --accent: #b4540a;
+  --accent-soft: #f7e6d6;
+  --code-bg: #eef0ee;
+  --code-fg: #1c2430;
+  --tok-kw: #7a3ea8;
+  --tok-str: #1f7a4d;
+  --tok-com: #7b8794;
+  --tok-num: #b4540a;
+  --tok-tag: #1b5fa8;
+  --good: #1f7a4d;
+  --bad: #b3261e;
+  --font-head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #181e27; --fg: #e3e7ee; --muted: #94a0b2; --line: #2a3340;
+    --accent: #f0a050; --accent-soft: #3a2a18; --code-bg: #1d2530; --code-fg: #e3e7ee;
+    --tok-kw: #c79bf0; --tok-str: #7fd3a3; --tok-com: #7b8794; --tok-num: #f0a050; --tok-tag: #7fb4f0;
+    --good: #7fd3a3; --bad: #f08a82; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #181e27; --fg: #e3e7ee; --muted: #94a0b2; --line: #2a3340;
+  --accent: #f0a050; --accent-soft: #3a2a18; --code-bg: #1d2530; --code-fg: #e3e7ee;
+  --tok-kw: #c79bf0; --tok-str: #7fd3a3; --tok-com: #7b8794; --tok-num: #f0a050; --tok-tag: #7fb4f0;
+  --good: #7fd3a3; --bad: #f08a82; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--font-body); margin: 0; }
+.shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1220px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); gap: 40px; }
+aside { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 4px 24px 0; }
+.brand { font: 700 20px/1 var(--font-head); letter-spacing: -0.01em; }
+.brand small { display: block; margin-top: 6px; font: 400 12px/1.4 var(--font-body); color: var(--muted); }
+#q { width: 100%; margin: 16px 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; }
+#q:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav h4 { margin: 18px 0 4px; font: 600 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+nav a { display: block; padding: 3px 8px; margin-left: -8px; border-radius: 5px; color: var(--fg); text-decoration: none; font-size: 14px; }
+nav a:hover { background: var(--accent-soft); }
+nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+nav .none { color: var(--muted); font-size: 13px; padding: 8px 0; }
+main { min-width: 0; padding: 32px 0 96px; }
+.intro { font-size: 17px; max-width: 64ch; }
+section { padding-top: 40px; border-top: 1px solid var(--line); margin-top: 40px; }
+section:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+h1 { font: 700 40px/1.1 var(--font-head); letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance; }
+h2 { font: 700 27px/1.2 var(--font-head); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+h3 { font: 700 18px/1.3 var(--font-head); margin: 28px 0 8px; }
+h3 code, h2 code { font-size: .9em; }
+p, li { max-width: 74ch; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+code { font: 13px/1.5 var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.codebox { margin: 14px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--code-bg); overflow: hidden; }
+.codebar { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px 3px 16px; border-bottom: 1px solid var(--line); }
+.codebar .lang { font: 500 10px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.codebar button.copy { font: 500 11px/1 var(--font-body); padding: 5px 8px; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); cursor: pointer; }
+.codebar button.copy:hover { background: var(--panel); border-color: var(--line); color: var(--fg); }
+pre.code { margin: 0; padding: 14px 16px; overflow-x: auto; color: var(--code-fg); font: 13px/1.6 var(--font-mono); }
+pre.code code { background: none; padding: 0; font: inherit; overflow-wrap: normal; }
+.k { color: var(--tok-kw); } .s { color: var(--tok-str); } .c { color: var(--tok-com); font-style: italic; } .n { color: var(--tok-num); } .t { color: var(--tok-tag); }
+.tablewrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 11px/1.2 var(--font-body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+td.type { font: 12.5px/1.5 var(--font-mono); color: var(--tok-tag); }
+.req { color: var(--bad); font-weight: 600; font-size: 11px; margin-left: 4px; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 78ch; }
+.callout p { margin: 4px 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pair > div { min-width: 0; }
+.pair h5 { margin: 6px 0 0; font: 600 12px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+.pair .yes h5 { color: var(--good); } .pair .no h5 { color: var(--bad); }
+.tag { display: inline-block; font: 600 10.5px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; margin-left: 6px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card b { font-family: var(--font-head); }
+.card p { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0; }
+.pipeline div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; flex: 1 1 140px; min-width: 0; }
+.pipeline b { display: block; font: 700 14px var(--font-head); margin-bottom: 2px; }
+.pipeline .arr { flex: 0 0 auto; min-width: 0; padding: 0; border: 0; background: none; align-self: center; color: var(--muted); font-size: 18px; }
+.menu-btn { display: none; }
+mark { background: var(--accent-soft); color: inherit; }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  aside { position: static; height: auto; padding: 16px 0 0; }
+  nav { display: none; }
+  nav.open, #q:not(:placeholder-shown) ~ nav { display: block; }
+  .menu-btn { display: inline-block; margin: 0 0 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; cursor: pointer; }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 32px; }
+  .pipeline .arr { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.pager{display:flex;justify-content:space-between;gap:12px;margin-top:56px;padding-top:20px;border-top:1px solid var(--line)}.pager a{font:600 15px var(--font-head)}
+</style>
+<style>
+body{margin:0} main.start{max-width:760px;margin:0 auto;padding:24px 16px 80px}
+main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.topbar a{margin-right:14px;color:var(--accent);text-decoration:none} pre.code{overflow:auto;padding:12px;background:var(--code-bg);border-radius:6px}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="index.html">Overview</a><a href="start.html">Getting started</a><a href="recipes.html"><strong>Recipes</strong></a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
+<main class="start">
+<h1>Recipes</h1>
+<p>Short components for things most games need, each complete and ready to copy into <code>src/</code>. Every one is compiled and type-checked by the engine's tests, so they work with the engine as it is. For a whole starting point, <code>rge create my-game --template menu</code> (a title, settings and a pause menu) or <code>--template platformer</code> (running and jumping on solid blocks).</p>
+<ul><li><a href="#menu">A menu</a></li><li><a href="#settings">A settings screen</a></li><li><a href="#health-bar">A health bar</a></li><li><a href="#spawning">Things that come and go</a></li><li><a href="#card">A panel that takes children</a></li><li><a href="#pickups">Picking things up</a></li><li><a href="#cooldown">A cooldown and a flash</a></li></ul>
+
+<h2 id="menu">A menu</h2>
+<p>A title or pause menu: buttons the arrow keys (or the d-pad) move between, Enter (or A) presses, and Escape closes. <code>&lt;Menu&gt;</code> keeps the focus among its own items and goes round at the ends; <code>autoFocus</code> says where it starts.</p>
+<pre class="code" data-lang="tsx" data-recipe="Menu.tsx"><code>import { Button, Menu, Text } from &quot;@rge/runtime/jsx&quot;;
+
+interface PauseMenuProps {
+  onResume: () =&gt; void;
+  onQuit: () =&gt; void;
+}
+
+export function PauseMenu({ onResume, onQuit }: PauseMenuProps) {
+  return (
+    &lt;Menu gap={4} width={140} alignItems=&quot;stretch&quot; onBack={onResume}&gt;
+      &lt;Button autoFocus onPress={onResume}&gt;
+        &lt;Text&gt;Resume&lt;/Text&gt;
+      &lt;/Button&gt;
+      &lt;Button onPress={onQuit}&gt;
+        &lt;Text&gt;Quit to title&lt;/Text&gt;
+      &lt;/Button&gt;
+    &lt;/Menu&gt;
+  );
+}</code></pre>
+<p>Any <code>Flex</code> prop restyles a button: <code>background</code>, <code>focusBackground</code>, <code>pressedBackground</code>, or a nine-slice <code>backgroundImage</code>.</p>
+
+<h2 id="settings">A settings screen</h2>
+<p>Rows that change a value in place: <code>onAdjust</code> hears left and right while a row has the focus, and the focus stays. A <code>&lt;Slider&gt;</code> and a <code>&lt;Toggle&gt;</code> do the same with the mouse.</p>
+<pre class="code" data-lang="tsx" data-recipe="Options.tsx"><code>import { Button, Flex, Menu, Slider, Text, Toggle, useMutable } from &quot;@rge/runtime/jsx&quot;;
+
+export function Options({ onClose }: { onClose: () =&gt; void }) {
+  const s = useMutable({ volume: 8, shake: true });
+  return (
+    &lt;Menu gap={4} width={200} alignItems=&quot;stretch&quot; onBack={onClose}&gt;
+      &lt;Button autoFocus onAdjust={(d) =&gt; { s.volume = Math.min(10, Math.max(0, s.volume + d)); }}&gt;
+        &lt;Text&gt;{`Volume &lt; ${s.volume} &gt;`}&lt;/Text&gt;
+      &lt;/Button&gt;
+      &lt;Flex direction=&quot;row&quot; gap={8} alignItems=&quot;center&quot;&gt;
+        &lt;Text&gt;Volume&lt;/Text&gt;
+        &lt;Slider width={100} min={0} max={10} step={1} value={s.volume} onChange={(v) =&gt; { s.volume = v; }} /&gt;
+      &lt;/Flex&gt;
+      &lt;Flex direction=&quot;row&quot; gap={8} alignItems=&quot;center&quot;&gt;
+        &lt;Text&gt;Screen shake&lt;/Text&gt;
+        &lt;Toggle checked={s.shake} onChange={(on) =&gt; { s.shake = on; }} /&gt;
+      &lt;/Flex&gt;
+      &lt;Button onPress={onClose}&gt;
+        &lt;Text&gt;Back&lt;/Text&gt;
+      &lt;/Button&gt;
+    &lt;/Menu&gt;
+  );
+}</code></pre>
+<p>Keep settings that outlive a run in a <code>createSettings</code> store and read them with <code>useStore</code> (see Systems, saved data).</p>
+
+<h2 id="health-bar">A health bar</h2>
+<p>A bar is a box inside a box: the inner one's width follows the value. It renders again only when <code>hp</code> or <code>max</code> change.</p>
+<pre class="code" data-lang="tsx" data-recipe="HealthBar.tsx"><code>import { Flex } from &quot;@rge/runtime/jsx&quot;;
+
+interface HealthBarProps {
+  hp: number;
+  max: number;
+  width?: number;
+}
+
+export function HealthBar({ hp, max, width = 40 }: HealthBarProps) {
+  const filled = Math.max(0, Math.min(1, hp / max)) * width;
+  return (
+    &lt;Flex width={width} height={5} background=&quot;#3a1418&quot; borderRadius={2}&gt;
+      &lt;Flex width={filled} height={5} background={hp * 3 &lt; max ? &quot;#e5534b&quot; : &quot;#57c26b&quot;} borderRadius={2} /&gt;
+    &lt;/Flex&gt;
+  );
+}</code></pre>
+<p>Put it in a <code>&lt;Hud&gt;</code> to keep it on the screen while the camera moves, or under an enemy to follow it.</p>
+
+<h2 id="spawning">Things that come and go</h2>
+<p>A list in state, one component per item, each with a <code>key</code>. A new item mounts its component; an item that leaves the list unmounts it. The item says it is done through a callback, as a React child tells its parent.</p>
+<pre class="code" data-lang="tsx" data-recipe="Spawner.tsx"><code>import { Entity, Shape, useMutable, useUpdate } from &quot;@rge/runtime/jsx&quot;;
+
+interface Spark {
+  id: number;
+  x: number;
+}
+
+function Fading({ x, onGone }: { x: number; onGone: () =&gt; void }) {
+  const s = useMutable({ life: 1 });
+  useUpdate((dt) =&gt; {
+    s.life -= dt;
+    if (s.life &lt;= 0) onGone();
+  });
+  return &lt;Shape kind=&quot;rect&quot; x={x} y={80 - s.life * 40} width={4} height={4} color=&quot;gold&quot; /&gt;;
+}
+
+export function Spawner() {
+  const s = useMutable({ sparks: [] as Spark[], next: 0, timer: 0 });
+  useUpdate((dt) =&gt; {
+    s.timer -= dt;
+    if (s.timer &lt;= 0) {
+      s.timer = 0.25;
+      s.sparks.push({ id: s.next, x: (s.next * 37) % 300 });
+      s.next += 1;
+    }
+  });
+  return (
+    &lt;Entity&gt;
+      {s.sparks.map((spark) =&gt; (
+        &lt;Fading key={spark.id} x={spark.x} onGone={() =&gt; { s.sparks = s.sparks.filter((p) =&gt; p.id !== spark.id); }} /&gt;
+      ))}
+    &lt;/Entity&gt;
+  );
+}</code></pre>
+<p><code>s.sparks.push(…)</code> is written in place and the compiler turns it into a new list, so everything that reads it sees the change. A helper in a <code>.ts</code> file returns a new list instead.</p>
+
+<h2 id="card">A panel that takes children</h2>
+<p>A reusable panel with a title and a footer of its own, and whatever the parent passes in between: single elements, conditions and a list, each kept in its place.</p>
+<pre class="code" data-lang="tsx" data-recipe="Card.tsx"><code>import { type Child, Flex, Text } from &quot;@rge/runtime/jsx&quot;;
+
+interface CardProps {
+  title: string;
+  children: Child;
+}
+
+export function Card({ title, children }: CardProps) {
+  return (
+    &lt;Flex direction=&quot;column&quot; gap={3} padding={6} background=&quot;#1c2235&quot; borderRadius={3}&gt;
+      &lt;Text color=&quot;#f2d17a&quot;&gt;{title}&lt;/Text&gt;
+      {children}
+      &lt;Text color=&quot;#7b8794&quot;&gt;Esc to close&lt;/Text&gt;
+    &lt;/Flex&gt;
+  );
+}
+
+interface Item {
+  id: string;
+  name: string;
+  count: number;
+}
+
+export function Bag({ items }: { items: readonly Item[] }) {
+  return (
+    &lt;Card title=&quot;Bag&quot;&gt;
+      &lt;Text&gt;{`${items.length} kinds`}&lt;/Text&gt;
+      {items.map((item) =&gt; (
+        &lt;Text key={item.id}&gt;{`${item.name} x${item.count}`}&lt;/Text&gt;
+      ))}
+    &lt;/Card&gt;
+  );
+}</code></pre>
+<p>A component that builds on <code>Card</code> may pass its own <code>{children}</code> on to it, between children of its own.</p>
+
+<h2 id="pickups">Picking things up</h2>
+<p>Colliders report when they start touching; the handler reads the other collider's <code>tag</code> (and <code>owner</code>, and <code>data</code>). There is no physics: what touching does is up to the handler.</p>
+<pre class="code" data-lang="tsx" data-recipe="Pickup.tsx"><code>import { Collider, Entity, Shape, useMutable } from &quot;@rge/runtime/jsx&quot;;
+
+export function Coin({ x, y, onTaken }: { x: number; y: number; onTaken: () =&gt; void }) {
+  return (
+    &lt;Entity x={x} y={y}&gt;
+      &lt;Shape kind=&quot;circle&quot; width={8} height={8} color=&quot;gold&quot; /&gt;
+      &lt;Collider width={8} height={8} tag=&quot;coin&quot; onCollisionEnter={(other) =&gt; { if (other.tag === &quot;player&quot;) onTaken(); }} /&gt;
+    &lt;/Entity&gt;
+  );
+}
+
+export function Field() {
+  const s = useMutable({ taken: 0, coins: [{ id: 1, x: 40 }, { id: 2, x: 80 }] });
+  return (
+    &lt;Entity&gt;
+      {s.coins.map((coin) =&gt; (
+        &lt;Coin key={coin.id} x={coin.x} y={100} onTaken={() =&gt; { s.taken += 1; s.coins = s.coins.filter((c) =&gt; c.id !== coin.id); }} /&gt;
+      ))}
+    &lt;/Entity&gt;
+  );
+}</code></pre>
+<p>To carry a value with the collision (a coin's worth, an enemy's damage), give the collider <code>data</code> and declare what each tag carries once in a <code>.ts</code> file (Systems, collisions).</p>
+
+<h2 id="cooldown">A cooldown and a flash</h2>
+<p>Time is counted in the update, in seconds of game time: it follows the fixed step, replays the same, and stops while the game is paused. <code>after</code> and <code>every</code> do the same for a one-off delay.</p>
+<pre class="code" data-lang="tsx" data-recipe="Turret.tsx"><code>import { after, Shape, useInput, useMutable, useUpdate } from &quot;@rge/runtime/jsx&quot;;
+
+export function Turret() {
+  const s = useMutable({ cooldown: 0, flash: false, shots: 0 });
+  useUpdate((dt) =&gt; {
+    s.cooldown = Math.max(0, s.cooldown - dt);
+  });
+  useInput((input) =&gt; {
+    if (input.pressed(&quot;Z&quot;) &amp;&amp; s.cooldown === 0) {
+      s.cooldown = 0.5;
+      s.shots += 1;
+      s.flash = true;
+      after(0.1, () =&gt; { s.flash = false; });
+    }
+  });
+  return &lt;Shape kind=&quot;rect&quot; width={12} height={12} color={s.flash ? &quot;white&quot; : &quot;#57c26b&quot;} /&gt;;
+}</code></pre>
+<p>A press is something that happens once, so it goes in <code>useInput</code>; anything over time goes in <code>useUpdate</code>.</p>
+
+<h2>Where next</h2>
+<p><a href="start.html">Getting started</a> takes a game from an empty folder to a package; <a href="language.html">Language</a> is what the compiler accepts, and <a href="reference.html">Reference</a> every built-in and hook.</p>
+</main>
+</body>
+</html>

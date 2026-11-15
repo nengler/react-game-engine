@@ -8,7 +8,7 @@ children are persistent instances, updated in place when state changes.
 This repository contains the **compiler** (Phase 2, M0–M15), the runtime, and the
 **native player** (Phase 3, N0–N6): a compiled game draws, plays sound and reads the
 keyboard and mouse through raylib, under Node during development and as a small Rust +
-QuickJS-ng executable that ships without Node. **Start with the [authoring guide](docs/index.html)** (open it in a browser; five pages: start, language, systems, effects and input, reference). See [docs/DESIGN.md](docs/DESIGN.md) for the
+QuickJS-ng executable that ships without Node. **Start with the [authoring guide](docs/index.html)** (open it in a browser; five pages: start, language, systems, effects and input, reference), [Getting started](docs/start.html) for a game from an empty folder (`rge create my-game --template menu` or `--template platformer` for more than a moving square), and [Recipes](docs/recipes.html) for a menu, a settings screen, a health bar and other everyday pieces. See [docs/DESIGN.md](docs/DESIGN.md) for the
 architecture, the IR, the ground rules and the design decisions, and
 [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's design, its ABI and its performance baseline. What comes next, including Phase 4 (a real game drives the backlog), is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); the next piece of work, priority 8 with a third game, is planned in [docs/ADVENTURE_PLAN.md](docs/ADVENTURE_PLAN.md). How writing a game should come to feel more like writing React (context, motion, timers, rewind, editor diagnostics, a web backend) is planned in [docs/REACT_FEEL_PLAN.md](docs/REACT_FEEL_PLAN.md).
 
