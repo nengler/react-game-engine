@@ -100,6 +100,21 @@ describe("createGameState(data, actions)", () => {
     assert.deepEqual(useGame.getState().gems, [], "the initial data was never written in place");
   });
 
+  it("runs without structuredClone, which QuickJS-ng (the packaged build's engine) does not have", () => {
+    const saved = globalThis.structuredClone;
+    // @ts-expect-error: removed for this test, as it is under QuickJS-ng
+    delete globalThis.structuredClone;
+    try {
+      useGame = make();
+      useGame.actions().gem(3);
+      useGame.actions().tick(0.25);
+      assert.deepEqual(useGame.getState().gems, [3]);
+      assert.equal(useGame.getState().run.time, 0.25);
+    } finally {
+      globalThis.structuredClone = saved;
+    }
+  });
+
   it("refuses a function in the data, and a name that is both", () => {
     assert.throws(() => createGameState({ f: () => 1 } as { f: () => number }, {}), /actions go in the second argument/);
     assert.throws(() => createGameState({ a: 1 }, { a() {} }), /both a value and an action/);

@@ -110,7 +110,7 @@ export class GameStore<S = object> {
     store = new GameStore<D>(() => {
       const bound: Record<string, unknown> = {};
       for (const [name, action] of Object.entries(actions)) bound[name] = (...args: unknown[]) => store!.#act(action as GameAction<unknown>, args);
-      return { ...structuredClone(data), ...bound } as D;
+      return { ...(cloneData(data) as object), ...bound } as D;
     });
     return store;
   }
@@ -120,7 +120,7 @@ export class GameStore<S = object> {
 
   #act(action: GameAction<unknown>, args: readonly unknown[]): unknown {
     if (this.#draft !== null) return action(this.#draft, ...args);
-    const draft = structuredClone(this.values());
+    const draft = cloneData(this.values()) as Record<string, unknown>;
     this.#draft = draft;
     let result: unknown;
     try {
@@ -267,6 +267,20 @@ export class GameStore<S = object> {
 }
 
 type Tree = { [key: string]: unknown };
+
+/**
+ * A deep copy of the game state's data: arrays and plain objects are copied, anything else (a number, a string, an instance of a
+ * class) is kept as it is. `structuredClone` would do, but QuickJS-ng, which runs packaged games, does not have it.
+ */
+function cloneData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cloneData);
+  if (typeof value !== "object" || value === null) return value;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  const out: Tree = {};
+  for (const key of Object.keys(value)) out[key] = cloneData((value as Tree)[key]);
+  return out;
+}
 
 /**
  * `after`, with every object or array whose values equal `before`'s replaced by `before`'s own, so what an action did not change
