@@ -56,8 +56,34 @@ Every job failing within seconds, with no steps, no logs (`get_job_logs` returns
 started them: usually the account is out of Actions minutes or has a billing hold. It is not the PR, and a rerun won't help.
 Run `npm run ci:local` on the PR head instead, with no job names, so all five jobs run, then say once on the PR that Actions
 didn't run and which jobs passed locally. When all five pass there, with no conflict and no review waiting, merge. If one was
-skipped (native-desktop needs `xvfb-run` and the X11/GL libraries from `ci.yml`), it has not passed: install what it needs
-and run it, or say what blocks it; do not merge without it.
+skipped, it has not passed: install what it needs and run it, or say what blocks it; do not merge without it.
+
+### native-desktop in a cloud container
+
+A Claude Code cloud container usually can't pass native-desktop, and that is the container, not the PR:
+
+- It needs the packages from the `apt-get install` line in `ci.yml` first (without them, cmake stops at
+  `RandR headers not found`): `sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev
+  libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb`.
+- Even then, the container's Mesa under Xvfb can't render to a framebuffer: `WARNING: FBO: ... Framebuffer has incomplete
+  attachment`, and every pixel read back is black (`000000ff`). The C smoke test fails 15 of 643 checks, and 7 Node-host
+  pixel tests fail (`librge through koffi`, `sharp upscaling, through librge`, `drawing the new built-ins in a hidden window`,
+  `demo: pixels from the real library`). `GALLIUM_DRIVER=softpipe` doesn't help. Seen on 2026-11-15, on PR #130.
+
+When native-desktop fails that way, check whether the PR has anything to do with it:
+
+1. `git diff origin/main..HEAD --stat -- native/ host/` is empty (the C smoke test runs no game code).
+2. The same Node tests fail the same way with `main`'s code for what the PR changed (`git checkout origin/main --
+   <the PR's engine paths>`, `npm run generate`, rerun the native-desktop Node step, then `git checkout HEAD -- <paths>` and
+   `npm run generate`).
+3. The rest of native-desktop passes: `npm run host:build`, and both packaged demos (QuickJS and V8) run under `xvfb-run`
+   until stopped.
+
+native-desktop has still not passed, so the PR does not meet the merge rule. Report the four jobs that passed, the
+native-desktop failure and these three checks to the user, and on the PR once, then wait for the user to decide. Do not merge
+on your own. (For PR #130 the user chose to merge on this evidence; that was their call for that PR.) A native-desktop failure
+that doesn't match the above (another error, pixels that aren't all black, a failure not on `main` as well, or a PR that
+touches `native/` or `host/`) is a real failure to fix.
 
 ## When CI fails
 

@@ -14,5 +14,8 @@ When a pull request is opened (by you or in this session), subscribe to its acti
   once on the PR that Actions didn't run and which jobs passed locally.
 - When all five jobs pass on the PR's head (on Actions, or all five in `ci:local`), there is no merge conflict and no review is
   waiting on a change, merge the PR. A job that was skipped or not run has not passed: don't merge then.
+- In a cloud container, native-desktop usually can't pass locally: its OpenGL can't render to a framebuffer, so pixel tests
+  read back black. The babysit skill ("native-desktop in a cloud container") says how to show that it isn't the PR's. Then
+  report it to the user and let them decide on the merge.
 
 Do not create a pull request unless the user asks for one.
