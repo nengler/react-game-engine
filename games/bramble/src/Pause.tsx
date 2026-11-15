@@ -1,7 +1,7 @@
 import { Entity, Shape, Text, useInput } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Inventory } from "./Inventory.tsx";
-import { Menu } from "./Menu.tsx";
+import { Choices } from "./Choices.tsx";
 import { pauseRows } from "./rules/menu.ts";
 
 /**
@@ -18,7 +18,7 @@ export function Pause() {
       <Shape kind="rect" width={320} height={180} color="#10131cd9" />
       <Text x={12} y={8}>PAUSED</Text>
       <Inventory />
-      <Menu top={120} rows={pauseRows()} onChoose={choosePaused} />
+      <Choices top={120} rows={pauseRows()} onChoose={choosePaused} />
     </Entity>
   );
 }

@@ -117,7 +117,7 @@ Save and quit (which writes the save and goes to the title). Picking up an item 
 
 Since the engine's `modal` (2026-11-12), the pause screen is its own component (`Pause.tsx`) with `modal` on its root: while it is
 shown the play screen hears no keys, so it closes itself on Escape, and `Play` no longer returns early from `useInput` when paused.
-The settings screen's wait for a key is `KeyPrompt.tsx`, a modal with no children, so `Menu` lost its `disabled` prop.
+The settings screen's wait for a key is `KeyPrompt.tsx`, a modal with no children, so `Menu` lost its `disabled` prop. *Since 2026-11-15:* `Menu.tsx` is `Choices.tsx`, a built-in `<Menu>` of focusable rows: the focus is the cursor, `onAdjust` takes left and right, and the screen looks the same (the stories' pictures did not change). Its own cursor state, its `useInput` and `wrap` are gone.
 
 17. **Narrowing does not reach a callback in the generated code.** In `{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`,
     TypeScript narrows `capturing` (a `const`) inside the arrow, but the generated callback reads `this.capturing`, which is not

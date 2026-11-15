@@ -1,6 +1,6 @@
 /**
- * The menus as plain data: what the title offers, and the rows of the settings screen. A screen draws `Row`s; the game state
- * moves a cursor over them and acts on the row under it.
+ * The menus as plain data: what the title offers, and the rows of the settings screen. A screen draws `Row`s in a `<Menu>`, which
+ * moves the focus over them, and acts on the row chosen.
  */
 export interface Row {
   readonly id: string;
@@ -67,7 +67,3 @@ export function pauseRows(): Row[] {
   ];
 }
 
-/** A cursor moved past either end of `count` rows comes round to the other. */
-export function wrap(cursor: number, count: number): number {
-  return (cursor + count) % count;
-}

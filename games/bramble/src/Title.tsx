@@ -1,6 +1,6 @@
 import { Entity, Text, useMount } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
-import { Menu } from "./Menu.tsx";
+import { Choices } from "./Choices.tsx";
 import { titleRows } from "./rules/menu.ts";
 
 export function Title() {
@@ -11,7 +11,7 @@ export function Title() {
   return (
     <Entity>
       <Text x={0} y={30} width={320} align="center" size={30}>BRAMBLE</Text>
-      <Menu top={90} rows={titleRows(hasSave)} start={start} onChoose={choose} />
+      <Choices top={90} rows={titleRows(hasSave)} start={start} onChoose={choose} />
     </Entity>
   );
 }
