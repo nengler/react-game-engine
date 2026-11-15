@@ -115,9 +115,16 @@ Each is real today. The first two cause wrong behavior; the rest cost time.
    note should say so once.
 4. ~~**A hook's internal mutable has a call-specific name.**~~ *Fixed in #124:* named after the hook (`body.x`, `body2` on a clash).
    Hot-reload keys for a hook's own state changed with it.
-5. **`s` read whole is a copy.** `total(s)` and `<Camera shake={shake}>` hand over a copy of the fields, not the live object, so a
-   write inside the callee is lost. It is the opposite of `return s` from a hook, which hands the object back. Either make a copy an
-   error where the callee could write it, or say it where `useMutable` is taught.
+5. ~~**`s` read whole is a copy.**~~ *Fixed 2026-11-14:* in a handler, `s` passed whole is the component's own object for that
+   `useMutable`, made with the component (`#sObject` in the generated class), with a getter and a setter per field. A getter reads the
+   field as the handler sees it (this step's writes included); a setter goes through the field's setter, so it marks the component dirty
+   and renders as `s.hp -= 3` would. So `takeHit(s)` changes the component, as `return s` from a hook already did. In render (props,
+   `<Camera shake={shake}>`, `{label(s)}`) it is still a copy of the committed fields, now typed `Readonly<…>`: render writes nothing.
+   List fields keep #128's rule: the object's list field is a `MutableList<T>`, so a helper that takes `T[]` to change it in place is
+   an error; a helper assigns a new list, which the setter takes. A write through the object after the component is unmounted (a helper
+   or a closure kept it) does nothing and warns once per component and field in development (`setDevelopmentWarnings` in the runtime;
+   on by default, `null` turns it off). The `component.s` view tests and tools use is unchanged: it reads the committed value.
+   Still open: a helper in a plain `.ts` file can still change an *item* of a list field in place (items are plain `T`, as item 1 says).
 6. ~~**Dead code from `useState`.**~~ *Fixed in #124:* the updater paths, setter binding and `inUpdater` are removed.
 7. **Stale text.** `packages/kite/DESIGN.md` (line 22) still says the character's state is `useState`. The doc comment on `useMutable`
    in `packages/runtime/src/jsx.ts` was updated in #124.
