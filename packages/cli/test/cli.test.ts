@@ -169,3 +169,50 @@ test("a folder that is not a game, and an unknown command, are usage errors", ()
   assert.match(rge(["check", root]).stderr, /no package\.json/);
   assert.equal(rge(["frobnicate"]).status, 2);
 });
+
+test(
+  "screenshot --compare passes against references it wrote, fails on a changed one, and --tolerance lets a small change pass",
+  { timeout: 120_000, skip: findLibrary("headless") === null ? "librge is not built (npm run native:build:headless)" : false },
+  () => {
+    assert.equal(rge(["build", game]).status, 0);
+    const refs = join(root, "refs");
+    const out = join(root, "shots");
+    const shot = (...more: string[]) =>
+      rge(["screenshot", game, "--script", "right*5", "--at", "4", "--out", out, "--compare", refs, ...more]);
+    const wrote = shot("--update");
+    assert.equal(wrote.status, 0, wrote.stderr);
+    assert.match(wrote.stdout, /updated 1 reference/);
+    const same = shot();
+    assert.equal(same.status, 0, same.stdout + same.stderr);
+    assert.match(same.stdout, /same {2}step-4/);
+    // Change one pixel of the reference by 10 in its red channel.
+    const reference = join(refs, "step-4.png");
+    execFileSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import { readFileSync, writeFileSync } from "node:fs";
+       import { decodePng, encodePng } from "@rge/player-node";
+       const p = decodePng(readFileSync(${JSON.stringify(reference)}));
+       p.rgba[0] = (p.rgba[0] + 10) % 256;
+       writeFileSync(${JSON.stringify(reference)}, encodePng(p));`,
+      ],
+      { cwd: root }
+    );
+    const changed = shot();
+    assert.equal(changed.status, 1);
+    assert.match(changed.stdout, /DIFF {2}step-4: 1 pixels differ by more than 0/);
+    assert.equal(shot("--tolerance", "10").status, 0, "a change of 10 is within a tolerance of 10");
+  }
+);
+
+test("screenshot --gpu says what is missing when the desktop build is not there", () => {
+  const ran = spawnSync(process.execPath, [cli, "screenshot", game, "--gpu"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, RGE_NATIVE_LIB: join(root, "no-such-librge.so") },
+  });
+  assert.equal(ran.status, 2);
+  assert.match(ran.stderr, /--gpu needs the desktop build of librge: run `npm run native:build`/);
+});

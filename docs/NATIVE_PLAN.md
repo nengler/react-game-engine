@@ -718,6 +718,18 @@ Built first, because the level is written without a window. `npm run check:<game
 
 - **`parseInputScript(script, { bindings, dt })`** turns `right*30, jump, right*20+dash` into input frames. Items run one after another, `+` joins terms that start together, `name*N` holds N frames, a bare name is a one-frame tap, `_` waits. Presses and releases are derived from what is held, so a key held across two items is one hold. The same format is the replay format of the level.
 - **`runScript(config, frames, observe)`** (`@rge/player`) builds a game on a `RecordingBackend`, does one warm-up step, then steps once per frame and returns what `observe` gives after each: the game state, not draw records. `ScriptedInputBackend` wraps any backend and takes input from a script, which is how a scripted run is drawn natively.
+- **GPU screenshots** (2026-11-15). `rge screenshot --gpu` runs `renderRun` against the desktop librge (`findNativeLibraryOf("desktop")`,
+  never falling back to the software build), in a hidden window captured with `LoadImageFromScreen`, and runs itself under
+  `xvfb-run -a -s "-screen 0 1920x1080x24"` when there is no display. `--compare <dir>` checks each frame against a stored PNG with a
+  per-channel `--tolerance`; `npm run check:gpu` checks two frames of the demo and two of Kite, and the `native-desktop` CI job runs it.
+  On this scene set, Mesa's llvmpipe and raylib's software renderer agree on every pixel of the demo and on all but 360 of Kite's
+  518,400 (within 64 per channel). Building it found the next item.
+- **Render targets on Mesa 25.x** (fixed 2026-11-15). raylib 6.0's `LoadRenderTexture` uploads its colour texture with no pixels, which
+  Mesa 25.2's llvmpipe and softpipe refuse (`GL_INVALID_ENUM` from `glTexImage2D`), and gives its depth renderbuffer the unsized
+  `GL_DEPTH_COMPONENT`. The framebuffer was incomplete, so the canvas (`RGE_OP_CANVAS`) and the sharp upscale were never drawn: 15 of
+  the C smoke test's 644 checks failed under Xvfb, and a player on such a driver would have seen the canvas missing. librge now makes its
+  own targets (`load_target` in `rge.c`): a colour texture uploaded from zeroed pixels and no depth, which nothing it draws tests. The
+  software build still uses `LoadRenderTexture`.
 - **`renderRun` and `npm run screenshot`** (`@rge/player-node`, `tools/screenshot.ts`) render chosen steps of a scripted run through the software-rendered hidden window to PNG, and a contact sheet of them with step numbers (`--sheet`). Needs `npm run native:build:headless`.
 
 ### Fixed timestep

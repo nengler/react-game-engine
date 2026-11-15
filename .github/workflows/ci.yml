@@ -128,6 +128,48 @@ jobs:
       - run: npm run host:build:headless
       - run: npm run check:outside
 
+  # The small host (`--engine quickjs`; V8 is the default): Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
+  # The parity test plays the demo for 60 scripted frames under Node and under the host and requires
+  # byte-identical output.
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.18"
+          cache: npm
+      - run: npm ci
+      - run: npm run generate
+      - name: Note the compiler versions (they key the build cache)
+        id: toolchain
+        run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Cache cargo and the host build (raylib and QuickJS are most of it)
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            host/target
+          key: host-headless-${{ steps.toolchain.outputs.id }}-${{ hashFiles('host/Cargo.lock', 'host/build.rs', 'native/CMakeLists.txt') }}
+          restore-keys: host-headless-${{ steps.toolchain.outputs.id }}-
+      - name: Build the host (software renderer)
+        run: npm run host:build:headless
+      - name: Parity with Node, and host behaviour
+        run: node --test --test-concurrency=1 packages/demo/test/parity.test.ts
+        env:
+          RGE_HOST_BIN: ${{ github.workspace }}/host/target/release/rge-host
+          RGE_REQUIRE_HOST: "1"
+      - name: Package the demo and run it
+        run: |
+          npm run package -- --engine quickjs --headless
+          cd /tmp
+          timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
+
+  # Last: ci-local runs every job in one checkout, and this job builds the windowed librge and rge-host there, which the host
+  # job's headless package would then pick up. On GitHub each job has its own machine, so the order only matters locally.
   # The same library on the real OpenGL path (GLFW), against Mesa's software GL on a virtual display.
   native-desktop:
     runs-on: ubuntu-latest
@@ -174,6 +216,10 @@ jobs:
         env:
           RGE_REQUIRE_NATIVE: "1"
           RGE_NATIVE_LIB: ${{ github.workspace }}/native/build/librge.so
+      # Frames of the demo and of Kite drawn on the real OpenGL path (rge screenshot --gpu runs itself under xvfb-run), against references
+      # drawn the same way: the software renderer cannot show what a shader or a driver does. A channel may differ by 64 between Mesa versions.
+      - name: GPU screenshots against references
+        run: npm run check:gpu
       - name: Build the Rust host (OpenGL window)
         run: npm run host:build
       - name: Package the demo and run it under a virtual display
@@ -187,43 +233,3 @@ jobs:
           npm run package -- --engine node
           cd /tmp
           xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
-
-  # The small host (`--engine quickjs`; V8 is the default): Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
-  # The parity test plays the demo for 60 scripted frames under Node and under the host and requires
-  # byte-identical output.
-  host:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22.18"
-          cache: npm
-      - run: npm ci
-      - run: npm run generate
-      - name: Note the compiler versions (they key the build cache)
-        id: toolchain
-        run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
-      - name: Cache cargo and the host build (raylib and QuickJS are most of it)
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            host/target
-          key: host-headless-${{ steps.toolchain.outputs.id }}-${{ hashFiles('host/Cargo.lock', 'host/build.rs', 'native/CMakeLists.txt') }}
-          restore-keys: host-headless-${{ steps.toolchain.outputs.id }}-
-      - name: Build the host (software renderer)
-        run: npm run host:build:headless
-      - name: Parity with Node, and host behaviour
-        run: node --test --test-concurrency=1 packages/demo/test/parity.test.ts
-        env:
-          RGE_HOST_BIN: ${{ github.workspace }}/host/target/release/rge-host
-          RGE_REQUIRE_HOST: "1"
-      - name: Package the demo and run it
-        run: |
-          npm run package -- --engine quickjs --headless
-          cd /tmp
-          timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124

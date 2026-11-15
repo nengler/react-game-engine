@@ -87,6 +87,22 @@ export function findNativeLibrary(prefer: BuildFlavor = "desktop", env: NodeJS.P
   return null;
 }
 
+/**
+ * librge of exactly one flavor, or null: the desktop build for drawing on the GPU (`rge screenshot --gpu`), where falling back to the
+ * software renderer would hide what a shader or a driver does. `RGE_NATIVE_LIB` still wins.
+ */
+export function findNativeLibraryOf(flavor: BuildFlavor, env: NodeJS.ProcessEnv = process.env): string | null {
+  const fromEnv = env["RGE_NATIVE_LIB"];
+  if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
+  const shipped = nativeLibrary(flavor);
+  if (shipped !== null) return shipped;
+  for (const name of libraryNames()) {
+    const candidate = join(REPO_ROOT, "native", flavor === "desktop" ? "build" : "build-headless", name);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 /** Throws if the library was built from a different `rge.h` than this package expects. */
 export function checkAbi(native: Pick<Native, "abiVersion" | "keyCount">): void {
   const version = native.abiVersion();
