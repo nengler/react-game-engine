@@ -8,7 +8,7 @@ name: Release
 #   "@rge/runtime": "https://github.com/nengler/react-game-engine/releases/download/v0.1.0/rge-runtime-0.1.0.tgz"
 #
 # @rge/native carries librge and rge-host built on this runner (linux-x64, desktop and headless), so the packs run on
-# Linux x64 only, as the engine does today. CI (ci.yml, including the `outside` job) is what checks the code; this only builds
+# Linux x64 only, as the engine does today, with glibc 2.39 or newer (Ubuntu 24.04 and later). CI (ci.yml, including the `outside` job) is what checks the code; this only builds
 # and publishes what the tag points at, so tag a commit CI has passed.
 on:
   push:
@@ -33,7 +33,10 @@ concurrency:
 
 jobs:
   packs:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: librge and rge-host link against the runner's glibc, and a binary built on a newer one does
+    # not load on an older system. v0.1.0 was built on ubuntu-latest and needed glibc 2.43, which Ubuntu 24.04 (2.39) lacks.
+    # Raise this only when the oldest system the packs should run on moves.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       # The version from the tag (v0.1.0 -> 0.1.0) or from the run's input, checked before anything is built.
