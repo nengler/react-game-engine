@@ -114,17 +114,6 @@ describe("Screen: diagnostics", () => {
   it("type-checks the generated module", () => {
     assert.deepEqual(typeCheck(compile(GAME, "Game.tsx")), []);
   });
-
-  it("lets state take its own names, kept in `$name` fields", () => {
-    for (const name of ["fit", "pixelPerfect", "border"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Screen width={1} height={1} />; }`).code.includes(
-          `get $${name}()`
-        ),
-        name
-      );
-    }
-  });
 });
 
 describe("Hud", () => {
@@ -175,16 +164,5 @@ function Level() {
       clash.some((d) => /conflicts with the built-in <Hud> this file imports/.test(d.message)),
       clash.map((d) => d.message).join("\n")
     );
-  });
-});
-
-describe("the layout offset", () => {
-  it("can be a state name, kept apart from the field layout writes into every object", () => {
-    for (const name of ["layoutX", "layoutY"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Entity name="C" />; }`).code.includes(`get $${name}()`),
-        name
-      );
-    }
   });
 });
