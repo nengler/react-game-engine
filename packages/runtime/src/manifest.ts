@@ -207,6 +207,8 @@ export const runtimeManifest: RuntimeManifest = {
     "Route",
     "Provider",
     "Layer",
+    "Light",
+    "Lighting",
   ],
   hostIntrinsic: "Entity",
   containerIntrinsics: [
@@ -223,6 +225,7 @@ export const runtimeManifest: RuntimeManifest = {
     "Route",
     "Provider",
     "Layer",
+    "Lighting",
   ],
   textContent: { Text: "text" },
   intrinsicMembers: {
@@ -365,6 +368,8 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name", "keepAlive", "visible", "active"],
     Provider: ["name", "context", "value", "addReader", "removeReader"],
     Layer: ["name", "blend", "childBlend", "clear", "opacity", "shader", "params"],
+    Light: ["radius", "color", "intensity"],
+    Lighting: ["name", "blend", "childBlend", "clear", "opacity", "shader", "params", "ambient"],
     Flex: [...FLEX_FIELDS, "contains", "boxPoint", "focusPoint", "onNavigate"],
     // A widget is a Flex with more: its members are Flex's fields, and what it adds (the methods Flex has are its prototype's, not its own).
     Slider: [
@@ -435,6 +440,8 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name"],
     Provider: ["context", "value"],
     Layer: [],
+    Light: ["radius"],
+    Lighting: [],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -671,6 +678,8 @@ export const runtimeManifest: RuntimeManifest = {
   transformIntrinsics: [
     "Entity",
     "Layer",
+    "Light",
+    "Lighting",
     "Sprite",
     "Collider",
     "Text",

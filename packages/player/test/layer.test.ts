@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `<Layer>` (ABI v10): its children are drawn between a layer-begin and a layer-end record, at its own z, its opacity on the end. */
 import { describe, it } from "node:test";
 
-import { Entity, Hud, Layer, Shape, type GameObject, type LayerProps } from "@rge/runtime";
+import { Entity, Hud, Layer, Light, Lighting, Shape, type GameObject, type LayerProps } from "@rge/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
@@ -141,5 +141,51 @@ describe("<Layer>", () => {
     const none = drawWith(new RecordingBackend({}), entity(layer({ shader: "x.glsl" }, shape("red"))), 2, { shaders: false });
     assert.equal((none.records.find((r) => r.op === "layerEnd") as { shader: string | null }).shader, null);
     assert.match(none.warnings.join("\n"), /runs no shaders/);
+  });
+});
+
+describe("<Light> and <Lighting>", () => {
+  it("is a light map: a multiply layer cleared to the ambient colour, its lights added, each its colour at its intensity", () => {
+    const lantern = new Light({ radius: 48, color: "#ffcc88", intensity: 0.5 });
+    lantern.transform.x = 100;
+    lantern.transform.y = 60;
+    const lighting = new Lighting({ ambient: "#16162c" });
+    lighting.addChild(lantern);
+    lighting.addChild(new Light({ radius: 16 }));
+    const records = draw(entity(shape("red"), lighting));
+    const begin = records.find((r) => r.op === "layerBegin");
+    assert.deepEqual(begin, { op: "layerBegin", clear: "#16162cff", childBlend: "add" });
+    const lights = records.filter((r) => r.op === "light");
+    assert.deepEqual(
+      lights.map((l) => (l.op === "light" ? [l.x, l.y, l.radius, l.color] : [])),
+      [
+        [100, 60, 48, "#ffcc8880"],
+        [0, 0, 16, "#fff3dcff"],
+      ]
+    );
+    assert.equal((records.find((r) => r.op === "layerEnd") as { blend: string }).blend, "multiply");
+  });
+
+  it("draws nothing for a light with no radius or no intensity, and fades one under an opacity", () => {
+    const faded = new Light({ radius: 10, color: "white" });
+    faded.transform.opacity = 0.5;
+    const records = draw(entity(new Light({ radius: 0 }), new Light({ radius: 10, intensity: 0 }), faded));
+    assert.deepEqual(
+      records.filter((r) => r.op === "light").map((l) => (l.op === "light" ? l.color : "")),
+      ["#ffffff80"]
+    );
+  });
+
+  it("follows a change of its ambient colour", () => {
+    const lighting = new Lighting({ ambient: "black" });
+    lighting.addChild(new Light({ radius: 10 }));
+    const root = entity(lighting);
+    draw(root);
+    lighting.ambient = "#202020";
+    lighting.markChanged();
+    assert.deepEqual(
+      draw(root).find((r) => r.op === "layerBegin"),
+      { op: "layerBegin", clear: "#202020ff", childBlend: "add" }
+    );
   });
 });

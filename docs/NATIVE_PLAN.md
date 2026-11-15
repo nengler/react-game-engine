@@ -854,6 +854,17 @@ Node and the Rust host. `<Layer shader params>` is checked against the assets fo
 shader on the GPU (a pixel-position split, `params` and `time`, in the window and in a canvas, a bad handle, a shader that does not
 compile) and checks the software build's -2 and fallback.
 
+### ABI v12: lights
+
+`RGE_OP_LIGHT` (op 13, 8 doubles): `op, x, y, rot, sx, sy, radius, color`. A disc at the local origin, `color` at the middle falling off as
+(1 − d)² to black at `radius`, drawn with rlgl's immediate mode as six rings of 48 segments with the colour at each ring, so it needs no
+texture and draws the same on the GPU and in the software renderer. The colour is premultiplied by its alpha (the light's strength) and
+the vertices are opaque: in an add layer black adds nothing, and the rlsw shortcut of ABI v10 does not apply. The smoke test checks the
+middle, a quarter at half the radius and black past it (within a tolerance: colours are interpolated between rings and a pixel's centre
+is off the light's), two half lights adding to one, and a radius of 0 or NaN drawing nothing. `<Light radius color intensity>` writes
+one; `<Lighting ambient>` is a `Layer` set to `multiply`, `add` and the ambient colour. The player's kind codes grew a bit for it (five
+bits of kind, `KIND_MASK`, then the flags).
+
 ### Router and Route
 
 `<Router route={screen} transition={fadeThrough} duration={0.5} coverColor="#12151f"><Route name="title">…</Route>…</Router>`. A `Route` is a container that is **in the world only while the router shows it**: the router keeps the routes by name, attaches the one `route` names, and swaps them with `queueAddChild` / `queueRemoveChild`, so only the shown screen updates, draws, collides and is pressed, and `useMount` / `useUnmount` inside a screen mean "the screen came" and "the screen went". **A route's components are made when it comes and dropped once it has gone** (decided 2026-11-11, as React Router does): the compiler shows a `<Route>`'s children only while the route is `active` (a conditional child on `this.<route>.active`, `ExprIR` `ElementRead`), and the router sets `active` when a route is entered and clears it when the leave transition ends, marking the compiled components above it dirty so they render and make or drop the children. So each visit starts fresh: initial state, `useState(() => …)`, `useMount`. **`<Route keepAlive>`** keeps a screen's components and their state between visits (Vue's `<KeepAlive>`), as all routes did before. Kite found why fresh is the default: its character's body is the `Player`'s own state, and a second run started where the first had ended. A route that does not exist is an error naming the ones that do.

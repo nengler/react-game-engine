@@ -390,6 +390,37 @@ static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float
   restore_target_state();
 }
 
+/* A light at the local origin (RGE_OP_LIGHT): `color` premultiplied by its alpha at the middle, falling off as (1 - d)^2 to black at
+ * `radius`, drawn as rings of triangles with the colour at each ring's radius (smooth enough at the sizes games draw lights). */
+static void draw_light(float radius, uint32_t packed) {
+  if (!(radius > 0.0f)) return;
+  Color c = unpack_color(packed);
+  float strength = c.a / 255.0f;
+  enum { RINGS = 6, SEGMENTS = 48 };
+  rlBegin(RL_TRIANGLES);
+  for (int ring = 0; ring < RINGS; ring++) {
+    float t0 = (float)ring / RINGS, t1 = (float)(ring + 1) / RINGS;
+    float k0 = (1.0f - t0) * (1.0f - t0) * strength, k1 = (1.0f - t1) * (1.0f - t1) * strength;
+    unsigned char r0 = (unsigned char)(c.r * k0), g0 = (unsigned char)(c.g * k0), b0 = (unsigned char)(c.b * k0);
+    unsigned char r1 = (unsigned char)(c.r * k1), g1 = (unsigned char)(c.g * k1), b1 = (unsigned char)(c.b * k1);
+    for (int s = 0; s < SEGMENTS; s++) {
+      float a0 = 2.0f * PI * s / SEGMENTS, a1 = 2.0f * PI * (s + 1) / SEGMENTS;
+      float x00 = cosf(a0) * radius * t0, y00 = sinf(a0) * radius * t0, x01 = cosf(a1) * radius * t0, y01 = sinf(a1) * radius * t0;
+      float x10 = cosf(a0) * radius * t1, y10 = sinf(a0) * radius * t1, x11 = cosf(a1) * radius * t1, y11 = sinf(a1) * radius * t1;
+      /* Counter-clockwise on screen (y down), as raylib draws its own shapes. */
+      rlColor4ub(r0, g0, b0, 255); rlVertex2f(x00, y00);
+      rlColor4ub(r1, g1, b1, 255); rlVertex2f(x11, y11);
+      rlColor4ub(r1, g1, b1, 255); rlVertex2f(x10, y10);
+      if (ring > 0) {
+        rlColor4ub(r0, g0, b0, 255); rlVertex2f(x00, y00);
+        rlColor4ub(r0, g0, b0, 255); rlVertex2f(x01, y01);
+        rlColor4ub(r1, g1, b1, 255); rlVertex2f(x11, y11);
+      }
+    }
+  }
+  rlEnd();
+}
+
 static void execute_records(const double *records, int32_t length, const char *text, const int32_t *text_offsets, int32_t text_count) {
   target.depth = 0;
   target.child_blend[0] = RGE_BLEND_NORMAL;
@@ -412,6 +443,7 @@ static void execute_records(const double *records, int32_t length, const char *t
       case RGE_OP_SCISSOR_END: need = RGE_OP_SCISSOR_END_LEN; break;
       case RGE_OP_LAYER_BEGIN: need = RGE_OP_LAYER_BEGIN_LEN; break;
       case RGE_OP_LAYER_END: need = RGE_OP_LAYER_END_LEN; break;
+      case RGE_OP_LIGHT: need = RGE_OP_LIGHT_LEN; break;
       case RGE_OP_CANVAS: report_bad_frame("canvas record that is not first", at); goto done;
       default: report_bad_frame("unknown op", at); goto done;
     }
@@ -505,6 +537,11 @@ static void execute_records(const double *records, int32_t length, const char *t
         rlPopMatrix();
         break;
       }
+      case RGE_OP_LIGHT:
+        push_transform(r);
+        draw_light(finite_or_zero((float)r[6]), to_color(r[7]));
+        rlPopMatrix();
+        break;
       case RGE_OP_ELLIPSE: {
         push_transform(r);
         float w = (float)r[6], h = (float)r[7];

@@ -61,7 +61,15 @@ static void layer_end_shaded(int blend, uint32_t tint, int32_t shader, double ti
   push(RGE_OP_LAYER_END); push(blend); push(tint); push(shader); push(time); push(p0);
   for (int i = 1; i < 8; i++) push(0);
 }
+static void light(double x, double y, double radius, uint32_t color) { header(RGE_OP_LIGHT, x, y, 0, 1, 1); push(radius); push(color); }
 static void layer_end(int blend, uint32_t tint) { layer_end_shaded(blend, tint, -1, 0, 0); }
+/* Whether each channel of a pixel is within `tolerance` of rgba. */
+static void expect_within(int x, int y, uint32_t rgba, int tolerance, const char *what) {
+  const uint8_t *p = &pixels[(y * W + x) * 4];
+  int ok = 1;
+  for (int c = 0; c < 4; c++) if (abs((int)p[c] - (int)(rgba >> (24 - 8 * c) & 255)) > tolerance) ok = 0;
+  CHECK(ok, "%s: pixel (%d,%d) is %02x%02x%02x%02x, expected within %d of %08x", what, x, y, p[0], p[1], p[2], p[3], tolerance, rgba);
+}
 /* Whether each channel of a pixel is within 2 of rgba: blending rounds differently on the GPU and the software renderer. */
 static void expect_near(int x, int y, uint32_t rgba, const char *what) {
   const uint8_t *p = &pixels[(y * W + x) * 4];
@@ -561,6 +569,17 @@ int main(void) {
     remove("rge_smoke_shader.glsl");
     remove("rge_smoke_bad.glsl");
   }
+  /* Lights (ABI v12): a falloff from the colour to black, added into a light map. */
+  reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x000000ffu, RGE_BLEND_ADD); light(32, 24, 20, 0xff8040ffu); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); frame();
+  /* Within 24: the colour is interpolated between rings, and a pixel's centre is half a pixel from the light's. */
+  expect_within(32, 24, 0xff8040ffu, 24, "a light is its colour at the middle");
+  expect_within(32 + 10, 24, 0x402010ffu, 12, "...a quarter of it half way out ((1 - 0.5)^2)");
+  expect_near(32 + 21, 24, 0x000000ffu, "...and black past its radius");
+  reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x000000ffu, RGE_BLEND_ADD); light(32, 24, 20, 0xff804080u); light(32, 24, 20, 0xff804080u); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); frame();
+  expect_within(32, 24, 0xff8040ffu, 24, "two lights at half strength add up to one at full");
+  reset(); view(1, 0, 0, 1, 0, 0); light(10, 10, 0, C_RED); light(10, 10, NAN, C_RED); frame();
+  expect(10, 10, CLEAR, "a light of no radius, or a radius that is not a number, draws nothing");
+
   /* The view carries into a layer, and layers nest. */
   reset(); view(1, 0, 0, 1, 10, 0); layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 4, 4, C_RED);
   layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 10, 0, 1, 1, 4, 4, C_GREEN); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); frame();

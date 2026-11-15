@@ -8,6 +8,7 @@ import type { FlexProps } from "./components/Flex.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { HudProps } from "./components/Hud.ts";
 import type { LayerProps } from "./components/Layer.ts";
+import type { LightingProps, LightProps } from "./components/Light.ts";
 import type { MenuProps } from "./components/Menu.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
@@ -506,6 +507,16 @@ export function Hud(_props: HudProps & { children?: Child } & TransformShorthand
  */
 export function Layer(_props: LayerProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Layer");
+}
+
+/** A soft disc of light, brightest at its middle, falling off to nothing at `radius`: put it in a `<Lighting>`. */
+export function Light(_props: LightProps & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Light");
+}
+
+/** The world as light reaches it: darkened to `ambient` except where its `<Light>` children shine. */
+export function Lighting(_props: LightingProps & { children?: Child } & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Lighting");
 }
 
 /**

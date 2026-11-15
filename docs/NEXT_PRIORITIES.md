@@ -36,7 +36,7 @@ performance are set aside for now; the author has played Bramble in a window, an
 | 4 | Checking visuals with a GPU renderer (**done**, #147; the software renderer's warning about shader effects comes with step 6, when there are shaders to skip) | `rge screenshot --gpu`: the desktop build under a virtual display on Mesa's software OpenGL, which runs real shaders; an image comparison with a tolerance; the software renderer says it skips shader effects |
 | 5 | Render targets and blend modes (**done**, #151: `<Layer>`, ABI v10; Bramble's cave is dark and lit by the lantern) | One ABI change both shaders and lighting build on; a greybox of a cave or night area in Bramble starts here |
 | 6 | Shaders (**done**, ABI v11: `<Layer shader params>`, a GLSL `effect` function per file; the software renderer warns that it runs none; Bramble's cave flickers and darkens at the edges) | Tested in Bramble's cave or night area |
-| 7 | Lighting | A light map multiplied over the scene, finishing that area |
+| 7 | Lighting (**done**, ABI v12: `<Lighting ambient>` and `<Light radius color intensity>`; Bramble's lantern, the cave's items and the wisps are lights; no shadows) | A light map multiplied over the scene, finishing that area |
 | 8 | Better collision shapes | Circles and polygons; whether they also stop movement (slopes) is the author's call |
 | 9 | Cutscenes | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
 
