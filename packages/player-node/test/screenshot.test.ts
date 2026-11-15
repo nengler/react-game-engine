@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseInputScript, type PlayerConfig } from "@rge/player";
-import { Entity, Shape, type InputState } from "@rge/runtime";
+import { parseInputScript, type PlayerConfig } from "@tsengine/player";
+import { Entity, Shape, type InputState } from "@tsengine/runtime";
 
 import { contactSheet, decodePng, encodePng, findNativeLibrary, renderRun, type Pixels } from "../src/index.ts";
 
 const library = findNativeLibrary("headless");
-const required = process.env["RGE_REQUIRE_NATIVE"] === "1";
-const skip = library === null && !required ? "librge is not built (npm run native:build:headless)" : false;
+const required = process.env["TSE_REQUIRE_NATIVE"] === "1";
+const skip = library === null && !required ? "libtse is not built (npm run native:build:headless)" : false;
 
 const solid = (width: number, height: number, [r, g, b]: [number, number, number]): Pixels => ({
   width,
@@ -77,9 +77,9 @@ describe("renderRun", { skip }, () => {
   });
 });
 
-describe("sharp upscaling, through librge", { skip }, () => {
+describe("sharp upscaling, through libtse", { skip }, () => {
   it("keeps the picture the right way up at a scale between whole numbers (full screen), as nearest does", async () => {
-    const { Game, Screen } = await import("@rge/runtime");
+    const { Game, Screen } = await import("@tsengine/runtime");
     const topLeftIsRed = (upscale: "nearest" | "sharp"): [boolean, boolean] => {
       const [shot] = renderRun(
         {

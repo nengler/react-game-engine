@@ -1,7 +1,7 @@
 /**
  * Development warnings: mistakes the engine can see at run time but that do not stop the game, such as a write through a
  * `useMutable`'s object after its component has left the world. Each is reported once per key, so one in a per-frame path does
- * not flood the console. On by default (tests, `rge dev`, `rge check`); a game or tool turns them off, or catches them, with
+ * not flood the console. On by default (tests, `tse dev`, `tse check`); a game or tool turns them off, or catches them, with
  * `setDevelopmentWarnings`.
  */
 

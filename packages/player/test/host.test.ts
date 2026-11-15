@@ -10,7 +10,7 @@ describe("hostBackend", () => {
   });
 
   it("throws a clear error when no host installed a backend", () => {
-    assert.throws(() => hostBackend(), /No host backend.*__rgeBackend/);
+    assert.throws(() => hostBackend(), /No host backend.*__tseBackend/);
   });
 
   it("returns the backend the host installed", () => {

@@ -30,7 +30,7 @@ export function createContext<T>(defaultValue: T): Context<T> {
   return {
     default: defaultValue,
     Provider: () => {
-      throw new Error("<Context.Provider> is a compile-time declaration: components are compiled by @rge/compiler, not executed.");
+      throw new Error("<Context.Provider> is a compile-time declaration: components are compiled by @tsengine/compiler, not executed.");
     },
   };
 }

@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
  */
 import { after, describe, it } from "node:test";
 
-import { World } from "@rge/runtime";
+import { World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load } from "./helpers.ts";
 
@@ -45,7 +45,7 @@ function compileProject(files: Record<string, string>): { status: number | null;
 const KEYS = `export function bind(action: string, key: string): void { void action; void key; }
 export function pick(id: string): string | null { return id === "" ? null : id; }
 `;
-const PROMPT = `import { Entity } from "@rge/runtime/jsx";
+const PROMPT = `import { Entity } from "@tsengine/runtime/jsx";
 interface PromptProps { onKey: (key: string) => void }
 export function Prompt({ onKey }: PromptProps) {
   return <Entity name="Prompt" />;
@@ -57,7 +57,7 @@ describe("narrowing in the generated code", () => {
     const r = compileProject({
       "keys.ts": KEYS,
       "Prompt.tsx": PROMPT,
-      "Settings.tsx": `import { Entity, useMutable } from "@rge/runtime/jsx";
+      "Settings.tsx": `import { Entity, useMutable } from "@tsengine/runtime/jsx";
 import { Prompt } from "./Prompt.tsx";
 import { bind } from "./keys.ts";
 export function Settings() {
@@ -77,7 +77,7 @@ export function Settings() {
     const r = compileProject({
       "keys.ts": KEYS,
       "Prompt.tsx": PROMPT,
-      "Settings.tsx": `import { Entity, useMutable } from "@rge/runtime/jsx";
+      "Settings.tsx": `import { Entity, useMutable } from "@tsengine/runtime/jsx";
 import { Prompt } from "./Prompt.tsx";
 import { bind, pick } from "./keys.ts";
 export function Settings() {
@@ -96,7 +96,7 @@ export function Settings() {
 
   it("a list item under `&&` is narrowed by its condition, as the filter guarantees", () => {
     const r = compileProject({
-      "Pads.tsx": `import { Entity } from "@rge/runtime/jsx";
+      "Pads.tsx": `import { Entity } from "@tsengine/runtime/jsx";
 interface TowerProps { level: number }
 export function Tower({ level }: TowerProps) {
   return <Entity name={\`t\${level}\`} />;

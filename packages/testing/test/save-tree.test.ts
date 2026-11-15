@@ -8,8 +8,8 @@ import { dirname, join, resolve } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { Compiler, formatDiagnostic } from "@rge/compiler";
-import { createMemoryStorage, createSave, setStorage, type GameObject } from "@rge/runtime";
+import { Compiler, formatDiagnostic } from "@tsengine/compiler";
+import { createMemoryStorage, createSave, setStorage, type GameObject } from "@tsengine/runtime";
 
 import { render } from "../src/index.ts";
 
@@ -24,7 +24,7 @@ after(() => {
   rmSync(OUT, { recursive: true, force: true });
 });
 
-const PACK = `import { Entity, Text, useMutable } from "@rge/runtime/jsx";
+const PACK = `import { Entity, Text, useMutable } from "@tsengine/runtime/jsx";
 interface EnemyProps { id: string }
 export function Enemy({ id }: EnemyProps) {
   const s = useMutable({ hp: 3 });

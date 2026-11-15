@@ -1,4 +1,4 @@
-import type { ScreenFit } from "@rge/runtime";
+import type { ScreenFit } from "@tsengine/runtime";
 
 import { KEY_INDEX } from "./protocol.ts";
 import type { InputFrame } from "./recording.ts";

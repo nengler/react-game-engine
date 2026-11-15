@@ -1,15 +1,15 @@
 {
-  "name": "@rge/hearth",
+  "name": "@tsengine/hearth",
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@rge/player": "0.0.0",
-    "@rge/player-node": "0.0.0",
-    "@rge/runtime": "0.0.0"
+    "@tsengine/player": "0.0.0",
+    "@tsengine/player-node": "0.0.0",
+    "@tsengine/runtime": "0.0.0"
   },
   "devDependencies": {
-    "@rge/testing": "0.0.0"
+    "@tsengine/testing": "0.0.0"
   }
 }

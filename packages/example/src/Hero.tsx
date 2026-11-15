@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, useInput, useSound, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, useInput, useSound, clamp, Entity, Sprite, Collider } from "@tsengine/runtime/jsx";
 
 function Hero() {
   const s = useMutable({ health: 100, poisoned: false });

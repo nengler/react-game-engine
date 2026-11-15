@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 /**
  * What the compiler says when a component is written as for React (PAIN_POINTS.md, 2026-11-14): one mistake is one error, and the
- * error says what to write instead. The editor shows each as the author types (`rge lsp`), so a cascade of follow-on errors or a
+ * error says what to write instead. The editor shows each as the author types (`tse lsp`), so a cascade of follow-on errors or a
  * message that misleads costs more than it did in a terminal.
  */
 import { after, describe, it } from "node:test";
@@ -10,7 +10,7 @@ import { closeCompiler, getCompiler } from "./helpers.ts";
 
 after(() => closeCompiler());
 
-const HEADER = `import { Entity, Text, useMutable, useUpdate, useMount } from "@rge/runtime/jsx";\n`;
+const HEADER = `import { Entity, Text, useMutable, useUpdate, useMount } from "@tsengine/runtime/jsx";\n`;
 const errors = (source: string): { code: string; message: string }[] =>
   getCompiler()
     .compile("src/A.tsx", HEADER + source)
@@ -35,7 +35,7 @@ describe("one mistake, one error", () => {
     assert.equal(
       only(`export function A() { const s = useMutable({ p: { x: 0, items: [] } }); return <Entity x={s.p.x} y={s.p.items.length} />; }`)
         .code,
-      "RGE1104"
+      "TSE1104"
     );
   });
 
@@ -43,7 +43,7 @@ describe("one mistake, one error", () => {
     // Nested in the destructuring (\`hp: { health }\`): refused, and \`health\` is not reported again where it is read.
     assert.equal(
       only(`interface P { hp: { health: number } }\nexport function A({ hp: { health } }: P) { return <Text>{health}</Text>; }`).code,
-      "RGE1208"
+      "TSE1208"
     );
   });
 
@@ -67,7 +67,7 @@ describe("what to write instead", () => {
   it("useState: useMutable, in the author's own names, once (not again at the import, nor at each read or setter call)", () => {
     const source = `export function A() { const [hp, setHp] = useState(3); useUpdate(() => setHp(hp - 1)); return <Text>{hp}</Text>; }`;
     const found = getCompiler()
-      .compile("src/A.tsx", `import { Text, useState, useUpdate } from "@rge/runtime/jsx";\n${source}`)
+      .compile("src/A.tsx", `import { Text, useState, useUpdate } from "@tsengine/runtime/jsx";\n${source}`)
       .diagnostics.filter((d) => d.severity === "error");
     assert.equal(found.length, 1, found.map((e) => `${e.code} ${e.message}`).join("\n"));
     assert.match(
@@ -77,7 +77,7 @@ describe("what to write instead", () => {
     // Imported and never called: the import says it.
     const imported = getCompiler().compile(
       "src/B.tsx",
-      `import { Entity, useState } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`
+      `import { Entity, useState } from "@tsengine/runtime/jsx";\nexport function B() { return <Entity />; }`
     ).diagnostics;
     assert.equal(imported.length, 1);
     assert.match(imported[0]!.message, /^`useState` is replaced by `useMutable`/);
@@ -86,17 +86,17 @@ describe("what to write instead", () => {
   it("useRef: a useMutable field, in the author's own names, once", () => {
     const source = `export function A() { const timer = useRef(0); useUpdate((dt) => { timer.current += dt; }); return <Text>hi</Text>; }`;
     const found = getCompiler()
-      .compile("src/A.tsx", `import { Text, useRef, useUpdate } from "@rge/runtime/jsx";\n${source}`)
+      .compile("src/A.tsx", `import { Text, useRef, useUpdate } from "@tsengine/runtime/jsx";\n${source}`)
       .diagnostics.filter((d) => d.severity === "error");
     assert.equal(found.length, 1, found.map((e) => `${e.code} ${e.message}`).join("\n"));
-    assert.equal(found[0]!.code, "RGE1102");
+    assert.equal(found[0]!.code, "TSE1102");
     assert.match(
       found[0]!.message,
       /^`useRef` is replaced by `useMutable`.*`const s = useMutable\(\{ timer: 0 \}\)`, read and written as `s\.timer` where `timer\.current` was\./
     );
     const imported = getCompiler().compile(
       "src/B.tsx",
-      `import { Entity, useRef } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`
+      `import { Entity, useRef } from "@tsengine/runtime/jsx";\nexport function B() { return <Entity />; }`
     ).diagnostics;
     assert.equal(imported.length, 1);
     assert.match(imported[0]!.message, /^`useRef` is replaced by `useMutable`/);
@@ -106,7 +106,7 @@ describe("what to write instead", () => {
     const e = only(
       `interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) { return null; } else { } return <Text>{hp}</Text>; }`
     );
-    assert.equal(e.code, "RGE1002");
+    assert.equal(e.code, "TSE1002");
     assert.match(e.message, /`if \(condition\) return …;`/);
     assert.match(e.message, /`return dead \? null : <Text>…<\/Text>;`/);
   });

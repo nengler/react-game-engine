@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Camera, Entity } from "@rge/runtime";
+import { Camera, Entity } from "@tsengine/runtime";
 
 import { PlayerInput } from "../src/input.ts";
-import { KEYS, RGE_IN_HEIGHT, RGE_IN_WIDTH } from "../src/protocol.ts";
+import { KEYS, TSE_IN_HEIGHT, TSE_IN_WIDTH } from "../src/protocol.ts";
 import { RecordingBackend, type InputFrame } from "../src/recording.ts";
 import { Warner } from "../src/warn.ts";
 
@@ -111,6 +111,6 @@ describe("PlayerInput window and mouse", () => {
 
   it("starts with the window size unset until a backend writes it", () => {
     const input = new PlayerInput(new Warner(() => {}));
-    assert.deepEqual([input.values[RGE_IN_WIDTH], input.values[RGE_IN_HEIGHT]], [0, 0]);
+    assert.deepEqual([input.values[TSE_IN_WIDTH], input.values[TSE_IN_HEIGHT]], [0, 0]);
   });
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import type { TilemapData, TilemapObject } from "@rge/runtime";
+import type { TilemapData, TilemapObject } from "@tsengine/runtime";
 
 import { tilemaps } from "../generated/tilemaps.ts";
 import { TILE } from "../src/rules/constants.ts";

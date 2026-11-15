@@ -16,7 +16,7 @@ import {
   registerTilemaps,
   shakeOn,
   type TilemapData,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
 
@@ -147,7 +147,7 @@ describe("<Tilemap>", () => {
   });
 
   it("is the same grid movement code asks: solid cells by cell and by pixel, markers by tile", async () => {
-    const { getTilemap } = await import("@rge/runtime");
+    const { getTilemap } = await import("@tsengine/runtime");
     const grid = getTilemap("room");
     assert.equal(grid.solidAt(1, 1), true, "tile 2 is solid");
     assert.equal(grid.solidAt(0, 0), false);

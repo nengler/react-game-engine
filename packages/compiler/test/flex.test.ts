@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { FrameBuilder } from "@rge/player";
+import { FrameBuilder } from "@tsengine/player";
 import {
   Button,
   createControls,
@@ -21,7 +21,7 @@ import {
   Tooltip,
   World,
   type GameObject,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -248,7 +248,7 @@ describe("Flex onPress and Text align", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Press${Math.random()}.tsx`,
-          text: `import { Flex, Text } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
+          text: `import { Flex, Text } from "@tsengine/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(check(`<Flex onPress={() => {}}><Text width={40} align={wide ? "left" : "right"}>x</Text></Flex>`), []);
@@ -260,7 +260,7 @@ describe("Flex onPress and Text align", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/TextFx${Math.random()}.tsx`,
-          text: `import { Text } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+          text: `import { Text } from "@tsengine/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -378,7 +378,7 @@ function Options({ onClose }: { onClose: () => void }) {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Widget${Math.random()}.tsx`,
-          text: `import { Slider, Toggle } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
+          text: `import { Slider, Toggle } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -394,7 +394,7 @@ function Options({ onClose }: { onClose: () => void }) {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/MenuCheck${Math.random()}.tsx`,
-          text: `import { Button, Menu, Text } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
+          text: `import { Button, Menu, Text } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -446,7 +446,7 @@ function Name() {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/TextCheck${Math.random()}.tsx`,
-          text: `import { Flex, Text, TextInput, Tooltip } from "@rge/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }`,
+          text: `import { Flex, Text, TextInput, Tooltip } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(check(`<TextInput value={n} onChange={(v) => v.trim()} onSubmit={(v) => v.length} textSize={8} />`), []);
@@ -522,7 +522,7 @@ describe("Flex: diagnostics", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Flex${Math.random()}.tsx`,
-          text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+          text: `import { Flex } from "@tsengine/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(
@@ -564,7 +564,9 @@ function Menu() {
     const menu = new Mine();
     assert.ok(!(menu instanceof MenuBox), "the file's own Menu, not the built-in");
     assert.ok(!(menu.children[0] instanceof Button) && menu.children[0] instanceof Flex);
-    const errors = compileErrors(`import { Entity, Flex } from "@rge/runtime/jsx"; function Flex() { return <Entity name="Flex" />; }`);
+    const errors = compileErrors(
+      `import { Entity, Flex } from "@tsengine/runtime/jsx"; function Flex() { return <Entity name="Flex" />; }`
+    );
     assert.ok(errors.some((d) => /conflicts with the built-in <Flex> this file imports/.test(d.message)));
   });
 });
@@ -663,7 +665,7 @@ function Tile() {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`,
-          text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
+          text: `import { Flex } from "@tsengine/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
         },
       ]);
     assert.deepEqual(

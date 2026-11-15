@@ -1,6 +1,6 @@
 import type { Backend } from "./backend.ts";
 import { createPlayer, type Player, type PlayerConfig } from "./loop.ts";
-import { RGE_IN_HEIGHT, RGE_IN_WIDTH } from "./protocol.ts";
+import { TSE_IN_HEIGHT, TSE_IN_WIDTH } from "./protocol.ts";
 import { applyInputFrame, RecordingBackend, type InputFrame, type RecordingOptions } from "./recording.ts";
 
 /**
@@ -50,7 +50,7 @@ export class ScriptedInputBackend implements Backend {
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     this.#inner.frame(clearColor, records, length, texts, input, keys);
-    applyInputFrame(this.#queue.shift() ?? {}, input, keys, input[RGE_IN_WIDTH] as number, input[RGE_IN_HEIGHT] as number);
+    applyInputFrame(this.#queue.shift() ?? {}, input, keys, input[TSE_IN_WIDTH] as number, input[TSE_IN_HEIGHT] as number);
   }
 }
 

@@ -84,7 +84,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rge-host"
+name = "tse-host"
 version = "0.0.0"
 dependencies = [
  "cmake",

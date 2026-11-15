@@ -1,4 +1,4 @@
-import { Entity, Sprite } from "@rge/runtime/jsx";
+import { Entity, Sprite } from "@tsengine/runtime/jsx";
 
 export function WarningIcon() {
   return (

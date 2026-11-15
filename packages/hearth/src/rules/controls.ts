@@ -1,4 +1,4 @@
-import { createControls } from "@rge/runtime";
+import { createControls } from "@tsengine/runtime";
 
 /**
  * The game's actions and the keys and gamepad buttons that do each: the one place to rebind. `Main.tsx` hands it to

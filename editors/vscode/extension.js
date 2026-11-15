@@ -1,9 +1,9 @@
-// The react-game-engine extension: starts the game's own language server (`rge lsp`, from the `@rge/cli` the game has installed)
-// and shows its RGE diagnostics and quick fixes in the editor, beside TypeScript's own. It has no dependencies: the few messages
+// The tse extension: starts the game's own language server (`tse lsp`, from the `@tsengine/cli` the game has installed)
+// and shows its TSE diagnostics and quick fixes in the editor, beside TypeScript's own. It has no dependencies: the few messages
 // of the Language Server Protocol it needs are spoken here directly.
 //
-// A file belongs to a game when a folder above it has a package.json with an "rge" field or a dependency on @rge/runtime. One
-// server runs for each @rge/cli found (usually one per repository or game), and serves every game under it.
+// A file belongs to a game when a folder above it has a package.json with an "tse" field or a dependency on @tsengine/runtime. One
+// server runs for each @tsengine/cli found (usually one per repository or game), and serves every game under it.
 "use strict";
 
 const vscode = require("vscode");
@@ -20,9 +20,9 @@ function gameOf(file) {
       try {
         const pkg = JSON.parse(readFileSync(manifest, "utf8"));
         if (
-          pkg.rge !== undefined ||
-          (pkg.dependencies && pkg.dependencies["@rge/runtime"]) ||
-          (pkg.devDependencies && pkg.devDependencies["@rge/runtime"])
+          pkg.tse !== undefined ||
+          (pkg.dependencies && pkg.dependencies["@tsengine/runtime"]) ||
+          (pkg.devDependencies && pkg.devDependencies["@tsengine/runtime"])
         )
           return dir;
       } catch {
@@ -35,15 +35,15 @@ function gameOf(file) {
   }
 }
 
-/** The `rge` script of the @rge/cli a game resolves (its node_modules, or one above it), or null. */
+/** The `tse` script of the @tsengine/cli a game resolves (its node_modules, or one above it), or null. */
 function cliOf(game) {
   let dir = game;
   for (;;) {
-    const manifest = join(dir, "node_modules", "@rge", "cli", "package.json");
+    const manifest = join(dir, "node_modules", "@tsengine", "cli", "package.json");
     if (existsSync(manifest)) {
       try {
         const bin = JSON.parse(readFileSync(manifest, "utf8")).bin;
-        const script = typeof bin === "string" ? bin : bin && bin.rge;
+        const script = typeof bin === "string" ? bin : bin && bin.tse;
         if (script) return join(dirname(manifest), script);
       } catch {
         return null;
@@ -55,7 +55,7 @@ function cliOf(game) {
   }
 }
 
-/** One running `rge lsp`, and the JSON-RPC around it. */
+/** One running `tse lsp`, and the JSON-RPC around it. */
 class Server {
   constructor(cli, output, onDiagnostics) {
     this.cli = cli;
@@ -66,14 +66,13 @@ class Server {
     this.opened = new Set();
     this.buffer = Buffer.alloc(0);
     this.stopped = false;
-    const node = vscode.workspace.getConfiguration("rge").get("node") || "node";
+    const node = vscode.workspace.getConfiguration("tse").get("node") || "node";
     this.child = spawn(node, [cli, "lsp"], { cwd: dirname(dirname(cli)), stdio: ["pipe", "pipe", "pipe"] });
     this.child.stdout.on("data", (chunk) => this.read(chunk));
     this.child.stderr.on("data", (chunk) => output.append(chunk.toString()));
-    this.child.on("error", (error) => output.appendLine(`rge lsp could not start (${node} ${cli}): ${error.message}`));
+    this.child.on("error", (error) => output.appendLine(`tse lsp could not start (${node} ${cli}): ${error.message}`));
     this.child.on("exit", (code) => {
-      if (!this.stopped)
-        output.appendLine(`rge lsp stopped (status ${code}). Run "react-game-engine: Restart the language server" to start it again.`);
+      if (!this.stopped) output.appendLine(`tse lsp stopped (status ${code}). Run "tse: Restart the language server" to start it again.`);
       for (const { fail } of this.pending.values()) fail(new Error("the server stopped"));
       this.pending.clear();
     });
@@ -169,9 +168,9 @@ class Server {
 const toRange = (r) => new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);
 
 function activate(context) {
-  const output = vscode.window.createOutputChannel("react-game-engine");
-  const collection = vscode.languages.createDiagnosticCollection("rge");
-  /** Servers by the @rge/cli they run. */
+  const output = vscode.window.createOutputChannel("tse");
+  const collection = vscode.languages.createDiagnosticCollection("tse");
+  /** Servers by the @tsengine/cli they run. */
   const servers = new Map();
   const warned = new Set();
   context.subscriptions.push(output, collection);
@@ -186,14 +185,14 @@ function activate(context) {
           d.message,
           d.severity === 2 ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error
         );
-        diagnostic.source = "rge";
+        diagnostic.source = "tse";
         diagnostic.code = d.code;
         return diagnostic;
       })
     );
   };
 
-  /** The server for a document of a game, started on first use; null for a file outside any game, or a game without @rge/cli. */
+  /** The server for a document of a game, started on first use; null for a file outside any game, or a game without @tsengine/cli. */
   const serverFor = (document) => {
     if (document.uri.scheme !== "file" || !/\.tsx?$/.test(document.uri.fsPath)) return null;
     const game = gameOf(document.uri.fsPath);
@@ -202,7 +201,7 @@ function activate(context) {
     if (cli === null) {
       if (!warned.has(game)) {
         warned.add(game);
-        output.appendLine(`${game} has no @rge/cli installed (npm install --save-dev @rge/cli): no RGE diagnostics for it.`);
+        output.appendLine(`${game} has no @tsengine/cli installed (npm install --save-dev @tsengine/cli): no TSE diagnostics for it.`);
       }
       return null;
     }
@@ -238,7 +237,7 @@ function activate(context) {
       [{ language: "typescriptreact", scheme: "file" }],
       {
         async provideCodeActions(document, range, context) {
-          const ours = context.diagnostics.filter((d) => d.source === "rge");
+          const ours = context.diagnostics.filter((d) => d.source === "tse");
           if (ours.length === 0) return [];
           const server = serverFor(document);
           if (server === null) return [];
@@ -274,7 +273,7 @@ function activate(context) {
       },
       { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
     ),
-    vscode.commands.registerCommand("rge.restart", async () => {
+    vscode.commands.registerCommand("tse.restart", async () => {
       for (const server of servers.values()) await server.stop();
       servers.clear();
       collection.clear();

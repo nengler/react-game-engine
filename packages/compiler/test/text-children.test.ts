@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, Text, World } from "@rge/runtime";
+import { Entity, Text, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
@@ -15,7 +15,7 @@ after(() => {
   cleanOutput();
 });
 
-const LABEL = `import { Entity, Text, useInput, useMutable, type TextChild } from "@rge/runtime/jsx";
+const LABEL = `import { Entity, Text, useInput, useMutable, type TextChild } from "@tsengine/runtime/jsx";
 interface LabelProps {
   color?: string;
   children: TextChild | readonly TextChild[];

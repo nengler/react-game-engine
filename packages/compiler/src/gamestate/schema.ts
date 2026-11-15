@@ -74,7 +74,7 @@ const SHAPE =
  * literal: its leaves are number, string or boolean literals (a negative number is fine; a leaf's type is its literal's: `0`
  * is a `number`), and objects of those nested as deep as you like. Any other value (an array, a call such as `newRun()`) is a
  * `GameStateValue`: its type comes from TypeScript. The actions are an object literal of functions. Spreads and computed keys
- * are `RGE1109`, and so is the removed `(set) => ({ … })` form, with what to write instead.
+ * are `TSE1109`, and so is the removed `(set) => ({ … })` form, with what to write instead.
  */
 export function parseGameState(parser: TsxParser, fileName: string, text: string): GameStateSchemaResult {
   const parsed = parser.parse(fileName, text);

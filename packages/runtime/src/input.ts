@@ -31,7 +31,7 @@ function isKeyName(name: string): name is KeyName {
 }
 
 /**
- * Every key name the player knows, in the order of its keys buffer (`RGE_KEYS` in `native/include/rge.h`, append only; the
+ * Every key name the player knows, in the order of its keys buffer (`TSE_KEYS` in `native/include/tse.h`, append only; the
  * player's `KEYS` is this list, and a test keeps it equal to the header). Mouse buttons and the first gamepad are keys too.
  */
 export const KEY_NAMES = [

@@ -1,4 +1,4 @@
-import { stories, story } from "@rge/player";
+import { stories, story } from "@tsengine/player";
 
 import { Notice } from "../generated/Notice.ts";
 

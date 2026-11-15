@@ -4,49 +4,49 @@ import { estimateTextWidth } from "./draw.ts";
 import {
   KEYS,
   KEY_INDEX,
-  RGE_IN_DT,
-  RGE_IN_HEIGHT,
-  RGE_IN_LEN,
-  RGE_IN_MOUSE_X,
-  RGE_IN_MOUSE_Y,
-  RGE_IN_QUIT,
-  RGE_IN_WHEEL,
-  RGE_IN_WIDTH,
-  RGE_KEY_DOWN,
-  RGE_KEY_PRESSED,
-  RGE_KEY_RELEASED,
-  RGE_OP_CANVAS,
-  RGE_OP_CANVAS_LEN,
-  RGE_OP_BOX,
-  RGE_OP_BOX_LEN,
-  RGE_OP_LAYER_BEGIN,
-  RGE_OP_LAYER_BEGIN_LEN,
-  RGE_OP_LAYER_END,
-  RGE_OP_LAYER_END_LEN,
-  RGE_OP_LIGHT,
-  RGE_OP_LIGHT_LEN,
-  RGE_LAYER_MAX,
-  RGE_BLEND_ADD,
-  RGE_BLEND_MULTIPLY,
-  RGE_BLEND_SCREEN,
-  RGE_OP_ELLIPSE,
-  RGE_OP_ELLIPSE_LEN,
-  RGE_OP_RECT,
-  RGE_OP_RECT_LEN,
-  RGE_OP_SCISSOR,
-  RGE_OP_SCISSOR_END,
-  RGE_OP_SCISSOR_END_LEN,
-  RGE_OP_SCISSOR_LEN,
-  RGE_OP_SPRITE,
-  RGE_OP_SPRITE_LEN,
-  RGE_OP_SPRITE_REGION,
-  RGE_OP_SPRITE_REGION_LEN,
-  RGE_SPRITE_FLIP_X,
-  RGE_SPRITE_FLIP_Y,
-  RGE_OP_TEXT,
-  RGE_OP_TEXT_LEN,
-  RGE_OP_VIEW,
-  RGE_OP_VIEW_LEN,
+  TSE_IN_DT,
+  TSE_IN_HEIGHT,
+  TSE_IN_LEN,
+  TSE_IN_MOUSE_X,
+  TSE_IN_MOUSE_Y,
+  TSE_IN_QUIT,
+  TSE_IN_WHEEL,
+  TSE_IN_WIDTH,
+  TSE_KEY_DOWN,
+  TSE_KEY_PRESSED,
+  TSE_KEY_RELEASED,
+  TSE_OP_CANVAS,
+  TSE_OP_CANVAS_LEN,
+  TSE_OP_BOX,
+  TSE_OP_BOX_LEN,
+  TSE_OP_LAYER_BEGIN,
+  TSE_OP_LAYER_BEGIN_LEN,
+  TSE_OP_LAYER_END,
+  TSE_OP_LAYER_END_LEN,
+  TSE_OP_LIGHT,
+  TSE_OP_LIGHT_LEN,
+  TSE_LAYER_MAX,
+  TSE_BLEND_ADD,
+  TSE_BLEND_MULTIPLY,
+  TSE_BLEND_SCREEN,
+  TSE_OP_ELLIPSE,
+  TSE_OP_ELLIPSE_LEN,
+  TSE_OP_RECT,
+  TSE_OP_RECT_LEN,
+  TSE_OP_SCISSOR,
+  TSE_OP_SCISSOR_END,
+  TSE_OP_SCISSOR_END_LEN,
+  TSE_OP_SCISSOR_LEN,
+  TSE_OP_SPRITE,
+  TSE_OP_SPRITE_LEN,
+  TSE_OP_SPRITE_REGION,
+  TSE_OP_SPRITE_REGION_LEN,
+  TSE_SPRITE_FLIP_X,
+  TSE_SPRITE_FLIP_Y,
+  TSE_OP_TEXT,
+  TSE_OP_TEXT_LEN,
+  TSE_OP_VIEW,
+  TSE_OP_VIEW_LEN,
 } from "./protocol.ts";
 
 interface Placed {
@@ -62,7 +62,7 @@ interface Placed {
 export type BlendName = "normal" | "add" | "multiply" | "screen";
 
 function blendName(code: number): BlendName {
-  return code === RGE_BLEND_ADD ? "add" : code === RGE_BLEND_MULTIPLY ? "multiply" : code === RGE_BLEND_SCREEN ? "screen" : "normal";
+  return code === TSE_BLEND_ADD ? "add" : code === TSE_BLEND_MULTIPLY ? "multiply" : code === TSE_BLEND_SCREEN ? "screen" : "normal";
 }
 
 export type DecodedRecord =
@@ -339,7 +339,7 @@ export class RecordingBackend implements Backend {
   }
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
-    if (input.length < RGE_IN_LEN) throw new Error(`The input buffer needs ${RGE_IN_LEN} entries, not ${input.length}.`);
+    if (input.length < TSE_IN_LEN) throw new Error(`The input buffer needs ${TSE_IN_LEN} entries, not ${input.length}.`);
     if (keys.length < KEYS.length) throw new Error(`The keys buffer needs ${KEYS.length} entries, not ${keys.length}.`);
     // Every frame is checked now (a bad record is the player's bug, and should fail the frame that drew it), but read into
     // `DecodedRecord`s only when a test looks: a long scripted run that keeps two frames of thirty thousand never builds the rest.
@@ -381,8 +381,8 @@ export class RecordingBackend implements Backend {
         if (at + count > length) throw new Error(`Record at ${at} (op ${op}) runs past the end of the buffer.`);
       };
       switch (op) {
-        case RGE_OP_VIEW:
-          need(RGE_OP_VIEW_LEN);
+        case TSE_OP_VIEW:
+          need(TSE_OP_VIEW_LEN);
           out?.push({
             op: "view",
             a: records[at + 1]!,
@@ -392,10 +392,10 @@ export class RecordingBackend implements Backend {
             e: records[at + 5]!,
             f: records[at + 6]!,
           });
-          at += RGE_OP_VIEW_LEN;
+          at += TSE_OP_VIEW_LEN;
           break;
-        case RGE_OP_CANVAS:
-          need(RGE_OP_CANVAS_LEN);
+        case TSE_OP_CANVAS:
+          need(TSE_OP_CANVAS_LEN);
           if (at !== 0) throw new Error(`A canvas record must be the first record of a frame, not at ${at}.`);
           out?.push({
             op: "canvas",
@@ -407,31 +407,31 @@ export class RecordingBackend implements Backend {
             destH: records[at + 6]!,
             borderColor: colorToHex(records[at + 7]!),
           });
-          at += RGE_OP_CANVAS_LEN;
+          at += TSE_OP_CANVAS_LEN;
           break;
-        case RGE_OP_SCISSOR:
-          need(RGE_OP_SCISSOR_LEN);
+        case TSE_OP_SCISSOR:
+          need(TSE_OP_SCISSOR_LEN);
           out?.push({ op: "scissor", x: records[at + 1]!, y: records[at + 2]!, width: records[at + 3]!, height: records[at + 4]! });
-          at += RGE_OP_SCISSOR_LEN;
+          at += TSE_OP_SCISSOR_LEN;
           break;
-        case RGE_OP_SCISSOR_END:
-          need(RGE_OP_SCISSOR_END_LEN);
+        case TSE_OP_SCISSOR_END:
+          need(TSE_OP_SCISSOR_END_LEN);
           out?.push({ op: "scissorEnd" });
-          at += RGE_OP_SCISSOR_END_LEN;
+          at += TSE_OP_SCISSOR_END_LEN;
           break;
-        case RGE_OP_LIGHT:
-          need(RGE_OP_LIGHT_LEN);
+        case TSE_OP_LIGHT:
+          need(TSE_OP_LIGHT_LEN);
           out?.push({ op: "light", ...placed(), radius: records[at + 6]!, color: colorToHex(records[at + 7]!) });
-          at += RGE_OP_LIGHT_LEN;
+          at += TSE_OP_LIGHT_LEN;
           break;
-        case RGE_OP_LAYER_BEGIN:
-          need(RGE_OP_LAYER_BEGIN_LEN);
-          if (++depth > RGE_LAYER_MAX) throw new Error(`Layers nested deeper than ${RGE_LAYER_MAX} at ${at}.`);
+        case TSE_OP_LAYER_BEGIN:
+          need(TSE_OP_LAYER_BEGIN_LEN);
+          if (++depth > TSE_LAYER_MAX) throw new Error(`Layers nested deeper than ${TSE_LAYER_MAX} at ${at}.`);
           out?.push({ op: "layerBegin", clear: colorToHex(records[at + 1]!), childBlend: blendName(records[at + 2]!) });
-          at += RGE_OP_LAYER_BEGIN_LEN;
+          at += TSE_OP_LAYER_BEGIN_LEN;
           break;
-        case RGE_OP_LAYER_END:
-          need(RGE_OP_LAYER_END_LEN);
+        case TSE_OP_LAYER_END:
+          need(TSE_OP_LAYER_END_LEN);
           if (--depth < 0) throw new Error(`A layer end with no layer open at ${at}.`);
           {
             const handle = records[at + 3]!;
@@ -446,19 +446,19 @@ export class RecordingBackend implements Backend {
               params: Array.from(records.subarray(at + 5, at + 13)),
             });
           }
-          at += RGE_OP_LAYER_END_LEN;
+          at += TSE_OP_LAYER_END_LEN;
           break;
-        case RGE_OP_SPRITE: {
-          need(RGE_OP_SPRITE_LEN);
+        case TSE_OP_SPRITE: {
+          need(TSE_OP_SPRITE_LEN);
           const handle = records[at + 6] as number;
           const texture = this.#textures[handle];
           if (texture === undefined) throw new Error(`Sprite record uses texture handle ${handle}, which was never loaded.`);
           out?.push({ op: "sprite", ...placed(), texture });
-          at += RGE_OP_SPRITE_LEN;
+          at += TSE_OP_SPRITE_LEN;
           break;
         }
-        case RGE_OP_SPRITE_REGION: {
-          need(RGE_OP_SPRITE_REGION_LEN);
+        case TSE_OP_SPRITE_REGION: {
+          need(TSE_OP_SPRITE_REGION_LEN);
           const handle = records[at + 6] as number;
           const texture = this.#textures[handle];
           if (texture === undefined) throw new Error(`Sprite region record uses texture handle ${handle}, which was never loaded.`);
@@ -473,28 +473,28 @@ export class RecordingBackend implements Backend {
             srcH: records[at + 10]!,
             originX: records[at + 11]!,
             originY: records[at + 12]!,
-            flipX: (flags & RGE_SPRITE_FLIP_X) !== 0,
-            flipY: (flags & RGE_SPRITE_FLIP_Y) !== 0,
+            flipX: (flags & TSE_SPRITE_FLIP_X) !== 0,
+            flipY: (flags & TSE_SPRITE_FLIP_Y) !== 0,
             tint: colorToHex(records[at + 14]!),
           });
-          at += RGE_OP_SPRITE_REGION_LEN;
+          at += TSE_OP_SPRITE_REGION_LEN;
           break;
         }
-        case RGE_OP_RECT:
-        case RGE_OP_ELLIPSE: {
-          need(RGE_OP_RECT_LEN);
+        case TSE_OP_RECT:
+        case TSE_OP_ELLIPSE: {
+          need(TSE_OP_RECT_LEN);
           out?.push({
-            op: op === RGE_OP_RECT ? "rect" : "ellipse",
+            op: op === TSE_OP_RECT ? "rect" : "ellipse",
             ...placed(),
             width: records[at + 6]!,
             height: records[at + 7]!,
             color: colorToHex(records[at + 8]!),
           });
-          at += op === RGE_OP_RECT ? RGE_OP_RECT_LEN : RGE_OP_ELLIPSE_LEN;
+          at += op === TSE_OP_RECT ? TSE_OP_RECT_LEN : TSE_OP_ELLIPSE_LEN;
           break;
         }
-        case RGE_OP_BOX: {
-          need(RGE_OP_BOX_LEN);
+        case TSE_OP_BOX: {
+          need(TSE_OP_BOX_LEN);
           out?.push({
             op: "box",
             ...placed(),
@@ -505,16 +505,16 @@ export class RecordingBackend implements Backend {
             borderWidth: records[at + 10]!,
             radius: records[at + 11]!,
           });
-          at += RGE_OP_BOX_LEN;
+          at += TSE_OP_BOX_LEN;
           break;
         }
-        case RGE_OP_TEXT: {
-          need(RGE_OP_TEXT_LEN);
+        case TSE_OP_TEXT: {
+          need(TSE_OP_TEXT_LEN);
           const index = records[at + 6] as number;
           const text = texts[index];
           if (text === undefined) throw new Error(`Text record uses string ${index}, but the frame has ${texts.length}.`);
           out?.push({ op: "text", ...placed(), text, size: records[at + 7]!, color: colorToHex(records[at + 8]!) });
-          at += RGE_OP_TEXT_LEN;
+          at += TSE_OP_TEXT_LEN;
           break;
         }
         default:
@@ -529,17 +529,17 @@ export class RecordingBackend implements Backend {
  * (and no key is down), except `dt` (1/60) and the window size, which fall back to `width` and `height`.
  */
 export function applyInputFrame(next: InputFrame, input: Float64Array, keys: Uint8Array, width: number, height: number): void {
-  input[RGE_IN_DT] = next.dt ?? 1 / 60;
-  input[RGE_IN_WIDTH] = next.width ?? width;
-  input[RGE_IN_HEIGHT] = next.height ?? height;
-  input[RGE_IN_MOUSE_X] = next.mouse?.x ?? 0;
-  input[RGE_IN_MOUSE_Y] = next.mouse?.y ?? 0;
-  input[RGE_IN_WHEEL] = next.wheel ?? 0;
-  input[RGE_IN_QUIT] = next.quit ? 1 : 0;
+  input[TSE_IN_DT] = next.dt ?? 1 / 60;
+  input[TSE_IN_WIDTH] = next.width ?? width;
+  input[TSE_IN_HEIGHT] = next.height ?? height;
+  input[TSE_IN_MOUSE_X] = next.mouse?.x ?? 0;
+  input[TSE_IN_MOUSE_Y] = next.mouse?.y ?? 0;
+  input[TSE_IN_WHEEL] = next.wheel ?? 0;
+  input[TSE_IN_QUIT] = next.quit ? 1 : 0;
   keys.fill(0);
-  for (const name of next.down ?? []) keys[keyIndex(name)]! |= RGE_KEY_DOWN;
-  for (const name of next.pressed ?? []) keys[keyIndex(name)]! |= RGE_KEY_DOWN | RGE_KEY_PRESSED;
-  for (const name of next.released ?? []) keys[keyIndex(name)]! |= RGE_KEY_RELEASED;
+  for (const name of next.down ?? []) keys[keyIndex(name)]! |= TSE_KEY_DOWN;
+  for (const name of next.pressed ?? []) keys[keyIndex(name)]! |= TSE_KEY_DOWN | TSE_KEY_PRESSED;
+  for (const name of next.released ?? []) keys[keyIndex(name)]! |= TSE_KEY_RELEASED;
 }
 
 function handleFor(paths: string[], path: string): number {

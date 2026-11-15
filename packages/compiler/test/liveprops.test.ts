@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { Entity, World } from "@rge/runtime";
+import { Entity, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -203,7 +203,7 @@ export function Parent() {
   const hit = (n: number) => { s.health -= n; };
   return <Entity><Hurt onHit={hit} /><Hp.Provider value={s.health}><Entity><Reader /></Entity></Hp.Provider></Entity>;
 }`);
-    const hp = `import { createContext } from "@rge/runtime";\nexport const Hp = createContext(0);\n`;
+    const hp = `import { createContext } from "@tsengine/runtime";\nexport const Hp = createContext(0);\n`;
     const hpFile = join(dirname(compiled.fileName), "..", "hp.ts");
     mkdirSync(dirname(hpFile), { recursive: true });
     writeFileSync(hpFile, hp);

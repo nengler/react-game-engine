@@ -1,4 +1,4 @@
-import { useMutable, Collider, Entity, Shape } from "@rge/runtime/jsx";
+import { useMutable, Collider, Entity, Shape } from "@tsengine/runtime/jsx";
 
 /**
  * Something to collect. It reads who touched it from the other collider's `owner` (the name of the entity the

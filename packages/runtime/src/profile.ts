@@ -1,5 +1,5 @@
 /**
- * A development profiler: where a frame's script time goes, by component and by phase. `rge dev`'s inspector turns it on and shows
+ * A development profiler: where a frame's script time goes, by component and by phase. `tse dev`'s inspector turns it on and shows
  * it as a table (the slowest components first); a test or a tool can use it too. Off by default, and when off the World's loops
  * do not look at the clock at all: one check per step and per flush.
  *

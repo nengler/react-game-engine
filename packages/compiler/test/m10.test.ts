@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Text, World, runtimeManifest } from "@rge/runtime";
+import { Entity, Text, World, runtimeManifest } from "@tsengine/runtime";
 
 import { DiagnosticCode, type ExprIR, type PropIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -179,7 +179,7 @@ describe("M10: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M10${Math.random()}.tsx`,
-        text: `import { Entity, Sprite, Text } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Sprite, Text } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: number }) { return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 

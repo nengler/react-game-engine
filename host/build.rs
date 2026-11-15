@@ -1,7 +1,7 @@
-//! Builds `librge` (and the raylib it wraps) with CMake from `../native`, and links it statically.
+//! Builds `libtse` (and the raylib it wraps) with CMake from `../native`, and links it statically.
 //!
 //! The platform is raylib's: `Desktop` (a real window) by default, or `Memory` (its software renderer: no
-//! window, no GPU, no system libraries) with the `headless` feature or `RGE_PLATFORM=Memory`. The Memory
+//! window, no GPU, no system libraries) with the `headless` feature or `TSE_PLATFORM=Memory`. The Memory
 //! platform is what tests and CI use.
 use std::env;
 use std::path::PathBuf;
@@ -11,24 +11,24 @@ fn main() {
     for path in ["CMakeLists.txt", "src", "include"] {
         println!("cargo:rerun-if-changed={}", native.join(path).display());
     }
-    println!("cargo:rerun-if-env-changed=RGE_PLATFORM");
+    println!("cargo:rerun-if-env-changed=TSE_PLATFORM");
 
-    let platform = env::var("RGE_PLATFORM").unwrap_or_else(|_| {
+    let platform = env::var("TSE_PLATFORM").unwrap_or_else(|_| {
         if env::var("CARGO_FEATURE_HEADLESS").is_ok() { "Memory".into() } else { "Desktop".into() }
     });
     let headless = platform == "Memory";
 
     let out = cmake::Config::new(&native)
-        .define("RGE_PLATFORM", &platform)
+        .define("TSE_PLATFORM", &platform)
         .profile("Release")
-        .build_target("rge_static")
+        .build_target("tse_static")
         .build();
     let build = out.join("build");
 
-    // librge, then raylib (which carries GLFW inside it), in link order.
+    // libtse, then raylib (which carries GLFW inside it), in link order.
     println!("cargo:rustc-link-search=native={}", build.display());
     println!("cargo:rustc-link-search=native={}", build.join("_deps/raylib-build/raylib").display());
-    println!("cargo:rustc-link-lib=static=rge_static");
+    println!("cargo:rustc-link-lib=static=tse_static");
     println!("cargo:rustc-link-lib=static=raylib");
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();

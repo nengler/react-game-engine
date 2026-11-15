@@ -4,17 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
-import { createPlayer, type PlayerConfig } from "@rge/player";
-import { Entity, Fade, Hud, Particles, Screen, Sprite, Text, Tilemap, registerTilemaps } from "@rge/runtime";
+import { createPlayer, type PlayerConfig } from "@tsengine/player";
+import { Entity, Fade, Hud, Particles, Screen, Sprite, Text, Tilemap, registerTilemaps } from "@tsengine/runtime";
 
 import { createNodeBackend, encodePng, findNativeLibrary, type Pixels } from "../src/index.ts";
 
 /** What tiles, sprite sheets, particles, fades and bitmap fonts really look like, through the software renderer. */
 const library = findNativeLibrary("headless");
-const required = process.env["RGE_REQUIRE_NATIVE"] === "1";
-const skip = library === null && !required ? "librge is not built (npm run native:build:headless)" : false;
+const required = process.env["TSE_REQUIRE_NATIVE"] === "1";
+const skip = library === null && !required ? "libtse is not built (npm run native:build:headless)" : false;
 
-const scratch = mkdtempSync(join(tmpdir(), "rge-feel-"));
+const scratch = mkdtempSync(join(tmpdir(), "tse-feel-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const RED: [number, number, number] = [255, 0, 0];

@@ -4,14 +4,14 @@ import { join } from "node:path";
 /** `<Game>`: the optional root that carries the game's configuration and its state. */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Game } from "@rge/runtime";
+import { Entity, Game } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, formatDiagnostic } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule } from "./helpers.ts";
 
 const ROOT = join(OUTPUT_ROOT, String(process.pid), "game");
 const STATE_FILE = join(ROOT, "GameState.ts");
-const STATE = `import { createGameState } from "@rge/runtime";
+const STATE = `import { createGameState } from "@tsengine/runtime";
 
 export const useGame = createGameState({ coins: 0 }, {});
 `;
@@ -57,7 +57,7 @@ const MAIN = `export default function Main() {
 describe("<Game> as a component's root", () => {
   it("makes a class that extends Game, passing its settings to the runtime", async () => {
     const compiled = build(MAIN);
-    assert.match(compiled.code, /import \{ Entity, Game, type PrefabDefinition \} from "@rge\/runtime";/);
+    assert.match(compiled.code, /import \{ Entity, Game, type PrefabDefinition \} from "@tsengine\/runtime";/);
     assert.match(compiled.code, /export class Main extends Game \{/);
     assert.match(
       compiled.code,
@@ -185,7 +185,7 @@ describe("<Game> as a component's root", () => {
 
   it("is checked in the authored source too: a setting the right type", () => {
     const file = (text: string) => [{ fileName: join(ROOT, "Src.tsx"), text }];
-    const good = `import { Game } from "@rge/runtime/jsx";\nexport function Main() { return <Game title="t" width={320} />; }`;
+    const good = `import { Game } from "@tsengine/runtime/jsx";\nexport function Main() { return <Game title="t" width={320} />; }`;
     assert.deepEqual(
       compiler.typeCheckSources(file(good)).map((d) => d.message),
       []

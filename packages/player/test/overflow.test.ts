@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { Camera, Entity, Flex, Hud, Shape, getSoundSink, type FlexProps, type GameObject } from "@rge/runtime";
+import { Camera, Entity, Flex, Hud, Shape, getSoundSink, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 import { createPlayer } from "../src/loop.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 const host = {
@@ -52,7 +52,7 @@ function draw(root: GameObject, width = 200, height = 100, check = false): Decod
   const backend = new RecordingBackend();
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), ...(check ? { retain: "check" as const } : {}) });
   const built = builder.build(root, width, height);
-  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   return [...backend.lastFrame.records];
 }
 

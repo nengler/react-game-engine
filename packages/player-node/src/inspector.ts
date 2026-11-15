@@ -1,5 +1,5 @@
 /**
- * The development inspector (REACT_FEEL_PLAN.md C4): a local web page that `rge dev` serves while the game runs, showing the tree
+ * The development inspector (REACT_FEEL_PLAN.md C4): a local web page that `tse dev` serves while the game runs, showing the tree
  * by component (as React DevTools does), the selected component's props, state, refs, game-state subscriptions and renders, and
  * each game state with the last actions and what they changed (as Redux DevTools does). A state value or a game-state leaf can be
  * edited from it; an edit is development-only (it is not input, so a replay does not repeat it) and is said so in the log.
@@ -10,7 +10,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import type { Rewind } from "@rge/player";
+import type { Rewind } from "@tsengine/player";
 import {
   activeProfiler,
   asData,
@@ -22,7 +22,7 @@ import {
   stopProfiling,
   type GameObject,
   type GameStore,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 export interface InspectorOptions {
   /** The game's current root (it changes on a hot reload). */
@@ -236,7 +236,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rge inspector</title>
+<title>tse inspector</title>
 <style>
   :root { color-scheme: light dark; --bg: #f7f7f8; --fg: #1b1b1f; --dim: #6b6b75; --line: #d9d9de; --accent: #2f6fde; --panel: #ffffff; }
   @media (prefers-color-scheme: dark) { :root { --bg: #16171b; --fg: #e8e8ec; --dim: #9a9aa6; --line: #2c2d33; --accent: #6ea0ff; --panel: #1d1e23; } }
@@ -272,7 +272,7 @@ const PAGE = `<!doctype html>
 </style>
 </head>
 <body>
-<header><b>rge inspector</b><span id="status">connecting…</span><span>edits here are development-only</span>
+<header><b>tse inspector</b><span id="status">connecting…</span><span>edits here are development-only</span>
   <button id="profile-toggle" title="Time each component's handlers and renders, per frame">profile</button>
   <span id="rewind" hidden>
     <button id="rw-pause" title="Pause (F2 in the window)">pause</button>
@@ -363,7 +363,7 @@ function renderStores(stores) {
 }
 const events = new EventSource("/events");
 events.onopen = () => (document.getElementById("status").textContent = "connected");
-events.onerror = () => (document.getElementById("status").textContent = "disconnected: is rge dev still running?");
+events.onerror = () => (document.getElementById("status").textContent = "disconnected: is tse dev still running?");
 events.addEventListener("tree", (e) => renderTree(JSON.parse(e.data)));
 events.addEventListener("object", (e) => renderObject(JSON.parse(e.data)));
 events.addEventListener("stores", (e) => renderStores(JSON.parse(e.data)));

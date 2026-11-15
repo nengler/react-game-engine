@@ -1,6 +1,6 @@
 /**
  * Plays the ten waves against a few fixed build orders and prints the lives left after each wave. The battle is the game's own
- * `Play` component, mounted alone in a headless world (`@rge/testing`, collisions on), and the orders are played by pressing what
+ * `Play` component, mounted alone in a headless world (`@tsengine/testing`, collisions on), and the orders are played by pressing what
  * a player presses: a pad is selected, then the build menu's key, the upgrade key, the wave key. `test/balance.test.ts` checks the table against `test/balance.expected.json`, so a change to a number in the rules shows
  * up as a change in difficulty. `--write` updates the expected table after a change you meant to make.
  *
@@ -10,7 +10,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { render } from "@rge/testing";
+import { render } from "@tsengine/testing";
 
 import { Play } from "../generated/Play.ts";
 import { useGame } from "../src/GameState.ts";

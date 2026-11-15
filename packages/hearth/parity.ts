@@ -2,11 +2,11 @@
  * Plays a short game (a build order of clicks and keys, then the first wave) against a recording backend and prints the battle's
  * state every 30 frames (its components' own state: `Play`'s numbers, each enemy's and tower's), with the sounds played and the number of draw records of the last frame, as one line of JSON (numbers
  * rounded to 1e-9). It runs unchanged under Node and, bundled, under the Rust host (QuickJS-ng): the two outputs must be identical,
- * which `rge check` checks.
+ * which `tse check` checks.
  *
  *   node packages/hearth/parity.ts
  */
-import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 
 import { bindings, gameConfig, screen } from "./game.ts";
 import { Enemy } from "./generated/Enemy.ts";

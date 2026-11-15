@@ -3,8 +3,16 @@ import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { createPlayer, parseInputScript, RecordingBackend, runScript, type DecodedRecord, type InputFrame, type Player } from "@rge/player";
-import { createNodeBackend, findNativeLibrary, type Pixels } from "@rge/player-node";
+import {
+  createPlayer,
+  parseInputScript,
+  RecordingBackend,
+  runScript,
+  type DecodedRecord,
+  type InputFrame,
+  type Player,
+} from "@tsengine/player";
+import { createNodeBackend, findNativeLibrary, type Pixels } from "@tsengine/player-node";
 
 import { bindings, gameConfig } from "../game.ts";
 import { Main } from "../generated/Main.ts";
@@ -282,11 +290,11 @@ describe("demo: a minute of play", () => {
 
 /**
  * The same game through the real library, on whatever build is available (the software renderer when
- * it is the headless one): 60 frames, then colours at known pixels. Skipped when `librge` is not built,
- * unless RGE_REQUIRE_NATIVE=1 (CI).
+ * it is the headless one): 60 frames, then colours at known pixels. Skipped when `libtse` is not built,
+ * unless TSE_REQUIRE_NATIVE=1 (CI).
  */
 const library = findNativeLibrary("headless");
-const skip = library === null && process.env["RGE_REQUIRE_NATIVE"] !== "1" ? "librge is not built (npm run native:build:headless)" : false;
+const skip = library === null && process.env["TSE_REQUIRE_NATIVE"] !== "1" ? "libtse is not built (npm run native:build:headless)" : false;
 
 function pixel(frame: Pixels, x: number, y: number): string {
   const at = (y * frame.width + x) * 4;

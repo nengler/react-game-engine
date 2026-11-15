@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Collider, Entity, GameObject, World } from "@rge/runtime";
+import { Collider, Entity, GameObject, World } from "@tsengine/runtime";
 
 import { Hero } from "../../example/generated/Hero.ts";
 import { boundsOverlap, colliderBounds, CollisionTracker, type Overlaps } from "../src/collide.ts";

@@ -1,9 +1,9 @@
 /**
  * Writes, reads and removes saved-data entries through the host's backend and prints what it saw as one line of JSON. It runs under
- * the Rust host (QuickJS-ng) with RGE_DATA_DIR set; `parity.test.ts` checks the output. (Under Node the same calls are
+ * the Rust host (QuickJS-ng) with TSE_DATA_DIR set; `parity.test.ts` checks the output. (Under Node the same calls are
  * `NodeBackend.storage`, tested in player-node's native.test.ts against the same library.)
  */
-import { hostBackend } from "@rge/player";
+import { hostBackend } from "@tsengine/player";
 
 const storage = hostBackend().storage;
 if (storage === undefined) throw new Error("the host has no storage");

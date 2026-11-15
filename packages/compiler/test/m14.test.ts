@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Pointer, World, runtimeManifest } from "@rge/runtime";
+import { Entity, Pointer, World, runtimeManifest } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -77,7 +77,7 @@ describe("M14: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M14${Math.random()}.tsx`,
-        text: `import { Entity, Pointer } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Pointer } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 

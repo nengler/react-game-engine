@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createControls, createSave, createSettings, Entity, getVolume, setVolume, type Controls } from "@rge/runtime";
+import { createControls, createSave, createSettings, Entity, getVolume, setVolume, type Controls } from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend } from "../src/index.ts";
 

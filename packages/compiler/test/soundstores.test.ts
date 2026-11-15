@@ -27,7 +27,7 @@ describe("sound stores are checked against the assets folder", () => {
 
   it("reports a missing file with the nearest name and where it is written", () => {
     const [d, ...rest] = check(
-      `import { createSounds } from "@rge/runtime";\n\nexport const sfx = createSounds({\n  jump: "jmup.wav",\n});\n`
+      `import { createSounds } from "@tsengine/runtime";\n\nexport const sfx = createSounds({\n  jump: "jmup.wav",\n});\n`
     );
     assert.equal(rest.length, 0);
     assert.equal(d?.code, DiagnosticCode.MissingAsset);

@@ -18,12 +18,12 @@ import {
   Tilemap,
   World,
   registerTilemaps,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { Hero } from "../../example/generated/Hero.ts";
 import { Level } from "../../example/generated/Level.ts";
 import { estimateTextWidth, FrameBuilder, walkTree } from "../src/draw.ts";
-import { RGE_IN_LEN, KEYS } from "../src/protocol.ts";
+import { TSE_IN_LEN, KEYS } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +56,7 @@ function draw(
     built.list.records,
     built.list.length,
     built.list.texts,
-    new Float64Array(RGE_IN_LEN),
+    new Float64Array(TSE_IN_LEN),
     new Uint8Array(KEYS.length)
   );
   return { records: [...backend.lastFrame.records], warnings, built, backend };
@@ -659,7 +659,7 @@ describe("FrameBuilder: draw order (z)", () => {
     const builder = new FrameBuilder({ loadTexture: (p) => backend.loadTexture(p) });
     const frame = (): number[] => {
       const built = builder.build(root, 100, 100);
-      backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+      backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
       return order(backend.lastFrame.records);
     };
     assert.deepEqual(frame(), [1, 2]);

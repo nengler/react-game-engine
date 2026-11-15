@@ -1,12 +1,12 @@
 /**
  * Script time of one frame of the busiest part of the game, over a scripted run of the good build on a recording backend: the mean
  * and the slowest frame (two steps: the replay plays at 2×) while wave 10 is on (the most enemies on the path), and with how many enemies, towers and shots that is.
- * Drawing in librge is not in it. Runs under Node and, bundled, under the Rust host (QuickJS), where it reports the same way:
+ * Drawing in libtse is not in it. Runs under Node and, bundled, under the Rust host (QuickJS), where it reports the same way:
  *
  *   node packages/hearth/tools/frame-time.ts
- *   npm run bundle -- packages/hearth/tools/frame-time.ts host/dist/hearth-frames.js && host/target/release/rge-host host/dist/hearth-frames.js
+ *   npm run bundle -- packages/hearth/tools/frame-time.ts host/dist/hearth-frames.js && host/target/release/tse-host host/dist/hearth-frames.js
  */
-import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 
 import { bindings, gameConfig, screen } from "../game.ts";
 import { battleOf, findPlay } from "../test/battle-state.ts";

@@ -28,13 +28,13 @@ export const generatedCodeCompilerOptions = {
 
 /**
  * Options used to check authored TSX: the same strictness, plus JSX typed by
- * the runtime's authoring module (`@rge/runtime/jsx-runtime`), so a wrong
+ * the runtime's authoring module (`@tsengine/runtime/jsx-runtime`), so a wrong
  * prop or an undefined hook is a type error in the source.
  */
 export const sourceCompilerOptions = {
   ...generatedCodeCompilerOptions,
   jsx: JsxEmit.ReactJSX,
-  jsxImportSource: "@rge/runtime",
+  jsxImportSource: "@tsengine/runtime",
 } satisfies Parameters<API["createProgram"]>[1];
 
 /**
@@ -46,7 +46,7 @@ export function typeCheckFiles(api: API, files: readonly VirtualFile[]): Compile
   return checkFiles(api, files, generatedCodeCompilerOptions, DiagnosticCode.GeneratedTypeError);
 }
 
-/** Type-check authored `.tsx` files. Errors are `RGE9002`, to tell them from errors in generated code (`RGE9001`). */
+/** Type-check authored `.tsx` files. Errors are `TSE9002`, to tell them from errors in generated code (`TSE9001`). */
 export function typeCheckSources(api: API, files: readonly VirtualFile[]): CompilerDiagnostic[] {
   return checkFiles(api, files, sourceCompilerOptions, DiagnosticCode.SourceTypeError);
 }

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, Shape, World } from "@rge/runtime";
+import { Entity, Shape, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -20,14 +20,14 @@ const sourceErrors = (body: string): string[] =>
     .typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/S${Math.random()}.tsx`,
-        text: `import { Entity, Shape, Sprite, Music, useMutable } from "@rge/runtime/jsx";\ninterface DotProps { x: number }\nfunction Dot({ x }: DotProps) { return <Shape kind="rect" width={x} height={1} color="red" />; }\nfunction C() { const s = useMutable({ n: 3 }); const n = s.n; return <Entity>${body}</Entity>; }\nvoid C; void Dot;`,
+        text: `import { Entity, Shape, Sprite, Music, useMutable } from "@tsengine/runtime/jsx";\ninterface DotProps { x: number }\nfunction Dot({ x }: DotProps) { return <Shape kind="rect" width={x} height={1} color="red" />; }\nfunction C() { const s = useMutable({ n: 3 }); const n = s.n; return <Entity>${body}</Entity>; }\nvoid C; void Dot;`,
       },
     ])
     .map((d) => d.message);
 
 describe("transform shorthand props", () => {
   it("places a built-in with x, y, rotation and scale written as props, from state, as transform does", async () => {
-    const compiled = compile(`import { Entity, Shape, useInput, useMutable } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Shape, useInput, useMutable } from "@tsengine/runtime/jsx";
 export function Row() {
   const s = useMutable({ at: 4 });
   useInput((input) => {
@@ -66,7 +66,7 @@ export function Row() {
   });
 
   it("refuses a field written both ways, and a built-in that cannot be placed", () => {
-    const twice = compileErrors(`import { Shape } from "@rge/runtime/jsx";
+    const twice = compileErrors(`import { Shape } from "@tsengine/runtime/jsx";
 export function A() {
   return <Shape kind="rect" width={1} height={1} color="red" x={1} transform={{ x: 2, y: 3 }} />;
 }`);
@@ -74,7 +74,7 @@ export function A() {
       twice.map((d) => [d.code, d.message]),
       [[DiagnosticCode.InvalidTransformAttribute, "'x' is written twice: as a prop (`x={…}`) and in `transform`. Keep one."]]
     );
-    const music = compileErrors(`import { Entity, Music } from "@rge/runtime/jsx";
+    const music = compileErrors(`import { Entity, Music } from "@tsengine/runtime/jsx";
 export function A() {
   return <Entity><Music src="a.wav" x={3} /></Entity>;
 }`);
@@ -83,7 +83,7 @@ export function A() {
   });
 
   it("leaves x alone on a component: it is the component's own prop", async () => {
-    const compiled = compile(`import { Entity, Shape } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Shape } from "@tsengine/runtime/jsx";
 interface DotProps {
   x: number;
 }

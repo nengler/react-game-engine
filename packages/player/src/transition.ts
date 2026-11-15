@@ -1,4 +1,4 @@
-import type { FlexTransition } from "@rge/runtime";
+import type { FlexTransition } from "@tsengine/runtime";
 
 import { mixColors, type PackedColor } from "./color.ts";
 

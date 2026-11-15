@@ -1,4 +1,4 @@
-# react-game-engine: next priorities after Phase 3
+# tse: next priorities after Phase 3
 
 **What is being worked on now is the table in "Now" below (2026-11-15).** The rest of this document is the record of how the engine got here: the priorities as first ranked, the findings of each game, and what waits.
 
@@ -33,12 +33,12 @@ performance are set aside for now; the author has played Bramble in a window, an
 | 1 | Finish the game-state migration (**done**, #144) | Kite, Hearth and Bramble on `createGameState(data, actions)`; the `set` form removed; writes from components refused with the action to add; selected values read-only |
 | 2 | Fix the docs | The guide and the notes match the code: `PAIN_POINTS.md` rewritten, examples on `useMutable`, this table, a shorter README |
 | 3 | Props read live everywhere, and React subset gaps (**done**, #146) | Context values, what is below a list item and a switching item read live; generic components reported at the source; `reduce` in the body; a short allowlist message, printed once; `<Text>` takes `undefined` and `null` |
-| 4 | Checking visuals with a GPU renderer (**done**, #147; the software renderer's warning about shader effects comes with step 6, when there are shaders to skip) | `rge screenshot --gpu`: the desktop build under a virtual display on Mesa's software OpenGL, which runs real shaders; an image comparison with a tolerance; the software renderer says it skips shader effects |
+| 4 | Checking visuals with a GPU renderer (**done**, #147; the software renderer's warning about shader effects comes with step 6, when there are shaders to skip) | `tse screenshot --gpu`: the desktop build under a virtual display on Mesa's software OpenGL, which runs real shaders; an image comparison with a tolerance; the software renderer says it skips shader effects |
 | 5 | Render targets and blend modes (**done**, #151: `<Layer>`, ABI v10; Bramble's cave is dark and lit by the lantern) | One ABI change both shaders and lighting build on; a greybox of a cave or night area in Bramble starts here |
 | 6 | Shaders (**done**, ABI v11: `<Layer shader params>`, a GLSL `effect` function per file; the software renderer warns that it runs none; Bramble's cave flickers and darkens at the edges) | Tested in Bramble's cave or night area |
 | 7 | Lighting (**done**, ABI v12: `<Lighting ambient>` and `<Light radius color intensity>`; Bramble's lantern, the cave's items and the wisps are lights; no shadows) | A light map multiplied over the scene, finishing that area |
 | 8 | Better collision shapes (**done**: `shape="circle"` and convex `shape="polygon"` on `<Collider>`, tested exactly for contacts and body queries, rotated boxes exact against them. Decided 2026-11-15: for now collision shapes are circles and polygons only; solid shapes and slopes are not planned) | Circles and polygons; whether they also stop movement (slopes) is the author's call |
-| 9 | Cutscenes (**done**: `sequence`, `wait`, `call`, `waitFor`, `tween`, `parallel` in `@rge/runtime`; Bramble's first visit to the cave is one) | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
+| 9 | Cutscenes (**done**: `sequence`, `wait`, `call`, `waitFor`, `tween`, `parallel` in `@tsengine/runtime`; Bramble's first visit to the cave is one) | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
 
 ## Phase 4: driven by a real game
 
@@ -62,7 +62,7 @@ Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or de
 This finishes priority 1. Most useful now that the HUD, `<Flex>`, the fixed resolution and full screen are in.
 
 **The target is macOS (decided 2026-11-15 by the owner).** The owner will make games on a Mac, so the real machine to play on is a
-Mac first. Nothing has been built or run on macOS yet: `librge`'s CMake build, `rge dev`, and `rge package` (the Node single
+Mac first. Nothing has been built or run on macOS yet: `libtse`'s CMake build, `tse dev`, and `tse package` (the Node single
 executable and the Rust host) are written for it but unverified, and CI runs on Linux only. A Linux desktop stays useful, second.
 
 **Work**
@@ -83,7 +83,7 @@ executable and the Rust host) are written for it but unverified, and CI runs on 
 
 Decided 2026-11-10: the game is an original precision platformer, in the spirit of tight-control mountain-climbing platformers: run, jump, a mid-air dash, wall slide and wall jump, short single-screen rooms, instant respawn, and a camera that moves room to room. The first milestone is **one complete level**: a title screen, 5–8 rooms that teach and then combine the mechanics, and an end screen, with music, sound and gamepad support. The character, art, rooms, music and name are all original; the genre is the reference for feel, not a source to copy.
 
-It lives in its own package beside `packages/demo`, and is written only through the public authoring API (`@rge/runtime/jsx`), as an outside author would. Unlike the "pull it in when needed" rule elsewhere in this document, the engine features below are planned up front: any game with a level, a character and music needs them, and this level is what tests each one.
+It lives in its own package beside `packages/demo`, and is written only through the public authoring API (`@tsengine/runtime/jsx`), as an outside author would. Unlike the "pull it in when needed" rule elsewhere in this document, the engine features below are planned up front: any game with a level, a character and music needs them, and this level is what tests each one.
 
 **Goals, in order:** it feels good to control; it is a complete, playable level; the engine gains the features below, each designed, tested and documented; and the gaps it still finds are written down.
 
@@ -119,7 +119,7 @@ The harness steps exactly one tick at a time, so once the fixed timestep lands, 
 
 **Tier 3: only if the level asks for them.** Context, spread props, conditionals inside a list's `.map`, and forwarding `{children}`. A diagnostic is lifted only when the level hits it, and each case is recorded as a finding.
 
-Each addition gets a design section in the matching doc (`DESIGN.md`, `NATIVE_PLAN.md` or `UI_PLAN.md`), compiler and runtime tests, and a recording or pixel test where it draws, and keeps the parity test byte-identical. Native changes are batched so `RGE_ABI_VERSION` moves once per batch. Engine and game changes go in separate commits.
+Each addition gets a design section in the matching doc (`DESIGN.md`, `NATIVE_PLAN.md` or `UI_PLAN.md`), compiler and runtime tests, and a recording or pixel test where it draws, and keeps the parity test byte-identical. Native changes are batched so `TSE_ABI_VERSION` moves once per batch. Engine and game changes go in separate commits.
 
 **Order of work**
 
@@ -168,7 +168,7 @@ What writing a real game found, beyond the planned additions. Each says what the
 12. **Room 4 was unplayable** (found by playing, not by the tests): the search found a contrived route, and the natural dash-up never worked. Fixed by redesigning the room and by testing a window of dash timings for the two dash rooms. *Should become:* a margin check for every room's key move, not only those two, and the search preferring routes a person would take.
 13. **Particles in an emitter that is removed are removed with it.** The first version mounted a burst emitter for 0.1 s and unmounted it, which cut the particles off, and kept them in the character's space, so they stuck to it. Emitters now stay mounted, switch on, and use `space="world"`. *Should become:* the guide should say this, and `<Particles>` may deserve a one-shot `burst` trigger that is not a prop toggled twice.
 14. **A router** was asked for, and built: `<Router route transition>` with `<Route name>` screens, transitions as plain functions (finding 1's escape hatch, now real: plain `.ts` functions are callable from components and passable as props). `useUpdate` takes the input, and an action can take it, so Kite's controls are read in plain TypeScript. Sharp scaling (ABI v6) fixes uneven pixels at fractional scales. See NATIVE_PLAN.md and DESIGN.md.
-15. **Smaller things.** The title's "press Z" prompt blinks from a counter in `useInput` (fine, but `useUpdate` would be more honest); `Particles` `emitting` and `burst` together mean "burst when it turns on, including when mounted", which reads oddly until you know it; the bitmap font has one case; TypeScript 7's strip-only mode in Node rejects parameter properties and enums, so the asset tool uses plain classes; `tools/screenshot.ts` needs the headless build and is slow on a cold cache; `npm run check:<game>` runs the Rust host comparison only if `host/target/release/rge-host` exists. The Tier 3 items (context, spread props, conditionals in `.map`, forwarding `{children}`) were **not hit**: the level has no lists and no deep trees, so their diagnostics stay and their rows in "Not now" stay too.
+15. **Smaller things.** The title's "press Z" prompt blinks from a counter in `useInput` (fine, but `useUpdate` would be more honest); `Particles` `emitting` and `burst` together mean "burst when it turns on, including when mounted", which reads oddly until you know it; the bitmap font has one case; TypeScript 7's strip-only mode in Node rejects parameter properties and enums, so the asset tool uses plain classes; `tools/screenshot.ts` needs the headless build and is slow on a cold cache; `npm run check:<game>` runs the Rust host comparison only if `host/target/release/tse-host` exists. The Tier 3 items (context, spread props, conditionals in `.map`, forwarding `{children}`) were **not hit**: the level has no lists and no deep trees, so their diagnostics stay and their rows in "Not now" stay too.
 
 16. **Code that did not read like React** (reviewed after the level was done, 2026-11-11), and what replaced it:
     - *Counters as events* (`jumps`, `lands`, `deathCount` in the state, compared with refs every frame by `useSoundOnCount`, `useBurst`, `shake={deathCount}`). Now the rules push `GameEvent`s and the game state answers them through **effect stores** (`createParticles` + `<ParticleLayer>`, `createSounds`, `createShake`), called from anywhere like a toast library. No `useEffect` was added: watching state to fire events is the pattern React advises against. This also closes finding 13.
@@ -209,7 +209,7 @@ What building Hearth found, and which of Kite's findings held a second time.
    "Narrowing in the generated code").
 3. **Forwarding `{children}`** was hit by the modal (`<Panel title={title}>{children}</Panel>`) and is **built**, with option A decided in the plan (the
    forwarded `{children}` is the only child passed on). The game never wanted anything beside it. See DESIGN.md, "Forwarding".
-4. **Children on list items** were hit by the build menu (`TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)`, `RGE1209`), worked around for a while with one
+4. **Children on list items** were hit by the build menu (`TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)`, `TSE1209`), worked around for a while with one
    component per item, and are **built** for the first cut: an item (a component or a built-in) may have plain child elements that read the item. Each item's children are made
    with it, kept in the list's per-key record (`kids`) and given the item's current value on every render, attached with `attachPassedChild` (or `addChild` on a built-in), and go
    with the item. Still rejected: a condition, a list, `{children}` or nested children inside an item's children, and children on a `? :` item that switches between two
@@ -224,13 +224,13 @@ What building Hearth found, and which of Kite's findings held a second time.
 
 **Compiler subset, found by writing a game the React way** (each is a clear diagnostic; the workaround and what it should become):
 
-7. **No constants or tables at the top of a component file** (`RGE1001`), **no index reads in render expressions** (`KIND_INDEX[kind]`, `pads[cursor]`) and **selectors must
-   be plain paths** (`s.battle.pads[s.cursor]`, `s.cursor === id` were `RGE1103`). **Built** after review: top-level `const`s and helper functions in a component file,
+7. **No constants or tables at the top of a component file** (`TSE1001`), **no index reads in render expressions** (`KIND_INDEX[kind]`, `pads[cursor]`) and **selectors must
+   be plain paths** (`s.battle.pads[s.cursor]`, `s.cursor === id` were `TSE1103`). **Built** after review: top-level `const`s and helper functions in a component file,
    index reads and `!`, `Math.PI`, and computed selectors (each path read is its own subscription; the expression is a derived value). Hearth's `rules/view.ts` lost
    `towerFrame`, `iconOf` and `PIPS` to the components that use them, and the store lost its `focus` copy: `useGame((s) => focusOf(s.battle, s.cursor))`.
    See DESIGN.md, "Computed selectors" and "Constants, helpers and index reads beside components". Found on the way: `useGame((s) => s.enemies.length)`
    subscribed to a path the store never reports (fixed: `.length` reads the array).
-8. **A component cannot be the root of another** (`RGE1003`): `BuildMenu` rendering `<Panel>` directly was rejected, so it wrapped it in a `<Flex>`. **Built**:
+8. **A component cannot be the root of another** (`TSE1003`): `BuildMenu` rendering `<Panel>` directly was rejected, so it wrapped it in a `<Flex>`. **Built**:
    a component, a condition (`on ? <X/> : null`) or `null` may be the root; the component is a see-through container (`layoutContents`, CSS's
    `display: contents` for `<Flex>` layout), so the panel still grows to the column. See DESIGN.md, "Component, condition and null roots".
 9. **A game-state action cannot be passed as a value** (`onPress={startWave}`), and **a callback prop could be forwarded whole only to a component**. **Built**:
@@ -301,7 +301,7 @@ Bramble (`games/bramble`, made from the template, checked from a copy outside th
 5. **The first-layout hazard in Kite (finding 7, 10) did not recur:** a door step costs 1.2 to 1.5 ms; a large map costs what its view costs (`<Tilemap>` writes only the cells in view).
 6. **Not found yet, because nobody has played it:** feel (speed, reach, enemy numbers, typing speed are all marked as guesses in the design note), whether a pause of one second of safety reads well, and Tiled finding 8 (no map was saved by Tiled).
 7. **Outside the repository:** packing, installing and checking from a temporary folder found nothing that a relative import into `packages/` would have hidden, but only because the template and `games/bramble` were written to it from the start; the CI job `outside` has not yet run.
-8. **A map is both a tilemap and a scene, and the scene importer took the rules' objects for prefabs** (M6.2): moving Bramble's doors and people into an object layer failed `rge check` with `RGE1503` for each one. An object layer with the bool property `data` is now the rules' alone. Bramble's world is read from its Tiled files and checked by one function; nothing in the rules changed.
+8. **A map is both a tilemap and a scene, and the scene importer took the rules' objects for prefabs** (M6.2): moving Bramble's doors and people into an object layer failed `tse check` with `TSE1503` for each one. An object layer with the bool property `data` is now the rules' alone. Bramble's world is read from its Tiled files and checked by one function; nothing in the rules changed.
 
 ### Findings from Hearth in components
 
@@ -320,21 +320,21 @@ state (screen, cursor, speed, pause, how the battle ended).
 2. **Four things the engine lacked, added for it.** A tower has to ask what is near it now: `overlapping(tag)` on `useBody`,
    contacts with their data, typed by tag. 2× speed and the pause had been the rules' (run them twice; skip them):
    `<Game timeScale paused>`, read every frame. Twenty towers firing in one step each played a sound: `once` sound entries.
-   A test of a subtree whose parts collide needs the collision pass: `@rge/testing`'s `collisions` and `place`.
+   A test of a subtree whose parts collide needs the collision pass: `@tsengine/testing`'s `collisions` and `place`.
 3. **Two compiler bugs, fixed.** An import used only inside a component's own function (`const build = (kind) => …
    TOWERS[kind] …`) was left out of the generated file; and a component's own function lost its type parameters.
 4. **What still did not read like React** (open):
-   - `useState(START_GOLD)` and `useState(-Math.PI / 2)` cannot infer their type (`RGE1104`): an imported constant or an
+   - `useState(START_GOLD)` and `useState(-Math.PI / 2)` cannot infer their type (`TSE1104`): an imported constant or an
      expression needs `useState<number>(…)`.
-   - ~~Renaming in prop destructuring (`{ seed: firstSeed }`) is refused (`RGE1208`), so a prop and the state it seeds need
+   - ~~Renaming in prop destructuring (`{ seed: firstSeed }`) is refused (`TSE1208`), so a prop and the state it seeds need
      different names.~~ *Allowed since 2026-11-15.*
    - `nextId.current++` is refused (a postfix increment); `+= 1` works.
    - A derived value is read again where it is used, so `cost !== null && gold >= cost` does not narrow `cost` in the second
      half; Hearth writes `?? -1`.
    - ~~Reading a running game's component state from outside (a replay, parity, the balance bot) means walking the tree for
-     `Play` and reading its generated fields (`test/battle-state.ts`). `@rge/testing`'s `state()` reads one component; there is
+     `Play` and reading its generated fields (`test/battle-state.ts`). `@tsengine/testing`'s `state()` reads one component; there is
      no "the state of `Play`" query on a running game.~~ *Since 2026-11-15:* `findComponent(Play)`, `findComponents` and
-     `componentState` in `@rge/testing` read the running game's tree; `battle-state.ts` uses them.
+     `componentState` in `@tsengine/testing` read the running game's tree; `battle-state.ts` uses them.
 5. **Timing is a step longer, and the same every run.** An enemy hit at the end of a step reports its death in the next step's
    update, and `Play` sees the wave cleared a step after that (A6's snapshot rule). Nothing in the game minds.
 6. **The balance had luck in it.** The old table's "a mixed build wins" held for seed 1: the old rules lose with it on two of
@@ -394,16 +394,16 @@ Everything is drawn through the camera, so a score or a health bar placed in the
 
 **Proposal**
 
-- A `<Hud>` built-in. Its subtree is drawn after the world through a view that ignores the camera: in canvas pixels under a `<Screen>`, in window pixels without one. The player emits a second `RGE_OP_VIEW` before it. The demo's own `Hud` component, and the `Hud` test components in the compiler's tests, are renamed, since a component cannot share a built-in's name.
-- librge today refuses a second view record ("malformed draw records"), so this is an ABI change: allow a later `RGE_OP_VIEW` to replace the current view, and bump `RGE_ABI_VERSION` to 2. Both hosts already check the version at load.
+- A `<Hud>` built-in. Its subtree is drawn after the world through a view that ignores the camera: in canvas pixels under a `<Screen>`, in window pixels without one. The player emits a second `TSE_OP_VIEW` before it. The demo's own `Hud` component, and the `Hud` test components in the compiler's tests, are renamed, since a component cannot share a built-in's name.
+- libtse today refuses a second view record ("malformed draw records"), so this is an ABI change: allow a later `TSE_OP_VIEW` to replace the current view, and bump `TSE_ABI_VERSION` to 2. Both hosts already check the version at load.
 - A `<Pointer>` inside `<Hud>` is hit-tested in the HUD's coordinates, so HUD buttons work while the camera moves.
 - A `z` draw order: **done 2026-11-09**, as a `transform` field (`transform={{ z: 2 }}`) rather than a prop, because `z` is a common prop name that an attribute would reserve on every component. It is relative to the parent like `x` and `y`, sorted in TypeScript (stable, tree order among equals) so the record format is unchanged, and pointers follow it. See "What is drawn" in `DESIGN.md`. Cost: about 10% of the tree walk in the bench scenes under QuickJS, which priority 4's `Transform` setters would remove for games that never use it.
-- UI layout (`<Flex alignItems="center" gap={8}>`, sized with Clay's algorithm) builds on this layer, and a `<Screen width={320} height={180}>` inside the `<Game>` root gives the game a fixed resolution scaled to the window; see [UI_PLAN.md](UI_PLAN.md). ABI v2 therefore carries four things, landing together so the version moves once: the second view record (`<Hud>`); `rge_measure_text` (width and line height) and `rge_texture_size` (UI_PLAN's U0); a scissor record for clipping (U0); and `RGE_OP_CANVAS`, the render texture that makes `<Screen pixelPerfect>` real (UI_PLAN's C2).
+- UI layout (`<Flex alignItems="center" gap={8}>`, sized with Clay's algorithm) builds on this layer, and a `<Screen width={320} height={180}>` inside the `<Game>` root gives the game a fixed resolution scaled to the window; see [UI_PLAN.md](UI_PLAN.md). ABI v2 therefore carries four things, landing together so the version moves once: the second view record (`<Hud>`); `tse_measure_text` (width and line height) and `tse_texture_size` (UI_PLAN's U0); a scissor record for clipping (U0); and `TSE_OP_CANVAS`, the render texture that makes `<Screen pixelPerfect>` real (UI_PLAN's C2).
 
 **Done when**
 
-- [x] `rge.h`, `protocol.ts` and the header-parity test agree on ABI v2; `smoke.c` checks a second view
-- [x] ABI v2 also has the measuring functions, the scissor record and `RGE_OP_CANVAS`, each with the checks in UI_PLAN's U0 and C2 (done 2026-11-10; the player does not write them yet, that is step 2)
+- [x] `tse.h`, `protocol.ts` and the header-parity test agree on ABI v2; `smoke.c` checks a second view
+- [x] ABI v2 also has the measuring functions, the scissor record and `TSE_OP_CANVAS`, each with the checks in UI_PLAN's U0 and C2 (done 2026-11-10; the player does not write them yet, that is step 2)
 - [x] `<Hud>` children stay fixed while the camera moves (a recording test and a pixel test)
 - [x] A HUD pointer receives presses through a moving, zoomed camera
 - [x] `z` reorders records, and equal keys keep tree order
@@ -430,9 +430,9 @@ The tree walk costs most; collisions add as much again. A 60 fps frame is 16.7 m
 - **Tree walk: reuse the draw records of still subtrees.** *(Done 2026-11-10, see NATIVE_PLAN.md, "reusing draw records": a still scene's walk goes from about 10 ms to under 2.)* Most objects do not move in a given frame. The change signal is the render / structure / animation stamp the world already has, not setters on `Transform`.
 - **Tick: dependency-scoped `render()`.** Today a moving object re-runs its whole `render()` every frame. Every dynamic prop already records which state it reads, so the compiler can re-evaluate only the props whose state changed. Setters called with an updater (`setX(x => x + 1)`) also allocate a closure per call, which the compiler could avoid.
 - **Collisions: an incremental check.** *(Done 2026-11-10, see NATIVE_PLAN.md: only colliders whose entries are new are tested again, about 10 ms to 0.1–1.2 ms when most stand still; the all-moving case is the full sweep, unchanged.)* The uniform grid below was tried first and did not pay. *(The grid, as first written:)* The sweep over x degrades when colliders line up in columns, as platforms and the bench's own grid do. A grid sized to a typical collider keeps it near linear. Layers from priority 2 also cut pairs before they are tested.
-- **The frame where everything moves.** *(Done 2026-11-10, see NATIVE_PLAN.md, "pass three": 2,000 state-driven objects with colliders that all move go from 23.5 to 15.0 ms. The sweep runs in horizontal bands when it tests many pairs for each box, the walk writes plain leaves in place, and the tick keeps a list of renders instead of a `Set`. What is left, by size: the walk for a component that only moved, the broad phase in `librge`, and updater arrows written out by the compiler.)*
+- **The frame where everything moves.** *(Done 2026-11-10, see NATIVE_PLAN.md, "pass three": 2,000 state-driven objects with colliders that all move go from 23.5 to 15.0 ms. The sweep runs in horizontal bands when it tests many pairs for each box, the walk writes plain leaves in place, and the tick keeps a list of renders instead of a `Set`. What is left, by size: the walk for a component that only moved, the broad phase in `libtse`, and updater arrows written out by the compiler.)*
 - **Updaters written in place.** *(Done 2026-11-10, see NATIVE_PLAN.md: an updater of one expression in a hook is generated as an assignment to the pending value, with no closure and no call; the tick for 2,000 moving objects goes from 4.5 to 3.0 ms.)*
-- **The broad phase in `librge`.** *(Done 2026-11-10, see NATIVE_PLAN.md: ABI v4 adds `rge_overlaps`, which finds the boxes that overlap; collisions for 2,000 moving colliders go from 4.3 to 2.2 ms. The rules, the contacts and the reports stay in script, and a backend without it sweeps in script as before.)*
+- **The broad phase in `libtse`.** *(Done 2026-11-10, see NATIVE_PLAN.md: ABI v4 adds `tse_overlaps`, which finds the boxes that overlap; collisions for 2,000 moving colliders go from 4.3 to 2.2 ms. The rules, the contacts and the reports stay in script, and a backend without it sweeps in script as before.)*
 - **A component that only moved.** *(Done 2026-11-10, see NATIVE_PLAN.md: a generated `render()` reports what it changed, and the player moves a component's records as a block when only its transform changed; 2,000 moving objects with colliders go from about 11.9 to 10.0 ms.)*
 - **A guard in CI.** *(Done 2026-11-10, see NATIVE_PLAN.md: `npm run bench:check` fails a scene over its budget in `packages/player/bench/budget.json`, or one that grows faster than its size; the host job runs it.)* The host job prints these numbers but fails on nothing, which is how a quadratic mount went unnoticed. Fail it on a generous threshold, or on the QuickJS/Node ratio, which is steadier on shared runners.
 
@@ -471,12 +471,12 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 
 Decided 2026-11-09. This merges the priorities above with the milestones in [UI_PLAN.md](UI_PLAN.md) (U0–U5 for layout, C1–C3 for the fixed resolution). Done so far: priority 2 (#34), C1, U1 and `z` (#36), the game state and the `<Game>` root (#37), ABI v2 (step 1), `<Hud>` with `pixelPerfect` (step 2, which finishes priority 3), `<Flex>` (step 3), U3 (step 4), U4 (step 5), C3 (step 6), and U5 (step 7).
 
-1. ~~**ABI v2, as one change**~~ **Done 2026-11-10** (priority 3, U0, and C2's native half): the second view record, the measuring functions, the scissor record and `RGE_OP_CANVAS`, in `rge.h`, librge, both hosts and the recording backend.
+1. ~~**ABI v2, as one change**~~ **Done 2026-11-10** (priority 3, U0, and C2's native half): the second view record, the measuring functions, the scissor record and `TSE_OP_CANVAS`, in `tse.h`, libtse, both hosts and the recording backend.
 2. ~~**The player's side of ABI v2:**~~ **Done 2026-11-10.** the `<Hud>` built-in (with the renames), and `pixelPerfect` (the rest of C2). The demo's click counter moves into a `<Hud>`. This finishes priority 3.
 3. ~~**U2, `<Flex>`:** the sizing modes, Clay's passes, alignment, `background`.~~ **Done 2026-11-10** (see UI_PLAN's U2 for what moved to U3 and U4).
 4. ~~**U3:** the HUD's box, shrinking to minimum sizes, and the demo's HUD rebuilt with `<Flex>`.~~ **Done 2026-11-10.**
 5. ~~**U4:** whole-pixel rounding, text alignment, `<Flex onPress>`.~~ **Done 2026-11-10.**
-6. ~~**C3:** the demo at a fixed resolution, `fit="expand"`, full screen, and the 3× window default.~~ **Done 2026-11-10** (full screen is `rge_set_fullscreen`, ABI v3; see UI_PLAN's C3).
+6. ~~**C3:** the demo at a fixed resolution, `fit="expand"`, full screen, and the 3× window default.~~ **Done 2026-11-10** (full screen is `tse_set_fullscreen`, ABI v3; see UI_PLAN's C3).
 7. ~~**U5:** floating boxes.~~ **Done 2026-11-10.**
 8. **Priority 4, the performance pass**, starting with its open decision (how a moved transform is detected), which also decides whether a game that never sets `z` can skip its cost.
 9. **Priority 5, the developer loop:** errors are drawn on the `<Hud>`, so it comes after step 2 at the earliest.
@@ -506,13 +506,13 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later. Storage (priority 8) is in librge only; a web build would add a `localStorage` one behind the player's `Storage` interface | Wanting a shareable browser build, after priority 8 |
+| Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later. Storage (priority 8) is in libtse only; a web build would add a `localStorage` one behind the player's `Storage` interface | Wanting a shareable browser build, after priority 8 |
 | High DPI | Slots into the ABI without rework; gamepads and a fixed timestep were built in priority 7 | A blurry Retina window |
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
-| One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
+| One-file executable, prebuilt libtse, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
 | ~~Context (`createContext` / `useContext`)~~ | Built 2026-11-13 ([REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md), C3) | — |
 | ~~Sequences for cutscenes~~ | Built 2026-11-15 (DESIGN.md, "Sequences, for cutscenes"), with Bramble's cave as the first | — |
-| Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `RGE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children; the third game's inventory slots are expected to (priority 8) |
+| Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `TSE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children; the third game's inventory slots are expected to (priority 8) |
 | ~~Forwarding `{children}` beside other passed children~~, spread onto a built-in | Forwarding and lists beside other passed children built 2026-11-15 (DESIGN.md, "Forwarding"); spread onto components only | A game writing `<Shape {...p} />` |
 | Tiled importer gaps (whole-number `int` checks, template properties, zstd layers, infinite maps, collections of images) | `visible`, tile flip flags (priority 7), base64 layers, external `.tsj` and `.tsx` tilesets, several tilesets each drawn from its own sheet, map properties and objects as data (priority 8, M6.1 and M6.2) are done; the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8): still none, so M6.3 (a person saving Bramble's overworld in Tiled) is the open step |

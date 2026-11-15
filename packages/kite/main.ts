@@ -3,7 +3,7 @@
  *
  *   npm run play:kite
  */
-import { hostBackend, run } from "@rge/player";
+import { hostBackend, run } from "@tsengine/player";
 
 import { gameConfig } from "./game.ts";
 

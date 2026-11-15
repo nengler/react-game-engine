@@ -1,10 +1,10 @@
 /**
  * Script time of each step of the replay (Node, V8) on a recording backend, with the steps that change map named: the mean, the
- * 99th percentile, the slowest step, and what a door costs. Drawing in librge is not in it.
+ * 99th percentile, the slowest step, and what a door costs. Drawing in libtse is not in it.
  *
  *   node tools/frame-time.ts
  */
-import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";

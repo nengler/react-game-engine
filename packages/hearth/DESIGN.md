@@ -15,7 +15,7 @@ node packages/hearth/tools/balance.ts [--write]   the balance table
 
 - Playable from the title through ten waves to a win or a loss, by mouse, keyboard or gamepad (`test/replays.test.ts` plays it by
   clicks and keys: a good build wins with lives left, a thin one loses, the pause menu works).
-- The battle is tested as components, without a window (`test/battle.test.ts`, `@rge/testing`): an enemy walking, taking a
+- The battle is tested as components, without a window (`test/battle.test.ts`, `@tsengine/testing`): an enemy walking, taking a
   blast, slowed, dying and getting through; a tower aiming, firing on its cooldown, a mortar's scatter and a frost pulse; a shell
   landing; and `Play`'s economy, waves, rewards, leaks and loss. The data and helpers (map, path, generator, wave tables, the
   towers' numbers, targeting) have plain tests (`test/data.test.ts`).

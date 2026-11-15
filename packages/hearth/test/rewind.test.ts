@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { describe, it } from "node:test";
 
-import { createPlayer, parseInputScript, RecordingBackend, replayMoment, Rewind, type Player } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend, replayMoment, Rewind, type Player } from "@tsengine/player";
 
 import { bindings, gameConfig, screen } from "../game.ts";
 import { useGame } from "../src/GameState.ts";

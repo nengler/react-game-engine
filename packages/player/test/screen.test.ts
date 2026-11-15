@@ -13,11 +13,11 @@ import {
   type InputState,
   type ScreenProps,
   type ViewTransform,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 import { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement } from "../src/screen.ts";
 
@@ -49,7 +49,7 @@ function draw(
     built.list.records,
     built.list.length,
     built.list.texts,
-    new Float64Array(RGE_IN_LEN),
+    new Float64Array(TSE_IN_LEN),
     new Uint8Array(KEYS.length)
   );
   return { records: [...backend.lastFrame.records], warnings, built };

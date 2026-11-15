@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseInputScript, runScript, type Player } from "@rge/player";
-import { createMemoryStorage, setStorage, setVolume, Text, type GameObject } from "@rge/runtime";
+import { parseInputScript, runScript, type Player } from "@tsengine/player";
+import { createMemoryStorage, setStorage, setVolume, Text, type GameObject } from "@tsengine/runtime";
 
 import { bindings, gameConfig } from "../game.ts";
 import { save, useGame } from "../src/GameState.ts";

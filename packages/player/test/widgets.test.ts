@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Flex, Hud, Slider, Toggle, getSoundSink, type GameObject, type SliderProps, type ToggleProps } from "@rge/runtime";
+import { Entity, Flex, Hud, Slider, Toggle, getSoundSink, type GameObject, type SliderProps, type ToggleProps } from "@tsengine/runtime";
 
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord, type InputFrame } from "../src/recording.ts";

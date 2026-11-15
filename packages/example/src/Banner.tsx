@@ -1,4 +1,4 @@
-import { Sprite, useMount, useMutable, useUnmount } from "@rge/runtime/jsx";
+import { Sprite, useMount, useMutable, useUnmount } from "@tsengine/runtime/jsx";
 
 interface BannerProps {
   text: string;

@@ -1,4 +1,4 @@
-import { Collider, Entity, Shape, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Collider, Entity, Shape, Sprite, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import { fx, sfx } from "./effects.ts";
 

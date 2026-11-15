@@ -1,4 +1,4 @@
-import { Entity, Shape, Text, useInput } from "@rge/runtime/jsx";
+import { Entity, Shape, Text, useInput } from "@tsengine/runtime/jsx";
 
 import { Choices } from "./Choices.tsx";
 import { useGame } from "./GameState.ts";

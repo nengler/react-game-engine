@@ -1,4 +1,4 @@
-import { AnimatedSprite } from "@rge/runtime/jsx";
+import { AnimatedSprite } from "@tsengine/runtime/jsx";
 
 /** Cycles three frames at 4 fps. "beacon-gone.png" does not exist: that frame shows the magenta placeholder. */
 export function Beacon() {

@@ -1,4 +1,4 @@
-import { moveActorX, moveActorY } from "@rge/runtime";
+import { moveActorX, moveActorY } from "@tsengine/runtime";
 
 import * as K from "../constants.ts";
 import { BODY_H, DUCK_H } from "../constants.ts";

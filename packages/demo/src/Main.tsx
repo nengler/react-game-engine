@@ -1,4 +1,4 @@
-import { useSound, useMutable, Camera, Flex, Game, Hud, Screen, Text } from "@rge/runtime/jsx";
+import { useSound, useMutable, Camera, Flex, Game, Hud, Screen, Text } from "@tsengine/runtime/jsx";
 
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
@@ -19,7 +19,7 @@ export default function Main() {
   const playClick = useSound("click.wav");
 
   return (
-    <Game title="rge demo" width={640} height={360} background="#10131c" assets="assets">
+    <Game title="tse demo" width={640} height={360} background="#10131c" assets="assets">
       {/* The game is drawn at 640 × 360 and scaled up by whole numbers; a wider window gets a wider view (fit="expand"), not bars. */}
       <Screen width={640} height={360} fit="expand">
         <Ground />

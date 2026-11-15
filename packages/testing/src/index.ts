@@ -3,7 +3,7 @@
  * it, press keys from the input script language the games already use, report collisions and presses, and read what it would
  * draw and what it holds.
  *
- *     import { render } from "@rge/testing";
+ *     import { render } from "@tsengine/testing";
  *     import { Enemy } from "../generated/Enemy.ts";
  *
  *     const t = render(Enemy, { hp: 3, onDefeated });
@@ -13,7 +13,7 @@
  *
  * Tests import the generated class, as a game's `game.ts` does.
  */
-import { CollisionTracker, parseInputScript } from "@rge/player";
+import { CollisionTracker, parseInputScript } from "@tsengine/player";
 import {
   Collider,
   Controls,
@@ -29,7 +29,7 @@ import {
   setGameTree,
   getGameTree,
   type TilemapData,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 export interface RenderOptions {
   /** Tiled maps to register before the component is made, by name (what `<Tilemap map>` and `getTilemap` look up). */

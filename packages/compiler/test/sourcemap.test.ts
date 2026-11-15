@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-/** Source maps from generated code to the component source (`compile(…, { file, source })`, `rge-compile --source-maps`). */
+/** Source maps from generated code to the component source (`compile(…, { file, source })`, `tse-compile --source-maps`). */
 import { after, describe, it } from "node:test";
 
 import { cleanOutput, closeCompiler, compile, getCompiler, OUTPUT_ROOT, typeCheck, withAuthoringImports } from "./helpers.ts";
@@ -96,7 +96,7 @@ describe("source maps", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "Shelf.ts"), code);
     writeFileSync(join(dir, "Shelf.ts.map"), JSON.stringify(map));
-    const run = `import { World } from "@rge/runtime"; import { Shelf } from "./Shelf.ts";
+    const run = `import { World } from "@tsengine/runtime"; import { Shelf } from "./Shelf.ts";
 const world = new World(); world.mount(new Shelf());
 try { world.tick(1); world.tick(1); world.tick(1); } catch (e) { console.log(e.stack); }`;
     writeFileSync(join(dir, "run.ts"), run);
@@ -106,7 +106,7 @@ try { world.tick(1); world.tick(1); world.tick(1); } catch (e) { console.log(e.s
   });
 });
 
-describe("rge-compile --source-maps", () => {
+describe("tse-compile --source-maps", () => {
   it("writes a map beside each generated file, naming the source from there", () => {
     const root = join(OUTPUT_ROOT, `cli-map-${process.pid}`);
     mkdirSync(join(root, "src"), { recursive: true });

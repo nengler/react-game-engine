@@ -1,4 +1,4 @@
-import { createParticles, createSounds } from "@rge/runtime";
+import { createParticles, createSounds } from "@tsengine/runtime";
 
 /**
  * The game's one-off effects, kept like a toast library's store and called from the components' handlers (`fx.burst("die", x, y)`,

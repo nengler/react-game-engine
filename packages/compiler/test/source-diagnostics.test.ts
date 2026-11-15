@@ -30,7 +30,7 @@ function compileProject(files: Record<string, string>): { status: number | null;
 describe("diagnostics in the source", () => {
   it("reports a type error in the source once, and does not check the generated code until the source passes", () => {
     const r = compileProject({
-      "A.tsx": `import { Entity, Sprite, useMutable } from "@rge/runtime/jsx";
+      "A.tsx": `import { Entity, Sprite, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ n: 0 });
   return <Entity name="A"><Sprite image={s.n} /></Entity>;
@@ -40,19 +40,19 @@ export function A() {
     assert.equal(r.status, 1);
     const errors = r.stderr.split("\n").filter((l) => / - error /.test(l));
     assert.equal(errors.length, 1, r.stderr);
-    assert.match(errors[0]!, /src\/A\.tsx:4:\d+ - error RGE9002: TS2322: /);
+    assert.match(errors[0]!, /src\/A\.tsx:4:\d+ - error TSE9002: TS2322: /);
     assert.match(r.stderr, /skipped type-checking the generated code: fix the type errors above first/);
   });
 
   it("does not report a file that failed to compile again, as a missing module of the files that import it", () => {
     const r = compileProject({
-      "Child.tsx": `import { Entity } from "@rge/runtime/jsx";
+      "Child.tsx": `import { Entity } from "@tsengine/runtime/jsx";
 export function Child() {
   var broken = 1;
   return <Entity name="Child" />;
 }
 `,
-      "Parent.tsx": `import { Entity } from "@rge/runtime/jsx";
+      "Parent.tsx": `import { Entity } from "@tsengine/runtime/jsx";
 import { Child } from "./Child.tsx";
 export function Parent() {
   return <Entity name="Parent"><Child /></Entity>;
@@ -67,7 +67,7 @@ export function Parent() {
 
   it("leaves a diagnostic on a line written for no construct, or in another file, where it was", () => {
     const d = (fileName: string, line: number): CompilerDiagnostic => ({
-      code: "RGE9001",
+      code: "TSE9001",
       severity: "error",
       message: "TS1: x",
       span: { fileName, start: 0, end: 1, line, column: 3 },

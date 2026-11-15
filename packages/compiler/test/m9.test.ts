@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Sprite, World } from "@rge/runtime";
+import { Entity, Sprite, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -112,7 +112,7 @@ describe("M9: IR and generated code", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/M9${Math.random()}.tsx`,
-          text: `import { Entity, useMount, useUnmount } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`,
+          text: `import { Entity, useMount, useUnmount } from "@tsengine/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`,
         },
       ]);
     assert.deepEqual(check("useMount(() => {}); useUnmount(() => {});"), []);

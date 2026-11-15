@@ -5,20 +5,20 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
 
-import { CollisionTracker, createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
-import { Camera, Collider, Entity, Flex, Hud, Screen, Shape, Sprite, Text, type World } from "@rge/runtime";
+import { CollisionTracker, createPlayer, KEYS, TSE_ABI_VERSION, type PlayerConfig } from "@tsengine/player";
+import { Camera, Collider, Entity, Flex, Hud, Screen, Shape, Sprite, Text, type World } from "@tsengine/runtime";
 
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
 /**
- * These run the real `librge`, on the software renderer when it is the headless build (no window, no
- * GPU). Without a built library they are skipped, unless RGE_REQUIRE_NATIVE=1 (CI), where that is a failure.
+ * These run the real `libtse`, on the software renderer when it is the headless build (no window, no
+ * GPU). Without a built library they are skipped, unless TSE_REQUIRE_NATIVE=1 (CI), where that is a failure.
  */
 const library = findNativeLibrary("headless");
-const required = process.env["RGE_REQUIRE_NATIVE"] === "1";
-const skip = library === null && !required ? "librge is not built (npm run native:build:headless)" : false;
+const required = process.env["TSE_REQUIRE_NATIVE"] === "1";
+const skip = library === null && !required ? "libtse is not built (npm run native:build:headless)" : false;
 
-const scratch = mkdtempSync(join(tmpdir(), "rge-node-"));
+const scratch = mkdtempSync(join(tmpdir(), "tse-node-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 /** A solid-colour PNG, so sprites can be tested without binary fixtures. */
@@ -80,10 +80,10 @@ function render(root: PlayerConfig["root"], options: Partial<PlayerConfig> = {})
   }
 }
 
-describe("librge through koffi", { skip }, () => {
+describe("libtse through koffi", { skip }, () => {
   it("matches the ABI this package was written against", () => {
     const native = loadNative(library as string);
-    assert.equal(native.abiVersion(), RGE_ABI_VERSION);
+    assert.equal(native.abiVersion(), TSE_ABI_VERSION);
     assert.equal(native.keyCount(), KEYS.length);
   });
 
@@ -99,7 +99,7 @@ describe("librge through koffi", { skip }, () => {
     }
   });
 
-  it("measures text and textures through librge", () => {
+  it("measures text and textures through libtse", () => {
     const png = join(scratch, "measured.png");
     writePng(png, 6, [255, 0, 0]);
     const backend = createNodeBackend(library);
@@ -292,7 +292,7 @@ describe("librge through koffi", { skip }, () => {
     assert.equal(pixel(frame, 10 + 4 + 8 + 6 + 1, 8 + 4 + 1), "ff0000ff", "the second child, after the gap");
   });
 
-  it("lays out around text measured by librge, so a label's box fits its real width", () => {
+  it("lays out around text measured by libtse, so a label's box fits its real width", () => {
     const backend = createNodeBackend(library);
     const warnings: string[] = [];
     const label = new Text({ text: "Score: 100", size: 20, color: "white" });
@@ -449,14 +449,14 @@ describe("librge through koffi", { skip }, () => {
   it("refuses to open a second window while one is open, and can open again after close", () => {
     const first = new NodeBackend(loadNative(library as string));
     first.open({ width: 16, height: 16, title: "a", hidden: true });
-    assert.throws(() => first.open({ width: 16, height: 16, title: "b", hidden: true }), /librge error/);
+    assert.throws(() => first.open({ width: 16, height: 16, title: "b", hidden: true }), /libtse error/);
     first.close();
     first.open({ width: 16, height: 16, title: "c", hidden: true });
     first.close();
   });
 });
 
-describe("librge's broad phase through koffi", { skip }, () => {
+describe("libtse's broad phase through koffi", { skip }, () => {
   const random = (seed: number): (() => number) => {
     let state = seed * 7919;
     return () => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -609,30 +609,30 @@ describe("loading the library", () => {
     assert.throws(() => createNodeBackend(null), /npm run native:build/);
   });
 
-  it("finds the library named by RGE_NATIVE_LIB, or none when that file is missing", () => {
-    assert.equal(findNativeLibrary("desktop", { RGE_NATIVE_LIB: join(scratch, "missing.so") }), null);
+  it("finds the library named by TSE_NATIVE_LIB, or none when that file is missing", () => {
+    assert.equal(findNativeLibrary("desktop", { TSE_NATIVE_LIB: join(scratch, "missing.so") }), null);
     writeFileSync(join(scratch, "fake.so"), "");
-    assert.equal(findNativeLibrary("desktop", { RGE_NATIVE_LIB: join(scratch, "fake.so") }), join(scratch, "fake.so"));
+    assert.equal(findNativeLibrary("desktop", { TSE_NATIVE_LIB: join(scratch, "fake.so") }), join(scratch, "fake.so"));
   });
 
   it("rejects a library whose ABI version or key count differs, naming both", () => {
     assert.throws(
-      () => checkAbi({ abiVersion: () => RGE_ABI_VERSION + 1, keyCount: () => KEYS.length }),
-      new RegExp(`version ${RGE_ABI_VERSION + 1}.*expects ${RGE_ABI_VERSION}`)
+      () => checkAbi({ abiVersion: () => TSE_ABI_VERSION + 1, keyCount: () => KEYS.length }),
+      new RegExp(`version ${TSE_ABI_VERSION + 1}.*expects ${TSE_ABI_VERSION}`)
     );
     assert.throws(
-      () => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length - 1 }),
+      () => checkAbi({ abiVersion: () => TSE_ABI_VERSION, keyCount: () => KEYS.length - 1 }),
       new RegExp(`has ${KEYS.length - 1} keys.*expects ${KEYS.length}`)
     );
-    assert.doesNotThrow(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length }));
+    assert.doesNotThrow(() => checkAbi({ abiVersion: () => TSE_ABI_VERSION, keyCount: () => KEYS.length }));
   });
 });
 
 describe("saved data (ABI v7)", { skip }, () => {
-  it("writes, reads, overwrites and removes text entries in RGE_DATA_DIR, and refuses names that could be paths", () => {
+  it("writes, reads, overwrites and removes text entries in TSE_DATA_DIR, and refuses names that could be paths", () => {
     const folder = join(scratch, "saves", "nested");
-    const before = process.env["RGE_DATA_DIR"];
-    process.env["RGE_DATA_DIR"] = folder;
+    const before = process.env["TSE_DATA_DIR"];
+    process.env["TSE_DATA_DIR"] = folder;
     try {
       const backend = createNodeBackend(library);
       const storage = backend.storage;
@@ -653,23 +653,23 @@ describe("saved data (ABI v7)", { skip }, () => {
       storage.remove("save");
       assert.equal(storage.open("../escape"), false, "a game id cannot be a path either");
     } finally {
-      if (before === undefined) delete process.env["RGE_DATA_DIR"];
-      else process.env["RGE_DATA_DIR"] = before;
+      if (before === undefined) delete process.env["TSE_DATA_DIR"];
+      else process.env["TSE_DATA_DIR"] = before;
     }
   });
 
   it("is not UTF-8 text: read says null rather than throwing", () => {
     const folder = join(scratch, "bytes");
-    const before = process.env["RGE_DATA_DIR"];
-    process.env["RGE_DATA_DIR"] = folder;
+    const before = process.env["TSE_DATA_DIR"];
+    process.env["TSE_DATA_DIR"] = folder;
     try {
       const native = loadNative(library as string);
       assert.equal(native.storageOpen("game"), 0);
       assert.equal(native.storageWrite("raw", new Uint8Array([0xff, 0xfe, 0x00])), 0);
       assert.equal(new NodeBackend(native).storage.read("raw"), null);
     } finally {
-      if (before === undefined) delete process.env["RGE_DATA_DIR"];
-      else process.env["RGE_DATA_DIR"] = before;
+      if (before === undefined) delete process.env["TSE_DATA_DIR"];
+      else process.env["TSE_DATA_DIR"] = before;
     }
   });
 });

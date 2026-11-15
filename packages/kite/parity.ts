@@ -1,11 +1,11 @@
 /**
  * Plays the first rooms of the level from their replays against a recording backend and prints everything the player
  * did as one line of JSON (numbers rounded to 1e-9). It runs unchanged under Node and, bundled, under the Rust host
- * (QuickJS-ng): the two outputs must be identical, which `rge check` and `test/parity.test.ts` check.
+ * (QuickJS-ng): the two outputs must be identical, which `tse check` and `test/parity.test.ts` check.
  *
  *   node packages/kite/parity.ts
  */
-import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 
 import { bindings, gameConfig } from "./game.ts";
 import { REPLAYS } from "./test/replays.ts";
