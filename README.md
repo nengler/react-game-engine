@@ -125,6 +125,18 @@ npm run package         # packages/demo/dist/demo/: the game on Node's V8 as one
 npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host (needs cargo), game.js and assets/; a few MB, no JIT
 ```
 
+### Releases
+
+Pushing a tag `vX.Y.Z` runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as
+`npm run dist`, stamped with that version) and attaches them to a GitHub release. A game outside this repository can depend
+on them by URL instead of building the engine itself (Linux x64 only, as the native binaries are built there):
+
+```json
+"@rge/runtime": "https://github.com/nengler/react-game-engine/releases/download/v0.1.0/rge-runtime-0.1.0.tgz"
+```
+
+List every `@rge/*` package the game uses at the same release; each pack depends on the others at its own version.
+
 Programmatic use:
 
 ```ts

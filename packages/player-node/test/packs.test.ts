@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { packAll, rewriteSpecifiers, setupNotes } from "../../../tools/pack.ts";
+import { packAll, rewriteSpecifiers, setupNotes, stampVersion } from "../../../tools/pack.ts";
 import { findNativeLibrary } from "../src/index.ts";
 
 test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages alone", () => {
@@ -28,6 +28,17 @@ test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages 
       `import x from "@rge/runtime/jsx";`,
     ].join("\n")
   );
+});
+
+test("stampVersion sets a release's version and pins the other @rge packages to it", () => {
+  const pkg = { name: "@rge/player", version: "0.0.0", dependencies: { "@rge/runtime": "0.0.0", koffi: "^2.9.0" } };
+  assert.deepEqual(stampVersion(pkg, "0.1.0"), {
+    name: "@rge/player",
+    version: "0.1.0",
+    dependencies: { "@rge/runtime": "0.1.0", koffi: "^2.9.0" },
+  });
+  assert.deepEqual(stampVersion({ name: "@rge/runtime", version: "0.0.0" }, "0.1.0"), { name: "@rge/runtime", version: "0.1.0" });
+  assert.equal(stampVersion(pkg, undefined), pkg);
 });
 
 test("the packs install into an empty project and every entry point imports under Node", { timeout: 300_000 }, () => {

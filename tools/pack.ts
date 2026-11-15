@@ -6,10 +6,12 @@
 // import.meta.url stay as they are), .d.ts from tsc, and a package.json whose exports name the built files. The workspace
 // keeps exporting source; nothing here changes how Kite, Hearth or the tests run.
 //
-//   node tools/pack.ts [--out <dir>] [--build [--strict]] [package ...]     (default: dist/packs, every package below)
+//   node tools/pack.ts [--out <dir>] [--build [--strict]] [--version <x.y.z>] [package ...]     (default: dist/packs, every package below)
 //   --build builds librge and rge-host first (headless always, desktop if it can); without it, @rge/native ships what is built.
 //     It builds what this machine can: without cmake there is no librge, without cargo no rge-host, and a build that fails is a
 //     warning. It ends by saying what the packs let you do and what to install for the rest. --strict makes any failure an error.
+//   --version stamps the packs with a release's version: each package's own, and its dependencies on the other @rge packages,
+//     so a game that installs one release's tarballs gets that release throughout (.github/workflows/release.yml uses it).
 //   npm run dist is `--build`: from a fresh checkout, `npm install && npm run dist` is all a game outside the repository needs.
 import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -202,9 +204,25 @@ function mapExports(exports: unknown): unknown {
   return exports;
 }
 
-export function stagePackage(name: string, staging: string): string {
+/**
+ * A package.json with `version` set, and its dependencies on other `@rge/*` packages pinned to the same version. Without a
+ * version it is returned as it is (every workspace package is 0.0.0).
+ */
+export function stampVersion(pkg: Json, version: string | undefined): Json {
+  if (version === undefined) return pkg;
+  const deps = pkg.dependencies as Record<string, string> | undefined;
+  return {
+    ...pkg,
+    version,
+    ...(deps && {
+      dependencies: Object.fromEntries(Object.entries(deps).map(([dep, range]) => [dep, dep.startsWith("@rge/") ? version : range])),
+    }),
+  };
+}
+
+export function stagePackage(name: string, staging: string, version?: string): string {
   const source = join(ROOT, "packages", name);
-  const pkg = readJson(join(source, "package.json"));
+  const pkg = stampVersion(readJson(join(source, "package.json")), version);
   const stage = join(staging, name);
   const src = join(source, "src");
   mkdirSync(join(stage, "dist"), { recursive: true });
@@ -289,13 +307,13 @@ function emitDeclarations(name: string, stage: string): void {
   }
 }
 
-export function packAll(outDir: string, names: readonly string[] = PACKABLE): string[] {
+export function packAll(outDir: string, names: readonly string[] = PACKABLE, version?: string): string[] {
   const staging = mkdtempSync(join(tmpdir(), "rge-pack-"));
   mkdirSync(outDir, { recursive: true });
   const tarballs: string[] = [];
   try {
     for (const name of names) {
-      const stage = stagePackage(name, staging);
+      const stage = stagePackage(name, staging, version);
       if (name === "native") {
         const shipped = addBinaries(stage);
         if (!shipped.some((file) => file.startsWith("lib/") && file.includes("/headless/"))) {
@@ -322,12 +340,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const names: string[] = [];
   let build = false;
   let strict = false;
+  let version: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "--out") out = resolve(args[++i] ?? "");
     else if (arg === "--build") build = true;
     else if (arg === "--strict") strict = true;
+    else if (arg === "--version") version = args[++i] ?? "";
     else names.push(arg);
+  }
+  if (version !== undefined && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) {
+    console.error(`pack: --version wants a version like 0.1.0, not "${version}"`);
+    process.exit(2);
   }
   const chosen = names.length > 0 ? names : [...PACKABLE];
   for (const name of chosen) {
@@ -359,7 +383,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.warn("pack: the desktop build failed (it needs the platform's window libraries); packing the headless one only");
     }
   }
-  const tarballs = packAll(out, chosen);
+  const tarballs = packAll(out, chosen, version);
   for (const tarball of tarballs) console.log(relative(ROOT, tarball));
   if (build) {
     console.log("");
