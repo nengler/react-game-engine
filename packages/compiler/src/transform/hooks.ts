@@ -406,11 +406,15 @@ export class HookLowering extends ExpressionLowering {
     // which is when the initial value is taken, as in a React first render. (The scope holds only what is declared above.)
     const type = this.hookStateType(source.typeNode, initialValue, hook.call);
     if (!type) return null;
+    // Made by a function: a per-instance object, which a handler may call methods of (`st.tally.add(1)`). A runtime factory's
+    // (`createBody()`) is only called; one of the game's own (`makeHero()`) may also be written through, as data is
+    // (`s.hero.hp -= 1`, a copy with the change made).
     const handle =
       type.kind === "SourceType" &&
       initialValue.kind === "Call" &&
       (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
     if (handle) this.handleStates.add(id);
+    if (handle && initialValue.callee.kind === "Function") this.runtimeHandleStates.add(id);
     state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}), mutable });
     this.stateTypes.set(id, type);
     hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
@@ -743,7 +747,11 @@ export class HookLowering extends ExpressionLowering {
         at
       );
     } else {
-      this.report(code, "Cannot infer the type; use a number/string/boolean literal or a prop, or give it: `angle: start as number`.", at);
+      this.report(
+        code,
+        "Cannot infer this value's type: a literal, a prop, an imported constant or a call of an imported function can be inferred; for anything else, write the type with `as` (`{ speed: base * 2 as number }`).",
+        at
+      );
     }
     return null;
   }
@@ -751,11 +759,19 @@ export class HookLowering extends ExpressionLowering {
   /**
    * The type TypeScript would infer for a literal of numbers, strings and booleans, objects of them and non-empty arrays of one
    * type of them (`{ x: 0, tags: ["a"] }` is `{ x: number; tags: string[] }`); null for anything else, which needs its type
-   * written.
+   * written. An imported constant has its declared type, widened as a `let` would widen it (`START_GOLD`, declared
+   * `= 100`, is `number`), and a call of an imported function has the type it returns.
    */
   protected literalType(e: ExprIR): string | null {
     const primitive = this.inferType(e);
     if (primitive !== null) return primitive;
+    if (e.kind === "PlainRef" && this.plainImports.has(e.name)) {
+      const t = `typeof ${e.name}`;
+      return `(${t} extends number ? number : ${t} extends string ? string : ${t} extends boolean ? boolean : ${t})`;
+    }
+    if (e.kind === "Call" && (e.callee.kind === "Function" || e.callee.kind === "Plain") && !e.callee.name.startsWith("Math.")) {
+      return `ReturnType<typeof ${e.callee.name}>`;
+    }
     if (e.kind === "ObjectLiteral") {
       const fields: string[] = [];
       for (const p of e.properties) {

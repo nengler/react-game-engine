@@ -164,3 +164,42 @@ export function Mover() {
     assert.match(out, /K\.twice\(this\.\$s_x\)/);
   });
 });
+
+describe("a useMutable field set from an imported constant or function", () => {
+  it("takes the constant's type, widened as a `let` would, and lets a handler write through what the function made", () => {
+    const repo = resolve(import.meta.dirname, "../../..");
+    mkdirSync(join(repo, ".test-output"), { recursive: true });
+    const dir = mkdtempSync(join(repo, ".test-output", "imp-"));
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "src/constants.ts"),
+      `export const START_GOLD = 100;\nexport function makeHero() {\n  return { hp: 3, name: "Ash" };\n}\n`
+    );
+    writeFileSync(
+      join(dir, "src/Shop.tsx"),
+      `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+import { START_GOLD, makeHero } from "./constants.ts";
+export function Shop() {
+  const s = useMutable({ gold: START_GOLD, hero: makeHero(), bought: 0 });
+  useInput((input) => {
+    if (input.pressed("confirm")) {
+      s.gold -= 10;
+      s.bought++;
+      s.hero.hp -= 1;
+    }
+  });
+  return <Text>{\`\${s.gold} \${s.bought} \${s.hero.name} \${s.hero.hp}\`}</Text>;
+}
+`
+    );
+    const run = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], {
+      cwd: repo,
+      encoding: "utf8",
+    });
+    // The CLI type-checks the generated file, so `s.gold -= 10` on `typeof START_GOLD` (`100`) would fail here.
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    const out = readFileSync(join(dir, "out/Shop.ts"), "utf8");
+    assert.match(out, /\$s_gold: \(typeof START_GOLD extends number \? number/);
+    assert.match(out, /\$s_hero: ReturnType<typeof makeHero>/);
+  });
+});

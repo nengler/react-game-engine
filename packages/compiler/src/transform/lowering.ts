@@ -131,6 +131,8 @@ export class LoweringBase {
   protected readonly plainImports: ReadonlySet<string>;
   /** State made once per instance by a factory (`useState(() => createSquash())`), whose methods handlers may call. */
   protected readonly handleStates = new Set<string>();
+  /** The handles a runtime factory made (`createBody()`): only called, never written through. */
+  protected readonly runtimeHandleStates = new Set<string>();
   /** Every path of the game state this component reads, to the snapshot that holds it (see `storePathState`). */
   protected readonly storePaths = new Map<string, StateId>();
 
@@ -435,8 +437,9 @@ export class LoweringBase {
     return { name: decl.name, role: decl.role };
   }
 
+  /** A runtime handle (`createBody()`), whose members are called, not written. */
   isHandleState(state: StateId): boolean {
-    return this.handleStates.has(state);
+    return this.runtimeHandleStates.has(state);
   }
 
   /** Resolves `s.vx` for a `useMutable` value `s` to its state slot. Undefined if `node` is not on one, "error" after reporting. */
