@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 /** `<Layer>` (ABI v10) in a component: a container whose blend modes are checked literals, and whose props follow state. */
 import { after, describe, it } from "node:test";
 
-import { Layer, Shape, World, type Entity } from "@rge/runtime";
+import { Layer, Light, Lighting, Shape, World, type Entity } from "@rge/runtime";
 
 import { checkAssets } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -52,5 +52,39 @@ describe("<Layer>", () => {
     assert.match(found[0]!.message, /cave\.glsl/);
     const fine = compile(`function Night() { return <Layer shader="cave.glsl"><Entity /></Layer>; }`);
     assert.deepEqual(checkAssets([fine.ir], { folder: "assets", exists: (name) => name === "cave.glsl", list: () => ["cave.glsl"] }), []);
+  });
+
+  it("compiles <Lighting> and <Light>, their props following state", async () => {
+    const compiled = compile(`export function Cave() {
+  const s = useMutable({ x: 10, glow: 0.5 });
+  useUpdate(() => { s.x += 5; s.glow = 1; });
+  return (
+    <Lighting ambient="#16162c">
+      <Light radius={48} color="#ffe2b0" x={s.x} y={20} intensity={s.glow} />
+    </Lighting>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Cave } = await load<{ Cave: new () => Entity }>(compiled);
+    const world = new World();
+    const cave = new Cave();
+    world.mount(cave);
+    world.flush();
+    assert.ok(cave instanceof Lighting);
+    assert.equal((cave as unknown as Lighting).ambient, "#16162c");
+    const light = cave.children[0] as Light;
+    assert.ok(light instanceof Light);
+    assert.deepEqual([light.radius, light.intensity, light.transform.x], [48, 0.5, 10]);
+    world.tick(1 / 60);
+    world.flush();
+    assert.deepEqual([light.intensity, light.transform.x], [1, 15]);
+  });
+
+  it("requires a light's radius: the type-check says it is missing", () => {
+    const source = `import { Light, Lighting } from "@rge/runtime/jsx";\nexport function Bad() { return <Lighting><Light /></Lighting>; }`;
+    const errors = getCompiler().typeCheckSources([
+      { fileName: `${process.cwd()}/.test-output/LightRadius${process.pid}.tsx`, text: source },
+    ]);
+    assert.match(errors.map((e) => e.message).join("\n"), /radius/);
   });
 });

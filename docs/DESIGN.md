@@ -2032,6 +2032,10 @@ is a `multiply` layer cleared to the darkness, with the lights in it drawn with 
   asset like an image, one GLSL function `vec4 effect(vec2 uv)` that the engine wraps for its platform, so a game's shaders are not
   tied to desktop GLSL. Not a shader on each sprite: a layer is already the off-screen picture a post-process needs, and a sprite with
   an effect is a layer with one child. The software renderer runs none and says so (NATIVE_PLAN.md, "ABI v11").
+- **Lights** (2026-11-15, ABI v12): `<Lighting ambient>` is a `Layer` subclass fixed to `multiply` over the world and `add` among its
+  children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`RGE_OP_LIGHT`), so a
+  light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
+  glow over what is under it, with normal blending (black at its edge, so it is meant for a lighting layer).
 
 ## Custom hooks (priority 7)
 

@@ -23,6 +23,8 @@ import {
   RGE_OP_LAYER_BEGIN_LEN,
   RGE_OP_LAYER_END,
   RGE_OP_LAYER_END_LEN,
+  RGE_OP_LIGHT,
+  RGE_OP_LIGHT_LEN,
   RGE_LAYER_MAX,
   RGE_BLEND_ADD,
   RGE_BLEND_MULTIPLY,
@@ -76,6 +78,17 @@ export type DecodedRecord =
     }
   | { readonly op: "scissor"; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
   | { readonly op: "scissorEnd" }
+  /** A light (ABI v12): `color` at the middle (its alpha the strength) falling off to black at `radius`. */
+  | {
+      readonly op: "light";
+      readonly x: number;
+      readonly y: number;
+      readonly rotation: number;
+      readonly scaleX: number;
+      readonly scaleY: number;
+      readonly radius: number;
+      readonly color: string;
+    }
   /** A layer opens (ABI v10): what follows is drawn into it, cleared to `clear`, each drawable blended with `childBlend`. */
   | { readonly op: "layerBegin"; readonly clear: string; readonly childBlend: BlendName }
   /**
@@ -405,6 +418,11 @@ export class RecordingBackend implements Backend {
           need(RGE_OP_SCISSOR_END_LEN);
           out?.push({ op: "scissorEnd" });
           at += RGE_OP_SCISSOR_END_LEN;
+          break;
+        case RGE_OP_LIGHT:
+          need(RGE_OP_LIGHT_LEN);
+          out?.push({ op: "light", ...placed(), radius: records[at + 6]!, color: colorToHex(records[at + 7]!) });
+          at += RGE_OP_LIGHT_LEN;
           break;
         case RGE_OP_LAYER_BEGIN:
           need(RGE_OP_LAYER_BEGIN_LEN);

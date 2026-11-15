@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 11
+#define RGE_ABI_VERSION 12
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -46,6 +46,12 @@
  *                                                into an off-screen width x height texture (point filtered, cleared to
  *                                                the frame's clear colour); the window is cleared to borderColor and
  *                                                the texture is copied into the dest rectangle, right way up.
+ *   RGE_OP_LIGHT    op, x, y, rot, sx, sy, radius, color
+ *                                                A light: a disc of `radius` at the local origin, `color` (its alpha the
+ *                                                strength) at the middle, falling off smoothly to black at the edge
+ *                                                ((1 - d)^2 of the way out). Its colours are premultiplied by the
+ *                                                strength and its alpha is opaque, so it is meant for a layer whose
+ *                                                childBlend is RGE_BLEND_ADD (a light map): there, black adds nothing.
  *   RGE_OP_LAYER_BEGIN  op, clearColor, childBlend
  *                                                Draw what follows into an off-screen layer the size of the current
  *                                                target (the canvas, the window, or the layer it is in), cleared to
@@ -75,6 +81,7 @@
 #define RGE_OP_BOX          10
 #define RGE_OP_LAYER_BEGIN  11
 #define RGE_OP_LAYER_END    12
+#define RGE_OP_LIGHT        13
 
 /* Record lengths in doubles, op included. */
 #define RGE_OP_VIEW_LEN    7
@@ -89,6 +96,7 @@
 #define RGE_OP_BOX_LEN     12
 #define RGE_OP_LAYER_BEGIN_LEN 3
 #define RGE_OP_LAYER_END_LEN   13
+#define RGE_OP_LIGHT_LEN       8
 
 /* Blend modes of RGE_OP_LAYER_BEGIN and RGE_OP_LAYER_END, as the source s (what is drawn, alpha a) meets the destination d:
  *   NORMAL    s * a + d * (1 - a)       painting over

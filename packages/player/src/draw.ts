@@ -21,6 +21,7 @@ import {
   Particles,
   Fade,
   Layer,
+  Light,
   type BlendMode,
   Route,
   Router,
@@ -52,6 +53,8 @@ import {
   RGE_OP_LAYER_BEGIN_LEN,
   RGE_OP_LAYER_END,
   RGE_OP_LAYER_END_LEN,
+  RGE_OP_LIGHT,
+  RGE_OP_LIGHT_LEN,
   RGE_OP_BOX,
   RGE_OP_BOX_LEN,
   RGE_OP_ELLIPSE,
@@ -197,6 +200,8 @@ function recordLength(op: number): number {
       return RGE_OP_LAYER_BEGIN_LEN;
     case RGE_OP_LAYER_END:
       return RGE_OP_LAYER_END_LEN;
+    case RGE_OP_LIGHT:
+      return RGE_OP_LIGHT_LEN;
     default:
       throw new Error(`Unknown draw op ${op}.`);
   }
@@ -702,6 +707,14 @@ export class DrawList {
     this.records[at + 2] = color;
   }
 
+  /** A light (`RGE_OP_LIGHT`): `color` (its alpha the strength) at `world`, falling off to black at `radius`. */
+  light(world: WorldTransform, radius: number, color: PackedColor): void {
+    if (this.alpha === 0) return;
+    const at = this.#header(RGE_OP_LIGHT, RGE_OP_LIGHT_LEN, world);
+    this.records[at] = radius;
+    this.records[at + 1] = this.alpha === 1 ? color : fadeColor(color, this.alpha);
+  }
+
   /**
    * Draw what is written from now on into a layer, until the matching `layerEnd`: cleared to `clear`, each drawable blended with
    * `childBlend` (an `RGE_BLEND_*`). What is inside is drawn at full opacity; the opacity it is at goes on the layer as a whole.
@@ -911,15 +924,19 @@ const KIND_ROUTE = 13;
 const KIND_ROUTER = 14;
 /** A `<Layer>`: its children go between a layer-begin and a layer-end record. */
 const KIND_LAYER = 15;
+/** A `<Light>`: one light record. */
+const KIND_LIGHT = 16;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
  */
 const KINDS = new Map<Function, number>();
 /** The draw records of a subtree with this object in it are never reused: it is found by the walk each frame (it feeds a list besides the draw records, or is not drawn where it is). */
-const FLAG_VOLATILE = 16;
+const FLAG_VOLATILE = 32;
 /** Nothing below this object is reused either: what it does to its children is not reported (layout), or it may change itself at any time (a hook of a hand-written class). */
-const FLAG_OPAQUE = 32;
+const FLAG_OPAQUE = 64;
+/** The bits of a kind code that say what kind of object it is (`KIND_*`); the flags are above them. */
+const KIND_MASK = 31;
 
 function kindCode(object: GameObject): number {
   let code = object.drawKind;
@@ -962,7 +979,9 @@ function classCode(object: GameObject): number {
                                   ? KIND_ROUTER
                                   : object instanceof Layer
                                     ? KIND_LAYER
-                                    : KIND_NONE;
+                                    : object instanceof Light
+                                      ? KIND_LIGHT
+                                      : KIND_NONE;
     code = kind;
     // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
     if (
@@ -1027,7 +1046,7 @@ const WALK_VOLATILE = 1;
 const WALK_OPAQUE = 2;
 
 function kindOf(object: GameObject): number {
-  return kindCode(object) & 15;
+  return kindCode(object) & KIND_MASK;
 }
 
 /**
@@ -1423,7 +1442,7 @@ export class FrameBuilder {
               ? placement.z + transform.z
               : parentZ + placement.z + transform.z;
       const code = node.drawKind >= 0 ? node.drawKind : kindCode(node);
-      const kind = code & 15;
+      const kind = code & KIND_MASK;
       const children = node.children;
       const count = children.length;
       // `transform={{ opacity }}`: this object and all under it are drawn at it, pushed here and popped where the walk leaves it.
@@ -1464,6 +1483,10 @@ export class FrameBuilder {
         case KIND_PARTICLES:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#particles(node as Particles, at);
+          break;
+        case KIND_LIGHT:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#light(node as Light, at);
           break;
         case KIND_ROUTE:
           // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
@@ -1884,6 +1907,10 @@ export class FrameBuilder {
                 case KIND_PARTICLES:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#particles(object as Particles, world);
+                  break;
+                case KIND_LIGHT:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#light(object as Light, world);
                   break;
                 case KIND_FADE:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -2772,6 +2799,13 @@ export class FrameBuilder {
   }
 
   /** The texture handle for an image name, loading it the first time (-1, warned about once, if it cannot be loaded). */
+  /** A `<Light>`: its colour at its intensity (0 to 1) as the record's alpha. Nothing for no radius or no intensity. */
+  #light(node: Light, at: WorldTransform): void {
+    const intensity = node.intensity >= 1 ? 1 : node.intensity > 0 ? node.intensity : 0;
+    if (!(node.radius > 0) || intensity === 0) return;
+    this.#list.light(at, node.radius, fadeColor(this.#color(node.color), intensity));
+  }
+
   /** The handle of a layer's shader, loaded the first time it is named: -1 for none (or one that failed), with a warning once. */
   #shader(name: string): number {
     if (name === "") return -1;
