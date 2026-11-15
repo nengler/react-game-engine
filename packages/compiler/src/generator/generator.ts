@@ -1,7 +1,7 @@
 import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type StateIR, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
-import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
+import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access, mutableObject } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
 import { RenderGuard } from "./expressions.ts";
 
@@ -357,13 +357,29 @@ class ComponentGenerator extends ElementEmitter {
         if (s.mutable === undefined) continue;
         mutables.set(s.mutable.view, [...(mutables.get(s.mutable.view) ?? []), s]);
       }
+      const mutableObjectLines = new Map<string, string[]>();
       for (const [view, fields] of mutables) {
-        const type = `{ ${fields.map((f) => `${f.mutable!.field}: ${typeText(f.type)}`).join("; ")} }`;
+        const type = `{ ${fields.map((f) => `${propertyKey(f.mutable!.field)}: ${typeText(f.type)}`).join("; ")} }`;
         const cache = `#${view}View`;
-        const members = fields.map((f) => `get ${f.mutable!.field}() { return self.${f.name}; }, set ${f.mutable!.field}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
+        const members = fields.map((f) => `get ${propertyKey(f.mutable!.field)}() { return self.${f.name}; }, set ${propertyKey(f.mutable!.field)}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
         w.line(`${cache}: ${type} | undefined;`);
         w.line(`get ${view}(): ${type} { const self = this; return (this.${cache} ??= { ${members.join(", ")} }); }`);
+        // The object a handler hands over when it passes the `useMutable` whole (`takeHit(s)`), written once the class body is (only a
+        // `useMutable` some handler passes whole gets one): one per component, made the first time it is passed. Its fields are the
+        // component's as a handler sees them: a read is the value as it is now, a write goes through the field's setter (so it renders,
+        // as `s.hp -= 1` would). Once the component has been unmounted a write does nothing (`$mayWrite`).
+        const live = fields.map((f) => {
+          const key = propertyKey(f.mutable!.field);
+          const path = `${f.mutable!.name}.${f.mutable!.field}`;
+          return `get ${key}() { return self.${pending(f)}; }, set ${key}(value: ${typeText(f.type)}) { if (self.$mayWrite(${JSON.stringify(path)})) self.${this.setter(f.id)}(value); }`;
+        });
+        const objectCache = `${mutableObject(view)}Cache`;
+        mutableObjectLines.set(view, [
+          `${objectCache}: ${type} | undefined;`,
+          `get ${mutableObject(view)}(): ${type} { const self = this; return (this.${objectCache} ??= { ${live.join(", ")} }); }`,
+        ]);
       }
+      const mutableObjectsAt = w.mark();
       // Its value props as a handler reads them (`this.$live.hp`): what its parent has now (see `GameObject.liveProp`). A property, not a
       // call, so TypeScript narrows it (`tower !== null && …`) as it does `this.props.tower`.
       const valueProps = c.props.filter((p) => p.role === "value");
@@ -550,6 +566,9 @@ class ComponentGenerator extends ElementEmitter {
         // What each input was at the last render; a fresh object at first, which no input can be.
         if (inputs.length > 0) w.insert(fields, [`readonly $in: unknown[] = new Array(${inputs.length}).fill({});`, ""]);
       }
+      // Last, once every handler has been written: an object only for a `useMutable` one of them passes whole. Inserted above
+      // everything after `mutableObjectsAt`, so the marks written later were already used.
+      w.insert(mutableObjectsAt, [...mutableObjectLines].filter(([view]) => this.mutableObjects.has(view)).flatMap(([, lines]) => lines));
     });
   }
 }

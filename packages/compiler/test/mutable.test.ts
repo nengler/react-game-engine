@@ -4,7 +4,7 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Text, World } from "@rge/runtime";
+import { Entity, setDevelopmentWarnings, Text, World } from "@rge/runtime";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -200,22 +200,105 @@ describe("useMutable: what a handler reads", () => {
 });
 
 describe("useMutable: read whole, and handed back by a hook", () => {
-  it("reads whole as a copy of its fields: live in a handler, and changing the copy leaves the fields alone", async () => {
-    const hero = await run(
+  it("reads whole in a handler as the component's own object: a helper that writes its fields changes the component", async () => {
+    const compiled = compile(
       `function total(p: { a: number; b: number }) { return p.a + p.b; }
+       function takeHit(p: { hp: number; hits: number }, damage: number) { p.hp -= damage; p.hits++; }
        export function Hero() {
-         const s = useMutable({ a: 1, b: 2, sum: 0 });
+         const s = useMutable({ a: 1, b: 2, sum: 0, hp: 10, hits: 0, after: 0 });
          useUpdate(() => {
            s.a = 10;
            s.sum = total(s);
-           const copy = s;
-           copy.b = 99;
+           const same = s;
+           same.b = 99;
+           takeHit(s, 3);
+           s.after = s.hp;
          });
          return <Entity />;
        }`,
-      "Hero",
     );
-    assert.deepEqual(hero.s, { a: 10, b: 2, sum: 12 });
+    assert.deepEqual(typeCheck(compiled), []);
+    // One object per useMutable, made with the component: a handler hands it over rather than a copy.
+    assert.match(compiled.code, /get #sObject\(\): \{[^}]*\} \{ const self = this; return \(this\.#sObjectCache \?\?= \{ get a\(\) \{ return self\.#\$s_aNext; \}/);
+    assert.match(compiled.code, /total\(this\.#sObject\)/);
+    const module = await load<Record<string, new () => Entity & { s: Record<string, unknown> }>>(compiled);
+    const world = new World();
+    const hero = new module.Hero!();
+    world.mount(hero);
+    world.flush();
+    world.tick(1 / 60);
+    assert.deepEqual(hero.s, { a: 10, b: 99, sum: 12, hp: 7, hits: 1, after: 7 }, "the helper's writes are the component's, and the handler reads them back at once");
+    world.tick(1 / 60);
+    world.flush();
+    assert.deepEqual([hero.s.hp, hero.s.hits, hero.s.after], [4, 2, 4]);
+  });
+
+  it("reads whole in render as a copy of the committed fields, typed Readonly", async () => {
+    const compiled = compile(
+      `function label(p: { hp: number }) { return \`hp \${p.hp}\`; }
+       export function Hero() {
+         const s = useMutable({ hp: 3 });
+         useUpdate(() => { s.hp -= 1; });
+         return <Entity><Text>{label(s)}</Text></Entity>;
+       }`,
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /\(\{ hp: this\.\$s_hp \} as Readonly<\{ hp: number \}>\)/);
+    assert.doesNotMatch(compiled.code, /label\(this\.#sObject\)/, "render never hands over the live object");
+    const hero = await run(
+      `function label(p: { hp: number }) { return \`hp \${p.hp}\`; }
+       export function Hero() {
+         const s = useMutable({ hp: 3 });
+         useUpdate(() => { s.hp -= 1; });
+         return <Entity><Text>{label(s)}</Text></Entity>;
+       }`,
+      "Hero",
+      2,
+    );
+    assert.equal((hero.children[0] as Text).text, "hp 1");
+  });
+
+  it("ignores a write through its object after the component is unmounted, and warns once in development", async () => {
+    const compiled = compile(
+      `interface HeroProps { onReady?: (s: { hp: number }) => void }
+       export function Hero({ onReady }: HeroProps) {
+         const s = useMutable({ hp: 10 });
+         useMount(() => { onReady?.(s); });
+         return <Entity />;
+       }`,
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    const module = await load<Record<string, new (props: { onReady?: (s: { hp: number }) => void }) => Entity & { s: { hp: number } }>>(compiled);
+    let kept: { hp: number } | null = null;
+    const hero = new module.Hero!({ onReady: (s) => { kept = s; } });
+    const world = new World();
+    world.mount(hero);
+    world.flush();
+    assert.ok(kept !== null, "useMount handed the object over");
+    const object = kept as { hp: number };
+    object.hp -= 4;
+    assert.equal(object.hp, 6, "a read through it is the value as it is now");
+    world.flush();
+    assert.equal(hero.s.hp, 6, "a write through it renders, as a handler's would");
+
+    const warnings: string[] = [];
+    setDevelopmentWarnings((message) => warnings.push(message));
+    try {
+      world.root.removeChild(hero);
+      object.hp = 1;
+      object.hp = 0;
+      assert.equal(object.hp, 6, "the writes did nothing");
+      assert.equal(hero.isDirty, false);
+      assert.equal(warnings.length, 1, "warned once, not once per write");
+      assert.match(warnings[0]!, /Hero's 's\.hp' after it was unmounted was ignored/);
+      // Mounted again, it is the component's again.
+      world.mount(hero);
+      object.hp = 2;
+      world.flush();
+      assert.equal(hero.s.hp, 2);
+    } finally {
+      setDevelopmentWarnings((message) => console.warn(message));
+    }
   });
 
   it("is handed back by a custom hook's `return s`, and the caller reads and writes its fields under its own name", async () => {

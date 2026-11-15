@@ -288,7 +288,10 @@ Settled:
   TypeScript narrows what the callback reads.
 - **A hook hands its state back as the object** (`return s`): `const counter = useCounter(2)` makes `counter` the hook's fields, and
   the shipped hooks do this (`squash.x = 0.6`; a shake is `strength`, `duration` and `elapsed`). `const t = s` is another name for
-  the same fields; `s` read whole anywhere else (`total(s)`, `<Camera shake={shake}>`) is a copy of its fields.
+  the same fields. `s` passed whole in a handler (`takeHit(s)`) is the component's own object for it, made the first time a handler passes it and kept for the component's life, whose
+  getters read the fields as the handler sees them and whose setters write through the fields' setters, so a helper's write renders;
+  after the component is unmounted a write through it does nothing and warns in development. In render (`total(s)`,
+  `<Camera shake={shake}>`) it is a copy of the committed fields, typed `Readonly<…>`.
 - **From outside**, a compiled component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the
   setter, so tests and tools write state the way handlers do. `@rge/testing`'s `state()` shows a mutable as `{ s: { vx } }`.
 
