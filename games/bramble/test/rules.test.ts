@@ -320,3 +320,23 @@ test("the inventory is eight slots, in a fixed order, with the empty ones last",
     ["", 0],
   ]);
 });
+
+test("what glows in the dark: the items still lying on the map, warm, and each wisp there, cold; a taken item no longer glows", async () => {
+  const { glowsOf } = await import("../src/rules/view.ts");
+  const { newRun } = await import("../src/rules/run.ts");
+  const cave = { ...newRun(), map: "cave" as const };
+  const glows = glowsOf(cave);
+  assert.deepEqual(
+    glows
+      .filter((g) => g.id.startsWith("pickup:"))
+      .map((g) => g.id)
+      .sort(),
+    ["pickup:bell-cave", "pickup:key"]
+  );
+  assert.ok(
+    glows.some((g) => g.id.startsWith("wisp:") && g.color === "#8fb8ff"),
+    "the cave's wisp carries a cold light"
+  );
+  const taken = glowsOf({ ...cave, taken: ["key"] });
+  assert.ok(!taken.some((g) => g.id === "pickup:key"));
+});

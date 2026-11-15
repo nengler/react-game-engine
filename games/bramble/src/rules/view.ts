@@ -106,6 +106,38 @@ export function spotsOf(run: Run): Spot[] {
   ];
 }
 
+/** A light in the dark: its middle in map pixels, how far it reaches, its colour and strength (for `<Light>`). */
+export interface Glow {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly color: string;
+  readonly intensity: number;
+}
+
+/**
+ * What glows on the map besides the lantern: an item still lying there (warm, faint, so a dark cave shows where to look), and each
+ * wisp (cold, as it drifts). Numbers *(guess)*: not played yet.
+ */
+export function glowsOf(run: Run): Glow[] {
+  const def = MAPS[run.map];
+  const items = def.pickups
+    .filter((p) => !run.taken.includes(p.id))
+    .map((p) => ({
+      id: `pickup:${p.id}`,
+      x: p.col * TILE + TILE / 2,
+      y: p.row * TILE + TILE / 2,
+      radius: 20,
+      color: "#ffd890",
+      intensity: 0.5,
+    }));
+  const wisps = run.enemies
+    .filter((e) => e.map === run.map && e.kind === "wisp")
+    .map((e) => ({ id: `wisp:${e.id}`, x: e.x + BODY / 2, y: e.y + BODY / 2, radius: 28, color: "#8fb8ff", intensity: 0.6 }));
+  return [...items, ...wisps];
+}
+
 const NO_DIALOGUE: DialogueView = { name: "", page: "", shown: 0, more: "" };
 
 /** The conversation on screen, if any. */
