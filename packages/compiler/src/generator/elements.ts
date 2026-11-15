@@ -509,7 +509,13 @@ export class ElementEmitter extends HandlerEmitter {
     const element = (el: Pick<ElementIR, "props" | "transform" | "children">): void => {
       for (const p of el.props) if (p.kind === "DynamicProp" || p.kind === "SpreadProp") visit(p.value);
       for (const p of el.transform) if (p.kind === "DynamicProp") visit(p.value);
-      for (const child of el.children) if (child.kind === "StaticChild") element(child.element);
+      for (const child of el.children) {
+        if (child.kind === "StaticChild") element(child.element);
+        // A condition is tested and a list's source read on every render, though what they show is not: `{boss && <Text>{boss.hp}</Text>}`
+        // then reads one `const` in the test and the branch, which TypeScript narrows as it does the source.
+        else if (child.kind === "ConditionalChild") visit(child.condition);
+        else if (child.kind === "KeyedListChild") visit(child.source);
+      }
     };
     element(this.c.root);
     return found;

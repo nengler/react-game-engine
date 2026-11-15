@@ -823,7 +823,7 @@ list, `{children}`, a `<Route>`, and children on an item that switches between t
 from the second Bramble review). `VALUE_METHODS` lists the string and number methods that change nothing (`padStart`, `startsWith`,
 `toUpperCase`, `toFixed`, …), called as written (`CalleeIR` `ValueMethod`); `String`, `Number` and `Boolean` are allowed as
 functions; `flatMap`, `join`, `at`, `lastIndexOf` and `flat` joined the array methods, and, once the type-check target moved to ES2023
-(QuickJS-ng and Node 22 implement them), the copying forms `toSorted`, `toReversed`, `toSpliced`, `with`, `findLast` and `findLastIndex`. A derived `const` may destructure (`const { x, y: top } = heroOf(run)`, `const [a, , c] = trio`): each
+(QuickJS-ng and Node 22 implement them), the copying forms `toSorted`, `toReversed`, `toSpliced`, `with`, `findLast` and `findLastIndex`. *Since 2026-11-15:* `reduce` and `reduceRight`, and `sort` or `reverse` on an array the expression made itself (`[...alive].sort(byX)`), lowered to `toSorted` / `toReversed`. A derived `const` may destructure (`const { x, y: top } = heroOf(run)`, `const [a, , c] = trio`): each
 name is a member or index read of the one value. A derived value that calls a function or a method is an `ExprIR` `Memo`: the
 generated code is `this.$memo(key, [deps], () => value)` (`GameObject.$memo`), the deps being the state and props it reads, so it
 is worked out once per change of them wherever it is used (render, handlers, field initialisers), as React's `useMemo`; in `super(…)`'s

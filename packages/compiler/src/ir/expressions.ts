@@ -260,6 +260,8 @@ export const ARRAY_METHODS = {
   with: { args: [2, 2], callback: false },
   findLast: { args: [1, 1], callback: true },
   findLastIndex: { args: [1, 1], callback: true },
+  reduce: { args: [1, 2], callback: true },
+  reduceRight: { args: [1, 2], callback: true },
   // Iterators for a handler's `for (const [i, item] of items.entries())`.
   entries: { args: [0, 0], callback: false },
   keys: { args: [0, 0], callback: false },

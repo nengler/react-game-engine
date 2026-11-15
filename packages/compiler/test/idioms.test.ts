@@ -238,3 +238,51 @@ export function Shop() {
     assert.deepEqual(texts(shop), ["axe"]);
   });
 });
+
+describe("a list worked out in the body: reduce, a sorted copy, and an item found and shown", () => {
+  const SOURCE = `import { Flex, Text, useInput, useMutable } from "@rge/runtime/jsx";
+interface Foe { id: number; hp: number; x: number; boss: boolean }
+export function Wave() {
+  const s = useMutable({ foes: [{ id: 1, hp: 2, x: 30, boss: false }, { id: 2, hp: 0, x: 10, boss: false }, { id: 3, hp: 5, x: 20, boss: true }] as Foe[] });
+  const alive = s.foes.filter((f) => f.hp > 0);
+  const total = alive.reduce((sum, f) => sum + f.hp, 0);
+  const byX = [...alive].sort((a, b) => a.x - b.x);
+  const boss = alive.find((f) => f.boss);
+  useInput((input) => {
+    if (input.pressed("confirm")) s.foes = s.foes.map((f) => (f.boss ? { ...f, hp: 0 } : f));
+  });
+  return (
+    <Flex>
+      <Text>{\`total \${total}\`}</Text>
+      {boss && <Text>{\`boss \${boss.hp}\`}</Text>}
+      {byX.map((f) => <Text key={f.id}>{\`at \${f.x}\`}</Text>)}
+    </Flex>
+  );
+}`;
+
+  it("compiles as React would take it, type-checks, and shows what the list holds", async () => {
+    assert.deepEqual(sourceErrors(SOURCE), [], "the source as written");
+    const compiled = compile(SOURCE);
+    assert.match(compiled.code, /\.toSorted\(/, "sorting a copy made right there is the copying form");
+    assert.deepEqual(typeCheck(compiled), [], "`boss.hp` is read from the one `const` the condition tested");
+    const { Wave } = await load<{ Wave: new () => Entity }>(compiled);
+    const world = new World();
+    const wave = new Wave();
+    world.mount(wave);
+    world.flush();
+    assert.deepEqual(texts(wave), ["total 7", "boss 5", "at 20", "at 30"]);
+    world.tick(1 / 60, { pressed: (k: string) => k === "confirm", down: () => false, released: () => false } as never);
+    world.flush();
+    assert.deepEqual(texts(wave), ["total 2", "at 30"]);
+  });
+
+  it("still refuses sorting state's own list in place", () => {
+    const errors = compileErrors(`import { Text, useMutable } from "@rge/runtime/jsx";
+export function A() {
+  const s = useMutable({ xs: [3, 1] });
+  const sorted = s.xs.sort();
+  return <Text>{sorted.join(",")}</Text>;
+}`);
+    assert.match(errors[0]!.message, /changes `s\.xs` in place/);
+  });
+});
