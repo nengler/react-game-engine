@@ -11,5 +11,5 @@ source material from anywhere else, except `font.png`, which is Kite's font copi
 | `shots.png` | 32 × 8, four 8 × 8 frames: bolt, shell, muzzle flash, spark |
 | `icons.png` | 60 × 10, six 10 × 10 icons: bolt, mortar, frost, gold, lives, wave |
 | `hearth.png` `cursor.png` | the hearth (two flicker frames, 20 × 20) and the cursor's corner brackets (14 × 14) |
-| `font.png` | 80 × 48, the 5 × 7 pixel font (upper case only) |
+| `font.png` | 80 × 48, the 5 × 7 pixel font (lower case is drawn as upper case) |
 | `*.wav` | fifteen synthesised effects (22.05 kHz, mono) and `theme.wav`, a looping tune (16 kHz, mono) |

@@ -56,8 +56,11 @@ the room's start 0.45 s later. Leaving a room by its exit moves to the next, wit
 | 7 | Gem ledge | a spiked pit with a pillar; the **optional gem** is up and to the right | everything |
 | 8 | Summit | stepping stones, a dash across, up the wall, the exit | everything |
 
-A solver finding a route is not the same as a person finding one (room 6 was the second time: after the switch to the Celeste body its only route was the solver's, a dash past the spike tips; it was re-made with overlapping safe stretches, a ledge to rest on and a lip at the top, and a test now plays a person's route from a range of heights): room 4 was first built with a ledge whose only route was a contrived one, and was effectively impossible to play. `test/rooms.test.ts` now also checks that the two dash moves (rooms 3 and 4) work over a window of dash timings, not a single frame (three tests: floor to the first ledge, first to second, and the exit; each checks a window of at least a tenth of a second). Rooms 1 and 2 are solved by the search with no dash; 4 and 6 cannot be solved without one. Room 3 can be crossed by wall jumping
-out of the pit (a finding: one wall is a ladder).
+**A solver finding a route is not the same as a person finding one.** Room 4 was first built with a ledge whose only route was a
+contrived one, and room 6, after the switch to the Celeste body, had only the solver's route (a dash past the spike tips); both were
+remade. So `test/rooms.test.ts` also checks that the dash moves of rooms 3 and 4 work over a window of at least a tenth of a second of
+dash timings, not a single frame, and plays a person's route through room 6 from a range of heights. Rooms 1 and 2 are solved with no
+dash; 4 and 6 cannot be solved without one. Room 3 can also be crossed by wall jumping out of the pit (one wall is a ladder).
 
 ## What "finished" means for the level
 
@@ -67,7 +70,7 @@ out of the pit (a finding: one wall is a ladder).
 2. Title → eight rooms → end works from a button press to the end screen, headlessly, under Node and the Rust host (the parity
    run plays two rooms under both).
 3. `npm run check:kite` passes: compile (maps, assets), type-check, tests, parity.
-4. A person has played it and tuned the numbers (priority 6): **not done**.
+4. A person has played it and tuned the numbers: **not done**.
 
 ## The movement constants (`src/rules/constants.ts`)
 
@@ -88,12 +91,15 @@ yet** in this engine.
 The geometry the rooms need from them: a four-tile gap has a margin of at least 40 % of a running jump; an eight-tile gap
 (room 3) is more than a jump (64 px) and less than a jump plus a dash; a ledge six tiles up needs the dash. With Celeste's
 moves the rooms are easier than they were designed to be: a super jump crosses room 3's gap, grabbing climbs walls, and the
-solver (which never grabs) finds every room in seconds where room 6 used to need millions of states. The rooms were made for
-the simpler body and have not been redesigned for this one. If any constant changes, `npm run kite:solve` and the tests say
+solver (which never grabs) finds every room in seconds. The rooms were made for a simpler body and have not been redesigned for
+this one. If any constant changes, `npm run kite:solve` and the tests say
 which room it breaks.
 
 ## Known limits
 
 Hazard and exit shapes are tiles (spikes are half a tile deep), not arbitrary rectangles. The room seam is not continuous (the
 character reappears standing on the next room's floor a little inside it, under the slide). One gem, no save, no settings, no
-rebinding, no dialogue (see the plan). Art and sound are placeholders made by `tools/make-assets.ts`.
+rebinding, no dialogue: those were left to Bramble. Art and sound are placeholders made by `tools/make-assets.ts`.
+
+`src/Runner.tsx` is not part of the game: it is the normal state's ground moves written as a component with `useBody` and
+`useMutable`, kept beside the rules so `test/runner.test.ts` can play both on the same input and show they agree.
