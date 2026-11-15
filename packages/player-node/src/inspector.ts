@@ -224,6 +224,8 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
             for (const res of clients) res.end();
             clients.clear();
             server.close(() => closed());
+            // Without this, close waits for idle keep-alive connections (a page's fetches, or a test's) to time out: about four seconds.
+            server.closeAllConnections();
           }),
       });
     });
