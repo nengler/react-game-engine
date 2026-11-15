@@ -37,7 +37,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | `useMutable` (2026-11-14, #121; it replaces `useState`, whose React snapshot semantics were decided 2026-11-08): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. "Every handler in a frame sees the same state" becomes "every handler sees the latest writes, in the order handlers run; render sees the frame's committed state". See [MUTABLE_STATE.md](MUTABLE_STATE.md) |
-| Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
+| Global state | **Since 2026-11-15:** `createGameState(data, actions)`: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). The form below still works while the games move (see "Global state"). Before: one nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
 | Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`RGE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
@@ -1530,6 +1530,18 @@ now"); with game code moving into components (section A), a parent sharing its s
 - Objects are never re-parented, so a reader keeps its provider; a provider that goes takes its subtree with it.
 
 ## Global state (`createGameState`)
+
+**`createGameState(data, actions)`, since 2026-11-15** (MUTABLE_STATE.md, "The game state: actions write, readers read"). The data is
+a plain object; the actions are an object of functions, each taking the state as its first argument (`collect(s, n: number) { s.coins += n; }`)
+and bound when a component takes it (`const { collect } = useGame.actions(); collect(2)`). `GameStore.fromActions` builds the store:
+an action runs on a draft (`structuredClone` of the values), may change it in place, and when the outermost action returns the draft is
+compared with the state, objects whose values did not change keep their identity (`shareUnchanged`), and `setState` tells the readers of
+each changed path, as before. An action called from another shares its draft and the commit happens once, under the outer action's
+name in the inspector's history; an action that throws commits nothing. The compiler reads the form in `gamestate/schema.ts`: the data's
+tree as before (a function in it is `RGE1109`), and each action's name. What is not done yet: a handler still reads the store as its
+component's last render saw it (rule 2's live read), and Kite, Hearth and Bramble still use the creator form below, which stays until
+they move.
+
 
 `useState` is one component's own state. The **game state** belongs to the game: a score, hit points, a mute switch,
 shared by every component. It is one nested object, shaped like a **Zustand store**: you read it with a selector that
