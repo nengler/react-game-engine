@@ -124,7 +124,7 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 </style>
 </head>
 <body>
-<div class="topbar"><a href="index.html">Overview</a><a href="start.html"><strong>Getting started</strong></a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
+<div class="topbar"><a href="index.html">Overview</a><a href="start.html"><strong>Getting started</strong></a><a href="recipes.html">Recipes</a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
 <main class="start">
 <h1>Getting started</h1>
 <p>From an empty folder to a packaged game, in eight steps. Every command below was run, in this order, in a folder outside the engine's repository. Nothing is published to a registry yet, so the engine is installed from tarballs made by the repository.</p>
@@ -145,6 +145,7 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <pre class="code" data-lang="sh"><code>cd /path/to/engine &amp;&amp; node packages/cli/src/cli.ts create ~/my-game --packs dist/packs
 cd ~/my-game &amp;&amp; npm install
 npm run check</code></pre>
+<p>To start from more than a moving square, add <code>--template menu</code> (a title, settings and a pause menu, built on <code>&lt;Menu&gt;</code> and <code>&lt;Button&gt;</code>) or <code>--template platformer</code> (running and jumping on solid blocks, with <code>useBody</code>). Each passes <code>npm run check</code> as it is.</p>
 <p><code>rge create</code> copies the template. <code>rge check</code> compiles, type-checks, runs the tests, and plays a short scripted run under Node and under the Rust host, which must print the same. The template passes it before you change anything.</p>
 <p>What is in the folder: <code>package.json</code> (its <code>"rge"</code> field names the entry and folders), <code>main.ts</code> (starts the player), <code>game.ts</code> (the root and the names a script may use), <code>src/Main.tsx</code> (the root), <code>src/Hero.tsx</code> (a component that keeps its own position and moves itself), <code>src/GameState.ts</code> (what the whole game shares), <code>test/</code>, <code>assets/</code>, <code>parity.ts</code>.</p>
 
@@ -216,7 +217,7 @@ npx rge package --headless         # the software renderer, no window: for CI</c
 <p>The folder holds the executable, <code>lib/</code> (librge) and <code>assets/</code>; copy it anywhere and run it. Saves and settings (<code>&lt;Game id="..."&gt;</code>, <a href="effects.html#saved">Saved data</a>) go to the user's data folder.</p>
 
 <h2>Where next</h2>
-<ul><li><a href="language.html">The language</a>: what a component may contain, and what the compiler says when it may not.</li><li><a href="systems.html">Systems</a>: tilemaps, collisions, layout, the camera.</li><li><a href="reference.html">Reference</a>: every built-in, hook and error code.</li><li><code>games/bramble</code> in the repository is a whole small game made this way, with its <code>DESIGN.md</code> of what writing it found.</li></ul>
+<ul><li><a href="recipes.html">Recipes</a>: a menu, a settings screen, a health bar, things that come and go, a panel that takes children, pickups, a cooldown.</li><li><a href="language.html">The language</a>: what a component may contain, and what the compiler says when it may not.</li><li><a href="systems.html">Systems</a>: tilemaps, collisions, layout, the camera.</li><li><a href="reference.html">Reference</a>: every built-in, hook and error code.</li><li><code>games/bramble</code> in the repository is a whole small game made this way, with its <code>DESIGN.md</code> of what writing it found.</li></ul>
 </main>
 </body>
 </html>

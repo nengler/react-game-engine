@@ -30,7 +30,7 @@ const USAGE = `usage: rge <command> [folder] [options]
   package      a folder to hand to someone                [--engine node|quickjs] [--headless] [--entry file] [--name name]
   screenshot   PNGs of a scripted run                     rge screenshot <folder> --script "right*30" --at 0,29
   preview      one component at a time, from its stories  [--story HealthBar] [--screenshot | --compare]
-  create       a new game from the template               rge create <folder> [--name name] [--packs dir]
+  create       a new game from a template                 rge create <folder> [--name name] [--template blank|menu|platformer] [--packs dir]
   lsp          the language server for an editor, on stdin and stdout (RGE diagnostics and quick fixes as you type)`;
 
 export async function main(argv: readonly string[]): Promise<number> {
