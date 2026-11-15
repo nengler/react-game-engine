@@ -105,14 +105,14 @@ export interface HandleTypeManifest {
 /** What a `<Flex>` has as fields (its methods are listed after them), which `Slider` and `Toggle` have too. */
 const FLEX_FIELDS = [
       "direction", "alignItems", "justifyContent", "gap", "wrap", "rowGap", "columnGap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "opacity", "drawnAlpha", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "overflow", "scrollX", "scrollY", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "onAdjust", "box", "widget",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "opacity", "drawnAlpha", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "overflow", "scrollX", "scrollY", "scrollbar", "scrollbarColor", "scrollbarWidth", "scrollFocus", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "onAdjust", "box", "widget",
 ] as const;
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Slider", "Toggle", "Button", "Menu", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route", "Provider"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Slider", "Toggle", "Button", "Menu", "Tooltip", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route", "Provider"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Button", "Menu", "Router", "Route", "Provider"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Button", "Menu", "Tooltip", "Router", "Route", "Provider"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -143,6 +143,7 @@ export const runtimeManifest: RuntimeManifest = {
     Toggle: [...FLEX_FIELDS, "checked", "onChange", "onColor", "offColor", "thumbColor", "flip"],
     Button: [...FLEX_FIELDS],
     Menu: [...FLEX_FIELDS, "loop", "onBack"],
+    Tooltip: [...FLEX_FIELDS, "show", "shown"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -161,6 +162,7 @@ export const runtimeManifest: RuntimeManifest = {
     Toggle: [],
     Button: [],
     Menu: [],
+    Tooltip: [],
     Tilemap: ["map"],
     Particles: [],
     ParticleLayer: ["particles"],
@@ -190,8 +192,9 @@ export const runtimeManifest: RuntimeManifest = {
     Toggle: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
     Button: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
     Menu: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
+    Tooltip: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
   },
-  intrinsicSizing: { Flex: ["width", "height"], Slider: ["width", "height"], Toggle: ["width", "height"], Button: ["width", "height"], Menu: ["width", "height"] },
+  intrinsicSizing: { Flex: ["width", "height"], Slider: ["width", "height"], Toggle: ["width", "height"], Button: ["width", "height"], Menu: ["width", "height"], Tooltip: ["width", "height"] },
   intrinsicCallbacks: {
     Collider: {
       onCollisionEnter: [{ name: "other", type: "Contact" }],
@@ -201,6 +204,7 @@ export const runtimeManifest: RuntimeManifest = {
     Flex: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onAdjust: [{ name: "direction", type: "number" }] },
     Button: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onAdjust: [{ name: "direction", type: "number" }] },
     Menu: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onAdjust: [{ name: "direction", type: "number" }], onBack: [] },
+    Tooltip: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onAdjust: [{ name: "direction", type: "number" }] },
     Slider: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onAdjust: [{ name: "direction", type: "number" }], onChange: [{ name: "value", type: "number" }] },
     Toggle: { onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onAdjust: [{ name: "direction", type: "number" }], onChange: [{ name: "checked", type: "boolean" }] },
   },
@@ -217,7 +221,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Slider", "Toggle", "Button", "Menu", "Tilemap", "Particles", "ParticleLayer"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Slider", "Toggle", "Button", "Menu", "Tooltip", "Tilemap", "Particles", "ParticleLayer"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1, lastPressed: 0 },

@@ -379,6 +379,8 @@ A floating `Flex` is laid out like any other (it fits its children, it can grow 
 - [x] A floating box takes no space and is placed at its anchor (tests for all nine points), including under a `<Hud>`, where its parent's box is the HUD's
 - [x] A floating box's pointers are pressed before what it covers, through `z`
 
+`<Tooltip>` (2026-11-15) is a floating `Flex` with a look of its own, attached above its parent, at z 100, that the walk skips (with its subtree) unless its parent is hovered or focused, or `show` says otherwise. A box with a tooltip among its children takes the mouse, as one with a `hover*` prop does.
+
 ## Decisions
 
 Decided on 2026-11-09:
@@ -455,7 +457,8 @@ Also decided on 2026-11-09, each as recommended:
 - **A clip is a property of a draw record, like its z.** The walk tags each record with the innermost clipping box (`DrawList.pushClip` / `popClip`, which keep the box's world transform and size). After the z sort, `sortByZ` takes each box's corners through the layer's final view (the camera's, the HUD's, the screen's placement, whichever the layer's view record carries) to a rectangle of pixels, cuts it down to the box it is inside, and writes a `SCISSOR` record wherever the records' boxes change, and a `SCISSOR_END` where they stop and at the end of the layer. A child's own z cannot lift it out of its clip, and a clip never runs on into the next layer. A box that is turned is clipped to the rectangle around it, and a box with a border (in any state: its room is kept) clips to the inside of the border, as CSS clips to the padding box.
 - **Layout:** a scroll box's children do not shrink along the main axis, and it asks its parent for no more than its edges, so it can be squeezed. `#position` records where the children end (`box.contentEnd`, floating children out of the flow not counted), and so how far the box can scroll (`box.scrollMax`), clamps `scrollX` / `scrollY` to it and moves the children by it.
 - **The mouse:** a press or hover on something inside a clipping box must also be inside every box that clips it (checked up the parents only when something clips). The wheel goes to the topmost scroll box under the mouse that can still move that way, up and down first, then left and right; a box at its end passes it to the one around it. A notch is 32 pixels.
-- **Not here:** scroll bars, dragging to scroll, the wheel with Shift for the other axis, and keeping the focused child in view.
+- **Scroll bars and the focus** (2026-11-15): a scroll box draws a thin `box` record along each axis it overflows, after its children and outside its own clip (but inside any around it), as long as the box is to its content and placed by the offset (`scrollbar`, `scrollbarColor`, `scrollbarWidth`). When the focus changes to something inside a scroll box, layout scrolls just enough to show it, inside the padding, once per change, so the wheel can still move away from it.
+- **Not here:** dragging a bar or the content to scroll, and the wheel with Shift for the other axis.
 
 ## Not in this plan, and what would pull it in
 

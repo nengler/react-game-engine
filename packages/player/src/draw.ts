@@ -7,6 +7,7 @@ import {
   offsetTransform,
   Pointer,
   Flex,
+  Tooltip,
   Game,
   GameObject,
   Hud,
@@ -101,6 +102,9 @@ export function walkTree(
   walk(root, visit, parentSpace, parentZ, intoHuds, leave);
 }
 
+/** What a `walkTree` visit returns for an object that is not drawn at all (a hidden `<Tooltip>`): its subtree is not walked, and it is not left. */
+export const SKIP_SUBTREE: WorldTransform = Object.freeze({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 }) as WorldTransform;
+
 /**
  * `walkTree` without default parameters, which QuickJS pays for on every call of a recursion that runs once per object.
  * `visit` is also told the object's kind (`KIND_*`), found here once, so it does not look it up again.
@@ -133,6 +137,7 @@ function walk(
   const kind = kindOf(root);
   // A visit may return the world to use for the children instead: a floating layout root is placed by the layout it has just run.
   const replaced = visit(root, world, z, kind);
+  if (replaced === SKIP_SUBTREE) return; // not entered, and not left
   if (replaced !== undefined) world = replaced;
   if (!intoHuds && kind === KIND_HUD) return;
   const isCamera = kind === KIND_CAMERA;
@@ -635,7 +640,19 @@ export class DrawList {
 
 /** A `<Flex>` takes the mouse when it has a press or a hover callback, or a prop that is drawn while the mouse is over it. */
 function hoverable(flex: Flex): boolean {
-  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.hoverBackgroundImage !== undefined || flex.widget !== WIDGET_NONE;
+  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.hoverBackgroundImage !== undefined || flex.widget !== WIDGET_NONE || hasTooltip(flex);
+}
+
+/** Whether a box holds a `<Tooltip>`, which shows while the mouse is over the box: so the box takes the mouse. */
+function hasTooltip(flex: Flex): boolean {
+  const children = flex.children;
+  for (let i = 0; i < children.length; i++) if (children[i] instanceof Tooltip) return true;
+  return false;
+}
+
+/** Whether a scroll box draws bars: `scrollbar`, and content that overflows it. */
+function hasScrollbars(flex: Flex): boolean {
+  return flex.scrollbar && ((flex.box.scrollMax[0] as number) > 0 || (flex.box.scrollMax[1] as number) > 0);
 }
 
 /** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one in a state. */
@@ -941,6 +958,8 @@ export class FrameBuilder {
   #time: number | undefined = undefined;
   /** Scratch for the colours a transitioning `<Flex>` shows, so drawing allocates nothing. */
   readonly #fadeColors: ShownColors = { fill: 0, edge: 0, alpha: 1 };
+  /** The scroll boxes inside a `<Hud>` with bars to draw: where each was drawn and at what z, for when the walk leaves it. */
+  readonly #scrollbarAt = new Map<Flex, { world: WorldTransform; z: number }>();
   /** Scratch for where a part of a widget is (see `#partAt`). */
   readonly #part = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   /** The colour a text's shadow or outline copy is drawn in, while one is; undefined for the text itself. */
@@ -1080,6 +1099,7 @@ export class FrameBuilder {
     let pointers: Pressable[] = [];
     const pointerZs: number[] = [];
     const scrollers: Flex[] = [];
+    this.#scrollbarAt.clear();
     let anyClips = false;
     const colliders: ColliderEntry[] = [];
     const huds: { readonly world: WorldTransform; readonly object: GameObject }[] = [];
@@ -1241,6 +1261,11 @@ export class FrameBuilder {
           if (faded) list.popAlpha();
           return WALK_VOLATILE; // drawn in a layer of its own, and not entered here
         case KIND_FLEX: {
+          // A tooltip whose box has neither the mouse nor the focus is not drawn or pressed: its children are not walked at all.
+          if (node instanceof Tooltip && !node.shown()) {
+            if (faded) list.popAlpha();
+            return WALK_VOLATILE;
+          }
           if (drawZ !== listZ && paints(node as Flex)) list.setZ((listZ = drawZ));
           const placed = this.#flex(node as Flex, at, gameWidth, gameHeight);
           if (hoverable(node as Flex)) {
@@ -1355,6 +1380,11 @@ export class FrameBuilder {
       flatWalk = flat && !faded;
       if (kind === KIND_FLEX) {
         if ((node as Flex).overflow !== "visible") list.popClip();
+        // The scroll bars go over the content, outside the box's own clip (but inside any around it), at the box's opacity.
+        if ((node as Flex).overflow === "scroll" && hasScrollbars(node as Flex)) {
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#scrollbars(node as Flex, at);
+        }
         if ((node as Flex).drawnAlpha !== 1) list.popAlpha();
       }
       if (faded) {
@@ -1516,6 +1546,7 @@ export class FrameBuilder {
           walkTree(
             child,
             (object, world, objectZ, kind) => {
+              if (kind === KIND_FLEX && object instanceof Tooltip && !object.shown()) return SKIP_SUBTREE;
               let z = objectZ;
               if (z !== 0) {
                 if (z !== z) z = 0;
@@ -1558,7 +1589,10 @@ export class FrameBuilder {
                   }
                   if (this.inspecting) this.inspected.push({ flex: object as Flex, world: { ...(placed ?? world) }, hud: true });
                   if ((object as Flex).overflow !== "visible") {
-                    if ((object as Flex).overflow === "scroll") scrollers.push(object as Flex);
+                    if ((object as Flex).overflow === "scroll") {
+                      scrollers.push(object as Flex);
+                      if (hasScrollbars(object as Flex)) this.#scrollbarAt.set(object as Flex, { world: { ...(placed ?? world) }, z });
+                    }
                     // Every box pushed here is popped by `leave` below, which runs for a leaf too.
                     list.pushClip(placed ?? world, (object as Flex).box.size[0] as number, (object as Flex).box.size[1] as number, borderRoom(object as Flex));
                     anyClips = true;
@@ -1580,6 +1614,11 @@ export class FrameBuilder {
             (object, kind) => {
               if (kind === KIND_FLEX) {
                 if ((object as Flex).overflow !== "visible") list.popClip();
+                const bars = (object as Flex).overflow === "scroll" ? this.#scrollbarAt.get(object as Flex) : undefined;
+                if (bars !== undefined) {
+                  if (bars.z !== listZ) list.setZ((listZ = bars.z));
+                  this.#scrollbars(object as Flex, bars.world);
+                }
                 if ((object as Flex).drawnAlpha !== 1) list.popAlpha();
               }
               if (object.transform.opacity !== 1) list.popAlpha();
@@ -1799,6 +1838,35 @@ export class FrameBuilder {
     part.scaleX = world.scaleX;
     part.scaleY = world.scaleY;
     return part;
+  }
+
+  /**
+   * A scroll box's bars, one along each axis its content overflows (`scrollMax`): a `box` record inside the border, at the right (a
+   * vertical bar) or the bottom, as long as the box is to its content as the bar is to the box (and never shorter than twice its
+   * thickness), where the scroll offset puts it.
+   */
+  #scrollbars(flex: Flex, world: WorldTransform): void {
+    const edge = borderRoom(flex);
+    const width = (flex.box.size[0] as number) - 2 * edge;
+    const height = (flex.box.size[1] as number) - 2 * edge;
+    const thick = flex.scrollbarWidth;
+    if (!(width > 0 && height > 0 && thick > 0)) return;
+    const color = this.#color(flex.scrollbarColor);
+    const maxX = flex.box.scrollMax[0] as number;
+    const maxY = flex.box.scrollMax[1] as number;
+    // With both bars, each stops short of the corner the other runs into.
+    const longY = maxX > 0 ? height - thick : height;
+    const longX = maxY > 0 ? width - thick : width;
+    if (maxY > 0 && longY > 0) {
+      const length = Math.min(Math.max((longY * longY) / (longY + maxY), 2 * thick), longY);
+      const y = edge + (flex.scrollY / maxY) * (longY - length);
+      this.#list.box(this.#partAt(world, edge + width - thick, y), thick, length, color, 0, 0, thick / 2);
+    }
+    if (maxX > 0 && longX > 0) {
+      const length = Math.min(Math.max((longX * longX) / (longX + maxX), 2 * thick), longX);
+      const x = edge + (flex.scrollX / maxX) * (longX - length);
+      this.#list.box(this.#partAt(world, x, edge + height - thick), length, thick, color, 0, 0, thick / 2);
+    }
   }
 
   /**

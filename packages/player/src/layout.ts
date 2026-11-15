@@ -718,9 +718,44 @@ export class Layouter {
     if (f.overflow === "scroll") this.#scroll(f);
   }
 
+  /**
+   * When the focus has just moved to something inside a scroll box (a menu's next item, below the fold), scroll the box just enough that
+   * it is in view, inside the padding. Once per change of focus: the wheel can still move away from it.
+   */
+  #reveal(f: Flex): void {
+    const focused = (f.world?.focused ?? null) as GameObject | null;
+    if (focused === f.scrollFocus) return;
+    f.scrollFocus = focused;
+    if (focused === null || focused === f) return;
+    // Where it is in the content, from the box's top-left before scrolling: each step up adds where the object sits in its parent.
+    let x = 0;
+    let y = 0;
+    let node: GameObject = focused;
+    for (;;) {
+      x += node.layoutX + node.placement.x + node.transform.x;
+      y += node.layoutY + node.placement.y + node.transform.y;
+      const parent: GameObject | null = node.parent;
+      if (parent === null) return; // not inside this box
+      if (parent === f) break;
+      node = parent;
+    }
+    const width = focused instanceof Flex ? (focused.box.size[X] as number) : ((focused as { width?: number }).width ?? 0);
+    const height = focused instanceof Flex ? (focused.box.size[Y] as number) : ((focused as { height?: number }).height ?? 0);
+    const reveal = (axis: number, at: number, size: number, scroll: number): number => {
+      const start = this.#pad(f, axis, false);
+      const view = (f.box.size[axis] as number) - start - this.#pad(f, axis, true);
+      if (at - start < scroll) return at - start;
+      if (at + size - start > scroll + view) return at + size - start - view;
+      return scroll;
+    };
+    if ((f.box.scrollMax[Y] as number) > 0) f.scrollY = reveal(Y, y, height, f.scrollY);
+    if ((f.box.scrollMax[X] as number) > 0) f.scrollX = reveal(X, x, width, f.scrollX);
+  }
+
   /** Clamp a scroll box's offset to its content and move the children by it (a floating child stays where it is attached). */
   #scroll(f: Flex): void {
     const box = f.box;
+    this.#reveal(f);
     const x = Math.round(Math.min(Math.max(Number.isFinite(f.scrollX) ? f.scrollX : 0, 0), box.scrollMax[X] as number));
     const y = Math.round(Math.min(Math.max(Number.isFinite(f.scrollY) ? f.scrollY : 0, 0), box.scrollMax[Y] as number));
     f.scrollX = x;

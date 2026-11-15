@@ -114,6 +114,15 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   scrollX?: number;
   scrollY?: number;
   /**
+   * Whether a `"scroll"` box shows a scroll bar along each axis its content overflows: a thin bar inside the right (or bottom) edge,
+   * as long as the box is to its content as the bar is to the box, and where the bar sits shows how far it is scrolled. Default true.
+   */
+  scrollbar?: boolean;
+  /** The scroll bar's CSS colour. Default `"#ffffff80"` (half-transparent white). */
+  scrollbarColor?: string;
+  /** The scroll bar's thickness in pixels. Default 3. */
+  scrollbarWidth?: number;
+  /**
    * How opaque the box and everything in it is drawn, 0 (gone) to 1 (the default): a panel that fades in and out. It multiplies into
    * every colour under the box, so a box inside a box at 0.5 is at 0.25. Each part is drawn at that opacity on its own, so where
    * parts overlap one shows through the other a little while the box is part way (a whole-box layer would not; see `UI_PLAN.md`).
@@ -303,6 +312,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   overflow: FlexOverflow;
   scrollX: number;
   scrollY: number;
+  scrollbar: boolean;
+  scrollbarColor: string;
+  scrollbarWidth: number;
+  /** What had the focus when layout last looked (a scroll box scrolls a newly focused child into view once, so the wheel can still move away from it). */
+  scrollFocus: object | null = null;
   borderWidth: number;
   borderColor: string | undefined;
   borderRadius: number;
@@ -375,6 +389,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.overflow = hostProps.overflow ?? "visible";
     this.scrollX = hostProps.scrollX ?? 0;
     this.scrollY = hostProps.scrollY ?? 0;
+    this.scrollbar = hostProps.scrollbar ?? true;
+    this.scrollbarColor = hostProps.scrollbarColor ?? "#ffffff80";
+    this.scrollbarWidth = hostProps.scrollbarWidth ?? 3;
     this.borderWidth = hostProps.borderWidth ?? 0;
     this.borderColor = hostProps.borderColor;
     this.borderRadius = hostProps.borderRadius ?? 0;
