@@ -100,27 +100,6 @@ describe("loops in handlers", () => {
       "aboom!b",
     );
   });
-
-  it("assigns to a ref in a for head", async () => {
-    const compiled = compile(`
-export function Counter() {
-  const steps = useRef(0);
-  const s = useMutable({ out: 0 });
-  useUpdate(() => {
-    for (steps.current = 0; steps.current < 4; steps.current++) {}
-    s.out = steps.current;
-  });
-  return <Text>{s.out}</Text>;
-}`);
-    assert.deepEqual(typeCheck(compiled), []);
-    const { Counter } = await load<{ Counter: new () => Text }>(compiled);
-    const world = new World();
-    const counter = new Counter();
-    world.mount(counter);
-    world.tick(1 / 60);
-    world.flush();
-    assert.equal(counter.text, "4");
-  });
 });
 
 describe("what a loop's head may hold", () => {

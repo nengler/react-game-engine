@@ -6,7 +6,7 @@ records what that change left open and what building it turned up, and one decis
 Props read live across components, tree-order handlers and in-place list writes were built in #124 (a separate branch, still open when
 this was written). What follows assumes #124's choices; where this note first leaned another way, it says so.
 
-## Decided: remove `useRef`
+## Decided and done: remove `useRef`
 
 `useRef` holds a value that persists across frames and never renders. Before #121 that was a real difference from `useState`, a
 snapshot that renders. Now `useMutable` fields are also written directly and read at once in a handler, so a ref is a mutable field
@@ -17,21 +17,23 @@ What a ref gave that a field does not is "never renders". That is already free: 
 field (`$in` guards, REACT_FEEL_PLAN.md D5), so a field nothing in render reads costs one comparison, not a redraw. Kite's `Runner`
 holds eight fields none of which render, and that is the shape to teach.
 
-To do:
+**Done 2026-11-14.** `useRef` is `RGE1102`, whose message writes out the conversion in the author's names; `tools/codemod-mutable.ts`, the
+`Compiler.convertToMutable` and the editor's quick fix move a file's refs (`const timer = useRef(0)` becomes a field of the function's
+own `useMutable`, or of a new one, and `timer.current` becomes `s.timer`; a ref used as a value, such as returned from a hook, is left
+for a person). Kite's `DashTrail`, the example's `Enemy`, Hearth's `Play` and the compiler's tests moved. The compiler lost `RefIR`,
+`RefRead`, the `RefCurrent` assignment target, `lowerUseRef`, `RGE1304` (retired) and the runtime's `useRef`; `RGE1106` is now only
+`ref={…}` on an element.
 
-- `useRef` becomes a diagnostic, as `useState` is (`RGE1102`): the message names the replacement and writes the conversion in the
-  author's names (`const timer = useRef(0)` becomes a field of `useMutable({ timer: 0 })`, and `timer.current` becomes `s.timer`).
-  The editor's quick fix and `tools/codemod-mutable.ts` convert it, extending `convertToMutable`
-  (`packages/compiler/src/codemod/mutable.ts`).
-- Move the users: `packages/example/src/Level.tsx` (`reported`), `packages/hearth/src/Play.tsx` (`nextId`),
-  `packages/kite/src/DashTrail.tsx` (`wait`, `made`), and the compiler tests that declare a ref (`m3`, `m5`, `m6`, `m7`, `m13`,
-  `customhooks`, `cleanup-keys`, `hooks-as-functions`, `root-name`, `render-blocks`). Check the shipped hooks too, and what saves and
-  hot reload do with a ref, which a field already does.
-- Remove the compiler's ref paths (`transform/hooks.ts`, `hooks/inline.ts`, `ir/ids.ts`, `ir/statements.ts`, `ir/declarations.ts`,
-  `analyzer/*`, `RGE1106`, the `useRef` export in `runtime/src/jsx.ts`) and the docs that teach it (`DESIGN.md` "Refs",
-  `language.html` `#hook-useref`, `index.html`'s "Keep a value that must not re-render" row, which then points at `useMutable`).
-- One thing to settle first: a ref was handler-only, so it never showed in render. A field can be read in render. A field written in
-  a handler and read in render makes the part that reads it render, which is correct and what the author asked for.
+What settling it showed:
+
+- **A field written in `useUnmount` is still refused** (`RGE1402`), which a ref could do. The message no longer says "or write a ref".
+  `m9`'s badge counted mounts and unmounts in a ref; it now counts mounts only and tells its parent with `onGone`. Allowing a field
+  write there (it would render nowhere, harmlessly) is open, if a component needs to leave a note on its way out.
+- **A ref used to cost nothing when written; a field marks the component**, which re-runs `render()` (`world.tick` returns 1 where it
+  returned 0). Each part of `render()` is guarded by what it reads, so nothing drawn changes. If a hot component writes a field per
+  frame that nothing reads, it is one `render()` call a frame; measure before worrying (Kite's `Runner` is the shape).
+- **A ref could not be read in render; a field can**, and a field read in render makes that part render. That is what the author asked
+  for, and nothing needed settling.
 
 ## Settled in #124, with what it leaves: changing a list or an object in place
 

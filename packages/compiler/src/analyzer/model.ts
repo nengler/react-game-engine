@@ -143,7 +143,7 @@ export interface UseStoreCallAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStoreCallAnalysis | UseMutableCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
+export type HookCallAnalysis = UseStoreCallAnalysis | UseMutableCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
 
 /** `const theme = useContext(Theme)` or `const { accent, text: ink } = useContext(Theme)`. */
 export interface UseContextCallAnalysis {
@@ -192,16 +192,6 @@ export type RenderConstPattern =
   | { readonly kind: "object"; readonly entries: readonly { readonly name: string; readonly key: string; readonly node: Node }[] }
   | { readonly kind: "array"; readonly entries: readonly ({ readonly name: string; readonly node: Node } | null)[] };
 
-/** `const r = useRef<Sprite>()`. */
-export interface UseRefCallAnalysis {
-  readonly kind: "useRef";
-  readonly name: string;
-  readonly typeArgument: Node | null;
-  readonly arguments: readonly Expression[];
-  readonly call: CallExpression;
-  readonly declaration: VariableDeclaration;
-}
-
 /** `const playHit = useSound("hit.wav")`. */
 export interface UseSoundCallAnalysis {
   readonly kind: "useSound";
@@ -235,7 +225,7 @@ export const HOOK_NAME = /^use[A-Z0-9]/;
 
 export const HANDLER_HOOKS: ReadonlySet<string> = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 
-export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useMutable", "useRef", "useSound", "useContext", ...HANDLER_HOOKS]);
+export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useMutable", "useSound", "useContext", ...HANDLER_HOOKS]);
 
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];
@@ -254,6 +244,10 @@ export const REMOVED_HOOKS: Readonly<Record<string, string>> = {
   useState:
     "`useState` is replaced by `useMutable`, state you write directly: `const s = useMutable({ hp: 3 })`, read as `s.hp` and written as " +
     "`s.hp = v` (where `setHp(v)` was). A handler reads its own writes at once. `node tools/codemod-mutable.ts <file>` converts a file.",
+  useRef:
+    "`useRef` is replaced by `useMutable`: a value that persists and never renders is a field you do not read in the JSX " +
+    "(`const s = useMutable({ timer: 0 })`, read and written as `s.timer`, where `timer.current` was). A render only redoes what reads a changed field, " +
+    "so such a field costs a comparison, not a redraw. `node tools/codemod-mutable.ts <file>` converts a file.",
   useEffect: EFFECT_MESSAGE("useEffect"),
   useLayoutEffect: EFFECT_MESSAGE("useLayoutEffect"),
   onCollisionEnter: "'onCollisionEnter' is no longer a hook: pass it to the collider, `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`, so you know which collider was hit.",

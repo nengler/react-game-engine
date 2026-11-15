@@ -1,5 +1,5 @@
 // The IR of statements: assignments, state setters, sounds, control flow and actions.
-import { type StateId, type LocalId, type RefId, type SoundId } from "./ids.ts";
+import { type StateId, type LocalId, type SoundId } from "./ids.ts";
 import { type TypeIR } from "./values.ts";
 import { type ExprIR } from "./expressions.ts";
 
@@ -124,7 +124,7 @@ export interface PlaySoundStmtIR {
 export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | "||=" | "&&=" | "??=";
 
 /** Where an assignment writes. Not reactive: no write marks anything dirty. */
-export type AssignTargetIR = RefCurrentTargetIR | LocalTargetIR | PathTargetIR;
+export type AssignTargetIR = LocalTargetIR | PathTargetIR;
 
 /** `best.hits = 0`, `grid[y]![x] = 1`: a member or element of a value the handler made (its own local). */
 export interface PathTargetIR {
@@ -137,12 +137,6 @@ export interface LocalTargetIR {
   readonly kind: "Local";
   readonly local: LocalId;
   readonly name: string;
-}
-
-/** `r.current`, where `r` is a `useRef` value. */
-export interface RefCurrentTargetIR {
-  readonly kind: "RefCurrent";
-  readonly ref: RefId;
 }
 
 /** `target = value;` and the compound forms. */

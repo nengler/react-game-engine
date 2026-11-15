@@ -2,7 +2,7 @@
 import { NodeFlags, SyntaxKind, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
 import { isAsExpression, isTypeReferenceNode, isArrayBindingPattern, isBindingElement, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isObjectLiteralExpression, isPropertyAccessExpression, isPropertyAssignment, isTypeLiteralNode, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
+import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
 import { unwrapParens } from "./util.ts";
 
 
@@ -37,6 +37,26 @@ export function matchUseStateStatement(statement: Statement): StatementMatch | n
     `\`useState\` is replaced by \`useMutable\`, state you write directly: \`const s = useMutable({ ${value}: ${initial} })\`, read as \`s.${value}\`` +
     (setter !== null ? `, and \`${setter}(v)\` becomes \`s.${value} = v\`` : "") +
     ". A handler reads its own writes at once. `node tools/codemod-mutable.ts <file>` converts a file.";
+  return { kind: "invalid", code: DiagnosticCode.UnknownHook, message, call: init };
+}
+
+/**
+ * `const timer = useRef(0)`: `useRef` is replaced by `useMutable` (docs/MUTABLE_STATE_FOLLOWUPS.md). Reported with the conversion
+ * written out in the author's names; null if the statement is not a `useRef` call at all.
+ */
+export function matchUseRefStatement(statement: Statement): StatementMatch | null {
+  if (!isVariableStatement(statement)) return null;
+  const list = statement.declarationList;
+  if (list.declarations.length !== 1) return null;
+  const declaration = list.declarations[0]!;
+  const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useRef") return null;
+  const name = isIdentifier(declaration.name) ? declaration.name.text : "value";
+  const initial = init.arguments[0]?.getText() ?? "…";
+  const message =
+    `\`useRef\` is replaced by \`useMutable\`: a value that persists and never renders is a field the JSX does not read: \`const s = useMutable({ ${name}: ${initial} })\`, ` +
+    `read and written as \`s.${name}\` where \`${name}.current\` was. A render only redoes what reads a changed field, so such a field costs a comparison, not a redraw. ` +
+    "`node tools/codemod-mutable.ts <file>` converts a file.";
   return { kind: "invalid", code: DiagnosticCode.UnknownHook, message, call: init };
 }
 
@@ -168,7 +188,7 @@ export function matchMutableStatement(statement: Statement): StatementMatch | nu
   return { kind: "ok", hooks: [{ kind: "useMutable", name: declaration.name.text, fields, call: init, declaration }] };
 }
 
-/** Recognises `const r = useRef<T>()` and `const play = useSound("a.wav")`; null if the statement is not one. */
+/** Recognises `const play = useSound("a.wav")`; null if the statement is not one. */
 export function matchHandleStatement(statement: Statement): StatementMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
@@ -177,17 +197,15 @@ export function matchHandleStatement(statement: Statement): StatementMatch | nul
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression)) return null;
   const hook = init.expression.text;
-  if (hook !== "useRef" && hook !== "useSound") return null;
+  if (hook !== "useSound") return null;
 
-  const code = hook === "useSound" ? DiagnosticCode.InvalidUseSound : DiagnosticCode.InvalidUseRef;
+  const code = DiagnosticCode.InvalidUseSound;
   const invalid = (message: string): StatementMatch => ({ kind: "invalid", code, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) {
     return invalid(`${hook} must be bound with a plain \`const\` name: \`const handle = ${hook}(...)\`.`);
   }
   const name = declaration.name.text;
-  const analysis: UseRefCallAnalysis | UseSoundCallAnalysis = hook === "useSound"
-    ? { kind: "useSound", name, arguments: init.arguments, call: init, declaration }
-    : { kind: "useRef", name, typeArgument: init.typeArguments?.[0] ?? null, arguments: init.arguments, call: init, declaration };
+  const analysis: UseSoundCallAnalysis = { kind: "useSound", name, arguments: init.arguments, call: init, declaration };
   return { kind: "ok", hooks: [analysis] };
 }
 

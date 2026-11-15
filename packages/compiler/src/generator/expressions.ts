@@ -1,5 +1,5 @@
 // Base of the component generator: the fields, the expression and field-reference emitters. Layer 0 of ComponentGenerator (see generator.ts).
-import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type RefId, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
+import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
 import { collectDependencies, walkExpr } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
 import { param, escapeTemplate, pendingRef, propertyKey, typeText } from "./helpers.ts";
@@ -125,7 +125,6 @@ export class ExpressionEmitter {
             break;
           }
           case "ElementRead":
-          case "RefRead":
           case "PropertyRead":
             unknown = true;
             break;
@@ -199,13 +198,6 @@ export class ExpressionEmitter {
     return sound.name;
   }
 
-  /** A ref's name is its field. */
-  protected refField(id: RefId): string {
-    const ref = this.c.refs.find((r) => r.id === id);
-    if (!ref) throw new Error(`Unknown ref ${id} in component ${this.c.name}`);
-    return ref.name;
-  }
-
   protected state(id: StateId): StateIR {
     const s = this.stateById.get(id);
     if (!s) throw new Error(`Unknown state ${id} in component ${this.c.name}`);
@@ -240,7 +232,6 @@ export class ExpressionEmitter {
         const guaranteed = this.c.props.find((p) => p.name === e.name)?.defaultValue != null;
         return `${e.live ? `this.$live.${e.name}` : `this.props.${e.name}`}${guaranteed ? "!" : ""}`;
       }
-      case "RefRead": return `this.${this.refField(e.ref)}`;
       case "MemberRead": return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
       case "NonNull": return `${this.expr(e.expression)}!`;
       case "IndexRead": return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;

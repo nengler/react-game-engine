@@ -49,10 +49,9 @@ function Watch({ listen, onLog }: WatchProps) {
 
 /** The block form: a returned arrow, a local function called in it, and an early \`return;\` with no cleanup. */
 function Counted({ listen, onLog }: WatchProps) {
-  const s = useMutable({ total: 0 });
-  const skip = useRef(false);
+  const s = useMutable({ total: 0, skip: false });
   useMount(() => {
-    if (skip.current) return;
+    if (s.skip) return;
     const stop = listen((n) => {
       s.total += n;
     });
@@ -89,8 +88,8 @@ describe("useMount returning a cleanup", () => {
     assert.match(code, /this\.keepCleanup\(this\.#onMount0\(\)\);\n\s+this\.keepCleanup\(this\.#onMount1\(\)\);/, "Counted keeps both: an expression body's call is returned, as in React");
     assert.match(code, /const stop = this\.props\.listen\(/);
     assert.match(code, /return \(\) => \{\n\s+stop\(\);/);
-    const plain = compile(`function C() { const r = useRef(0); useMount(() => { r.current = 1; }); return <Entity name="C" />; }`).code;
-    assert.match(plain, /override onMount\(\): void \{\n\s+this\.r = 1;/);
+    const plain = compile(`function C() { const s = useMutable({ r: 0 }); useMount(() => { s.r = 1; }); return <Entity name="C" />; }`).code;
+    assert.match(plain, /override onMount\(\): void \{\n\s+this\.\$set_s_r\(1\);/);
     assert.doesNotMatch(plain, /keepCleanup/);
   });
 

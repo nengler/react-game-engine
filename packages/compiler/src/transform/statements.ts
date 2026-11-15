@@ -65,7 +65,7 @@ export interface LoweringContext {
   lowerExpression(node: Expression): ExprIR | null;
   /** Lowers each expression in order; null at the first that fails. */
   lowerAll(nodes: readonly Expression[]): ExprIR[] | null;
-  /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
+  /** Resolves an assignment to a `let` local or a member of a handler's own value; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
   stateType(state: StateId): TypeIR;
   /** `receiver.name(args)` for an allowlisted array method (`toSpliced`, `with`, …), the arguments lowered as a call would. */
@@ -385,7 +385,7 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
   }
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement ${ctx.inRenderBlock() ? "in the component body" : "in a handler"} (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
+    `Unsupported statement ${ctx.inRenderBlock() ? "in the component body" : "in a handler"} (${SyntaxKind[statement.kind]}). Supported: state setter calls, writes to \`useMutable\` fields and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
     statement,
   );
   return null;
@@ -712,7 +712,7 @@ function writeBlocked(ctx: LoweringContext, at: Node): boolean {
     return true;
   }
   if (!ctx.canSetState()) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`), or write a ref.", at);
+    ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`).", at);
     return true;
   }
   return false;
@@ -801,7 +801,7 @@ function lowerMutableMethod(ctx: LoweringContext, call: CallExpression): Stateme
   return next && { kind: "SetState", state: path.state, value: next };
 }
 
-/** `target = value` / `target += value` (ref properties). */
+/** `target = value` / `target += value`: a `useMutable` field, a `let` local, or a member of a handler's own value. */
 function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): StatementIR | null {
   const operator = ASSIGN_OPERATORS.get(expression.operatorToken.kind);
   if (!operator) {
@@ -821,7 +821,7 @@ function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): St
 }
 
 /**
- * `n++`, `--r.current`: as a statement, the same as `+= 1` / `-= 1` on a `let` local or a ref. (Anywhere else, `++` stays an
+ * `n++`, `--best.hits`: as a statement, the same as `+= 1` / `-= 1` on a `let` local. (Anywhere else, `++` stays an
  * error: it would change state in place.)
  */
 function lowerIncrement(ctx: LoweringContext, expression: Expression): StatementIR | null | undefined {
@@ -831,7 +831,7 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   const operand = unwrapParens(expression.operand);
   const mutable = lowerMutableWrite(ctx, operand, operator, null, expression);
   if (mutable !== undefined) return mutable;
-  // Only a local, `ref.current` or a member of a handler's own value (`best.hits++`); anything else (`count++` on state) is left to
+  // Only a local or a member of a handler's own value (`best.hits++`); anything else (`count++` on state) is left to
   // the expression's own diagnostic.
   const object = isPropertyAccessExpression(operand) ? unwrapParens(operand.expression) : null;
   const kind = isIdentifier(operand) ? ctx.scope.get(operand.text)?.kind : object && isIdentifier(object) ? ctx.scope.get(object.text)?.kind : undefined;
@@ -839,7 +839,7 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) root = unwrapParens(root.expression);
   const rootBinding = root !== operand && isIdentifier(root) ? ctx.scope.get(root.text) : undefined;
   const owned = rootBinding?.kind === "local" && rootBinding.owned === true;
-  if (!owned && kind !== (isIdentifier(operand) ? "local" : "ref")) return undefined;
+  if (!owned && !(isIdentifier(operand) && kind === "local")) return undefined;
   const target = ctx.lowerAssignTarget(operand);
   return target && { kind: "Assign", target, operator, value: { kind: "NumberLiteral", value: 1 } };
 }
@@ -883,7 +883,7 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   const lowered = ctx.lowerExpression(call);
   if (!lowered) return null;
   if (lowered.kind !== "Call") {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "Expression statements must be a state setter call, an assignment to a ref property, or an allowlisted call.", at);
+    ctx.error(DiagnosticCode.UnsupportedStatement, "Expression statements must be a state setter call, a write to a field or a `let` local, or an allowlisted call.", at);
     return null;
   }
   return { kind: "ExpressionStatement", expression: lowered };

@@ -42,13 +42,7 @@ export { readContext, type Context } from "./context.ts";
 import type { Context } from "./context.ts";
 import type { BodyHit, BodyOptions } from "./body.ts";
 
-// -- state and refs -----------------------------------------------------------
-
-/** `useRef(100)` infers `number`, not the literal `100`. Arrays and records are kept as written. */
-type Widen<T> = T extends number ? number : T extends string ? string : T extends boolean ? boolean : T;
-
-/** Primitive values, the only thing a ref holds. */
-type Primitive = number | string | boolean;
+// -- state -----------------------------------------------------------
 
 export type Setter<T> = (value: T | ((previous: T) => T)) => void;
 
@@ -205,11 +199,6 @@ export function Provider<T>(_props: { context: Context<T>; value: T; children?: 
  */
 export function useMutable<T extends Record<string, unknown>>(_initial: T): T {
   return compileTimeOnly("useMutable");
-}
-
-/** A value that persists across frames but never renders. Read and write `.current` in handlers only. */
-export function useRef<T extends Primitive>(_initial: T): { current: Widen<T> } {
-  return compileTimeOnly("useRef");
 }
 
 // -- per-frame hooks ----------------------------------------------------------

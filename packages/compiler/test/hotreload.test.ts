@@ -18,8 +18,7 @@ interface Panel extends Entity {
 }
 
 interface Counter extends Entity {
-  ticks: number;
-  s: { count: number };
+  s: { count: number; ticks: number };
 }
 
 const V1 = `
@@ -34,10 +33,9 @@ export function Panel() {
 }
 
 export function Counter() {
-  const s = useMutable({ count: 0 });
-  const ticks = useRef(0);
+  const s = useMutable({ count: 0, ticks: 0 });
   useUpdate(() => {
-    ticks.current = ticks.current + 1;
+    s.ticks = s.ticks + 1;
   });
   return <Text>{s.count}</Text>;
 }
@@ -57,10 +55,9 @@ export function Panel() {
 }
 
 export function Counter() {
-  const s = useMutable({ count: 0 });
-  const ticks = useRef(0);
+  const s = useMutable({ count: 0, ticks: 0 });
   useUpdate(() => {
-    ticks.current = ticks.current + 2;
+    s.ticks = s.ticks + 2;
   });
   return <Text>Count: {s.count}</Text>;
 }
@@ -95,7 +92,7 @@ describe("hot reload", () => {
     before.tick(1 / 60);
     before.tick(1 / 60);
     assert.equal(oldCounter.s.count, 7);
-    assert.equal(oldCounter.ticks, 2);
+    assert.equal(oldCounter.s.ticks, 2);
 
     const saved = captureHotState(old);
     const after = new World();
@@ -110,10 +107,10 @@ describe("hot reload", () => {
     assert.ok(counter, "the panel's restored state built its counter, which then took its own state");
     assert.notEqual(counter, oldCounter);
     assert.equal(counter.s.count, 7);
-    assert.equal(counter.ticks, 2);
+    assert.equal(counter.s.ticks, 2);
     // The new build's code runs on the old state.
     after.tick(1 / 60);
-    assert.equal(counter.ticks, 4);
+    assert.equal(counter.s.ticks, 4);
   });
 
   it("keeps the new initial value for state the old build did not have", async () => {

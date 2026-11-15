@@ -42,9 +42,9 @@ function Scorer() {
     total: 0,
     strongest: "",
     ticks: 0,
+    seen: [] as string[],
+    last: null as Enemy | null,
   });
-  const seen = useRef<string[]>([]);
-  const last = useRef<Enemy | null>(null);
   useUpdate((dt) => {
     let sum = 0;
     let best: Enemy | null = null;
@@ -65,8 +65,8 @@ function Scorer() {
     flag &&= s.ticks < 100;
     s.total = sum + count + (flag ? 0 : 1000) + 2 ** 3;
     s.strongest = best === null ? label : best.id;
-    seen.current = [...seen.current, best === null ? "-" : best.id];
-    last.current = best;
+    s.seen = [...s.seen, best === null ? "-" : best.id];
+    s.last = best;
     s.ticks += 1;
   });
   return <Entity name="Scorer" />;
@@ -94,7 +94,7 @@ describe("for…of, let and compound assignment in handlers", () => {
       value: { kind: "NumberLiteral", value: 1 },
     });
     const operators = body.flatMap((s) => (s.kind === "Assign" ? [s.operator] : []));
-    assert.deepEqual(operators, ["+=", "**=", "%=", "??=", "||=", "&&=", "=", "="]); // then the two ref writes
+    assert.deepEqual(operators, ["+=", "**=", "%=", "??=", "||=", "&&="]);
   });
 
   it("generate plain TypeScript loops and lets that type-check", () => {
@@ -105,13 +105,13 @@ describe("for…of, let and compound assignment in handlers", () => {
     assert.match(compiled.code, /count \+= 1;/);
     assert.match(compiled.code, /label \?\?= "none";/);
     assert.match(compiled.code, /\(2 \*\* 3\)/);
-    assert.match(compiled.code, /seen: string\[\] = \[\];/);
-    assert.match(compiled.code, /last: Enemy \| null = null;/);
+    assert.match(compiled.code, /\$s_seen: string\[\] = \[\];/);
+    assert.match(compiled.code, /\$s_last: Enemy \| null = null;/);
     assert.deepEqual(typeCheck(compiled), []);
   });
 
-  it("run: the loop skips, accumulates and stops; refs keep arrays and records", async () => {
-    type Scorer = Entity & { s: { total: number; strongest: string }; seen: string[]; last: { id: string } | null };
+  it("run: the loop skips, accumulates and stops; fields keep arrays and records", async () => {
+    type Scorer = Entity & { s: { total: number; strongest: string; seen: string[]; last: { id: string } | null } };
     const { Scorer } = await load<{ Scorer: new () => Scorer }>(compile(SCORER));
     const world = new World();
     const scorer = new Scorer();
@@ -121,8 +121,8 @@ describe("for…of, let and compound assignment in handlers", () => {
     assert.equal(scorer.s.total, 3 + 7 + 1 + 8);
     assert.equal(scorer.s.strongest, "c");
     world.tick(1);
-    assert.deepEqual(scorer.seen, ["c", "c"]);
-    assert.equal(scorer.last?.id, "c");
+    assert.deepEqual(scorer.s.seen, ["c", "c"]);
+    assert.equal(scorer.s.last?.id, "c");
   });
 
   it("writes `else if` chains flat", () => {
@@ -132,23 +132,22 @@ describe("for…of, let and compound assignment in handlers", () => {
     assert.deepEqual(typeCheck(compiled), []);
   });
 
-  it("allow `++` and `--` as statements on refs, and loops in handlers and callbacks", () => {
+  it("allow `++` and `--` as statements on fields, and loops in handlers and callbacks", () => {
     const compiled = compile(`
 interface Props { onHit?: (n: number) => void }
 function Child({ onHit }: Props) { return <Entity name="Child" />; }
 function C() {
-  const s = useMutable({ items: [1, 2, 3] as number[] });
-  const hits = useRef(0);
+  const s = useMutable({ items: [1, 2, 3] as number[], hits: 0 });
   useUpdate(() => {
-    hits.current++;
-    --hits.current;
+    s.hits++;
+    --s.hits;
     let out: number[] = [];
     for (const x of s.items) out = [...out, x * 2];
     s.items = out;
   });
-  return <Entity name="C"><Child onHit={(n) => { for (const i of s.items) { if (i === n) hits.current += i; } }} /></Entity>;
+  return <Entity name="C"><Child onHit={(n) => { for (const i of s.items) { if (i === n) s.hits += i; } }} /></Entity>;
 }`);
-    assert.match(compiled.code, /this\.hits \+= 1;\s*this\.hits -= 1;/);
+    assert.match(compiled.code, /this\.\$set_s_hits\(this\.#\$s_hitsNext \+ 1\);\s*this\.\$set_s_hits\(this\.#\$s_hitsNext - 1\);/);
     assert.deepEqual(typeCheck(compiled), []);
   });
 });
@@ -247,12 +246,6 @@ describe("diagnostics for the new statements", () => {
     assert.deepEqual(codes(handler("s = 2;")), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes(handler("s++;")), [DiagnosticCode.UnsupportedExpression]);
     assert.doesNotThrow(() => compile(handler("s.n = 2; s.n++; s.n -= 1;")));
-    assert.deepEqual(codes(handler("r.current &= 1;", "const r = useRef(0);")), [DiagnosticCode.UnsupportedStatement]);
-  });
-
-  it("rejects a ref typed as an element, and a ref whose type cannot be inferred", () => {
-    assert.deepEqual(codes(handler("", "const r = useRef<Sprite[]>([]);")), [DiagnosticCode.InvalidUseRef]);
-    assert.deepEqual(codes(handler("", "const r = useRef([]);")), [DiagnosticCode.InvalidUseRef]);
   });
 
   it("suggests the nearest name for an unknown identifier or component", () => {

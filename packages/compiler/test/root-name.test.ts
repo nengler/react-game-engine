@@ -81,11 +81,10 @@ describe("names that the root built-in also has (REACT_FEEL_PLAN.md, B7)", () =>
 
   it("lets a ref be called `image` on a <Sprite> root, and state `parent` anywhere", async () => {
     const compiled = compile(`export function Coin() {
-  const image = useRef(0);
-  const s = useMutable({ parent: 1 });
+  const s = useMutable({ parent: 1, image: 0 });
   useUpdate(() => {
-    image.current += 1;
-    s.parent = image.current + 1;
+    s.image += 1;
+    s.parent = s.image + 1;
   });
   return <Sprite image={s.parent > 1 ? "b.png" : "a.png"} />;
 }`);

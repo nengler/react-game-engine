@@ -1,4 +1,4 @@
-import { Entity, Hud, ParticleLayer, useInput, useRef, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Hud, ParticleLayer, useInput, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { hpOf, type Built, type Fired, type Foe, type InFlight } from "./battle.ts";
 import { Enemy } from "./Enemy.tsx";
 import { fx, sfx } from "./effects.ts";
@@ -51,9 +51,9 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
     towers: NO_TOWERS as readonly (Built | null)[],
     enemies: [] as readonly Foe[],
     shots: [] as readonly InFlight[],
+    /** The next id for an enemy or a shot (a list's key). */
+    nextId: 1,
   });
-  /** The next id for an enemy or a shot (a list's key). */
-  const nextId = useRef(1);
   const spawns = spawnsOf(s.wave - 1);
 
   useUpdate((dt) => {
@@ -74,9 +74,9 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
       const kind = spawns[s.spawned]!.kind;
       const r = rollSigned(s.laneSeed);
       s.laneSeed = r.seed;
-      s.enemies = [...s.enemies, { id: nextId.current, kind, lane: r.value * LANE_SPREAD, maxHp: hpOf(kind, s.wave - 1) }];
+      s.enemies = [...s.enemies, { id: s.nextId, kind, lane: r.value * LANE_SPREAD, maxHp: hpOf(kind, s.wave - 1) }];
       s.spawned += 1;
-      nextId.current += 1;
+      s.nextId += 1;
     }
   });
   useInput((input) => {
@@ -141,8 +141,8 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
     sfx.play("leak");
   };
   const fire = (shot: Fired) => {
-    s.shots = [...s.shots, { ...shot, id: nextId.current }];
-    nextId.current += 1;
+    s.shots = [...s.shots, { ...shot, id: s.nextId }];
+    s.nextId += 1;
   };
   const landed = (id: number) => {
     s.shots = s.shots.filter((shot) => shot.id !== id);

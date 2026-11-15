@@ -15,7 +15,7 @@ export const DiagnosticCode = {
   UnsupportedStateType: "RGE1104",
   /** Retired: `useTransform` was replaced by the `transform={{ x, y }}` attribute driven by state. */
   InvalidUseTransform: "RGE1105",
-  InvalidUseRef: "RGE1106",
+  ElementRef: "RGE1106",
   /** `useSound` that is not `const play = useSound("file.wav")`: a path that is not a string literal, or a name already taken. */
   InvalidUseSound: "RGE1107",
   /** `useGameState` with a key the project's `GameState.ts` does not declare, or when there is no such schema. */
@@ -42,7 +42,7 @@ export const DiagnosticCode = {
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",
-  /** A `ref.current` read outside a handler (JSX, state initialisers, derived consts): it would never update. */
+  /** Retired with `useRef`: a `ref.current` read outside a handler. Kept so codes are never reused. */
   HandleReadOutsideHandler: "RGE1304",
   /** A sound's play function used outside a handler call (`play()` in JSX or a derived const, or passed as a value): it would play on every render. */
   SoundOutsideHandler: "RGE1305",
