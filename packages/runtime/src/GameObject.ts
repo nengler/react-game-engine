@@ -2,6 +2,7 @@ import type { GameStore } from "./GameState.ts";
 import type { InputState } from "./input.ts";
 import { IDENTITY_TRANSFORM, Transform, composeTransforms, offsetTransform, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
+import { developmentWarning } from "./develop.ts";
 
 type StructureOp =
   | { readonly kind: "add"; readonly child: GameObject; readonly slot: number; readonly order: number }
@@ -161,6 +162,8 @@ export class GameObject<P extends object = {}> {
   #order = 0;
   /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
   #mounted = false;
+  /** It was mounted and has since left its World (and not come back): what a `useMutable`'s object checks before a write. */
+  #unmounted = false;
   #inert = false;
   #modal = false;
   /** What `useMount` handlers returned this stay in a World (`keepCleanup`), run after `onUnmount` when it leaves. */
@@ -401,6 +404,21 @@ export class GameObject<P extends object = {}> {
     return value;
   }
 
+  /**
+   * For generated code: whether a write through one of this component's `useMutable` objects (`takeHit(s)`, called later) may still
+   * change it. False once it has been mounted and has left its World, until it is mounted again. A write that may not does nothing,
+   * and says so once in development (see `develop.ts`): the component is gone, so nothing would ever show it.
+   */
+  $mayWrite(field: string): boolean {
+    if (!this.#unmounted) return true;
+    const name = this.constructor.name;
+    developmentWarning(
+      `unmounted-write:${name}:${field}`,
+      `A write to ${name}'s '${field}' after it was unmounted was ignored: something kept its useMutable object (passed whole, as \`takeHit(s)\`) and wrote to it later. Write only while the component is mounted, or keep the value somewhere that outlives it (the game state).`,
+    );
+    return false;
+  }
+
   /** Request a render pass for this object. */
   markDirty(): void {
     if (this.#dirty) return;
@@ -616,6 +634,7 @@ export class GameObject<P extends object = {}> {
     for (const child of this.children) child.attachToWorld(world);
     if (!this.#mounted) {
       this.#mounted = true;
+      this.#unmounted = false;
       this.onMount();
     }
   }
@@ -626,6 +645,7 @@ export class GameObject<P extends object = {}> {
     this.gameStateStore?.unsubscribe(this, this.gameStateKeys);
     if (this.#mounted) {
       this.#mounted = false;
+      this.#unmounted = true;
       this.onUnmount();
       const cleanups = this.#cleanups;
       this.#cleanups = [];

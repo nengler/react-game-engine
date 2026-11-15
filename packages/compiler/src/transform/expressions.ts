@@ -68,12 +68,14 @@ export class ExpressionLowering extends LoweringBase {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
-        // Read whole (`springBack(s, …)`, `<Camera shake={shake}>`): a plain object of its fields, as they are now in a handler and as
-        // the frame committed them in render. It is a copy: changing it does not change the fields.
+        // Read whole (`takeHit(s)`, `<Camera shake={shake}>`). In a handler it is the component's own object for this `useMutable`,
+        // whose fields read and write the component's (`takeHit(s)` changes them, as `s.hp -= 1` would). In render, where nothing
+        // writes, it is a copy of the fields as the frame committed them, typed `Readonly`. The properties say which fields it reads.
         case "mutable":
           return {
             kind: "ObjectLiteral",
             mutableCopy: true,
+            ...(this.mode.inHandler ? { live: true as const } : {}),
             properties: [...binding.fields].map(([name, state]) => ({ kind: "Property" as const, name, value: { kind: "StateRead" as const, state, ...(this.mode.inHandler ? { live: true as const } : {}) } })),
           };
         case "propsObject":

@@ -2,7 +2,7 @@
 import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
 import { collectDependencies, walkExpr } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
-import { param, escapeTemplate, pendingRef, propertyKey, typeText } from "./helpers.ts";
+import { param, escapeTemplate, mutableObject, pendingRef, propertyKey, typeText } from "./helpers.ts";
 
 /** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
 export interface EmitMode {
@@ -82,6 +82,8 @@ export class ExpressionEmitter {
   protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map(), renderMemos: new Map(), guard: null };
   /** Whether a callback was written with `$assume`, so the module declares it. */
   usesAssume = false;
+  /** The `useMutable`s a handler has passed whole (`takeHit(s)`), by view name: the class gets an object for each (see the generator). */
+  protected readonly mutableObjects = new Set<string>();
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
   protected renderTemps = 0;
   /** The imported game state (`useGame`), when the module uses one. */
@@ -238,12 +240,21 @@ export class ExpressionEmitter {
       case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.expr(el.value, true)}`).join(", ")}]`;
       case "ObjectLiteral": {
         if (e.properties.length === 0) return "{}";
+        // A `useMutable` read whole in a handler: the component's own object for it (see `mutableObject` in the generator).
+        if (e.mutableCopy && e.live) {
+          const first = e.properties[0]!;
+          const view = first.kind === "Property" && first.value.kind === "StateRead" ? this.state(first.value.state).mutable?.view : undefined;
+          if (view !== undefined) {
+            this.mutableObjects.add(view);
+            return `this.${mutableObject(view)}`;
+          }
+        }
         const literal = `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
         if (!e.mutableCopy) return literal;
-        // A `useMutable` read whole: typed as its fields, so it is not checked as a fresh literal (`total(s)` with more fields than
-        // `total` takes is fine in the source, where `s` is a variable).
+        // A `useMutable` read whole in render: a copy, typed as its fields (so it is not checked as a fresh literal: `total(s)` with
+        // more fields than `total` takes is fine in the source, where `s` is a variable) and `Readonly`, since render writes nothing.
         const fields = e.properties.map((p) => (p.kind === "Property" && p.value.kind === "StateRead" ? `${propertyKey(p.name)}: ${typeText(this.state(p.value.state).type)}` : ""));
-        return `(${literal} as { ${fields.join("; ")} })`;
+        return `(${literal} as Readonly<{ ${fields.join("; ")} }>)`;
       }
       case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
       case "Callback": return this.callback(e.fn);
