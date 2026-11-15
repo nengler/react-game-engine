@@ -19,6 +19,14 @@ import {
   RGE_OP_CANVAS_LEN,
   RGE_OP_BOX,
   RGE_OP_BOX_LEN,
+  RGE_OP_LAYER_BEGIN,
+  RGE_OP_LAYER_BEGIN_LEN,
+  RGE_OP_LAYER_END,
+  RGE_OP_LAYER_END_LEN,
+  RGE_LAYER_MAX,
+  RGE_BLEND_ADD,
+  RGE_BLEND_MULTIPLY,
+  RGE_BLEND_SCREEN,
   RGE_OP_ELLIPSE,
   RGE_OP_ELLIPSE_LEN,
   RGE_OP_RECT,
@@ -48,6 +56,13 @@ interface Placed {
 }
 
 /** A draw record in readable form; colours are `#rrggbbaa` and textures are the path they were loaded from. */
+/** A blend mode by name, as `<Layer blend>` takes it. */
+export type BlendName = "normal" | "add" | "multiply" | "screen";
+
+function blendName(code: number): BlendName {
+  return code === RGE_BLEND_ADD ? "add" : code === RGE_BLEND_MULTIPLY ? "multiply" : code === RGE_BLEND_SCREEN ? "screen" : "normal";
+}
+
 export type DecodedRecord =
   | {
       readonly op: "canvas";
@@ -61,6 +76,10 @@ export type DecodedRecord =
     }
   | { readonly op: "scissor"; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
   | { readonly op: "scissorEnd" }
+  /** A layer opens (ABI v10): what follows is drawn into it, cleared to `clear`, each drawable blended with `childBlend`. */
+  | { readonly op: "layerBegin"; readonly clear: string; readonly childBlend: BlendName }
+  /** The innermost layer closes and is laid over what is below it with `blend`, its colours multiplied by `tint`. */
+  | { readonly op: "layerEnd"; readonly blend: BlendName; readonly tint: string }
   | {
       readonly op: "view";
       readonly a: number;
@@ -312,6 +331,7 @@ export class RecordingBackend implements Backend {
 
   /** Check the frame's records, and when `out` is given, read them into it. */
   #decode(records: Float64Array, length: number, texts: readonly string[], out: DecodedRecord[] | null): void {
+    let depth = 0;
     for (let at = 0; at < length;) {
       const op = records[at] as number;
       const placed = (): Placed => ({
@@ -362,6 +382,18 @@ export class RecordingBackend implements Backend {
           need(RGE_OP_SCISSOR_END_LEN);
           out?.push({ op: "scissorEnd" });
           at += RGE_OP_SCISSOR_END_LEN;
+          break;
+        case RGE_OP_LAYER_BEGIN:
+          need(RGE_OP_LAYER_BEGIN_LEN);
+          if (++depth > RGE_LAYER_MAX) throw new Error(`Layers nested deeper than ${RGE_LAYER_MAX} at ${at}.`);
+          out?.push({ op: "layerBegin", clear: colorToHex(records[at + 1]!), childBlend: blendName(records[at + 2]!) });
+          at += RGE_OP_LAYER_BEGIN_LEN;
+          break;
+        case RGE_OP_LAYER_END:
+          need(RGE_OP_LAYER_END_LEN);
+          if (--depth < 0) throw new Error(`A layer end with no layer open at ${at}.`);
+          out?.push({ op: "layerEnd", blend: blendName(records[at + 1]!), tint: colorToHex(records[at + 2]!) });
+          at += RGE_OP_LAYER_END_LEN;
           break;
         case RGE_OP_SPRITE: {
           need(RGE_OP_SPRITE_LEN);

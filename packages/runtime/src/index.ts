@@ -114,6 +114,7 @@ export {
   type SoundEntry,
 } from "./effects.ts";
 export { Fade, type FadeProps } from "./components/Fade.ts";
+export { BLEND_MODES, Layer, type BlendMode, type LayerProps } from "./components/Layer.ts";
 export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";

@@ -56,6 +56,13 @@ step (the map changes, the new map's cells are written for the first time) costs
 (`node tools/frame-time.ts`), so no hitch needs fixing; the mean step is 0.6 ms, the 99th percentile 5 ms, and one step in 1,433
 took 18 ms (a garbage collection or a JIT step, nowhere near a door).
 
+## The cave is dark (2026-11-15)
+
+The cave is drawn under a `<Layer blend="multiply" clear="#16162c" childBlend="add">` with the lantern's light in it, a soft white
+disc 96 pixels across (`assets/light.png`, made by `tools/make-assets.ts`) centred on the character (`Play.tsx`). It is the greybox for
+the engine's lighting (NEXT_PRIORITIES.md, "Now", steps 5 to 7): shaders and proper lights come next. The story `Play/Cave` keeps its
+picture. Not decided yet: how dark it should be when played, whether the bell and the key glow, and whether the wisp carries a light.
+
 ## Findings while writing
 
 Written down as they were hit, as Kite and Hearth did; the engine is changed only when one is worth it.

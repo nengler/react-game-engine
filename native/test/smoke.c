@@ -56,6 +56,15 @@ static void text(double x, double y, int32_t index, double size, uint32_t color)
 
 static void scissor(double x, double y, double w, double h) { push(RGE_OP_SCISSOR); push(x); push(y); push(w); push(h); }
 static void scissor_end(void) { push(RGE_OP_SCISSOR_END); }
+static void layer_begin(uint32_t clear, int child_blend) { push(RGE_OP_LAYER_BEGIN); push(clear); push(child_blend); }
+static void layer_end(int blend, uint32_t tint) { push(RGE_OP_LAYER_END); push(blend); push(tint); }
+/* Whether each channel of a pixel is within 2 of rgba: blending rounds differently on the GPU and the software renderer. */
+static void expect_near(int x, int y, uint32_t rgba, const char *what) {
+  const uint8_t *p = &pixels[(y * W + x) * 4];
+  int ok = 1;
+  for (int c = 0; c < 4; c++) if (abs((int)p[c] - (int)(rgba >> (24 - 8 * c) & 255)) > 2) ok = 0;
+  CHECK(ok, "%s: pixel (%d,%d) is %02x%02x%02x%02x, expected about %08x", what, x, y, p[0], p[1], p[2], p[3], rgba);
+}
 static void canvas(double w, double h, double dx, double dy, double dw, double dh, uint32_t border) {
   push(RGE_OP_CANVAS); push(w); push(h); push(dx); push(dy); push(dw); push(dh); push(border);
 }
@@ -481,6 +490,58 @@ int main(void) {
   expect(5, 5, CLEAR, "a bad canvas size draws nothing but the clear colour");
   reset(); view(1, 0, 0, 1, 0, 0); canvas(16, 9, 0, 6, 64, 36, C_GREEN); frame();
   expect(5, 5, CLEAR, "a canvas that is not first is refused");
+
+  /* Layers: drawn off screen, then laid over what is below with a blend mode. */
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 32, 48, 0x808080ffu);
+  layer_begin(0xffffffffu, RGE_BLEND_NORMAL); rect(8, 8, 0, 1, 1, 8, 8, 0x000000ffu); layer_end(RGE_BLEND_MULTIPLY, WHITE_RGBA); frame();
+  expect_near(4, 4, 0x808080ffu, "multiply: the layer's white leaves the grey below as it is");
+  expect_near(10, 10, 0x000000ffu, "multiply: its black darkens the grey to black");
+  expect_near(40, 4, CLEAR, "multiply: white over the clear colour leaves it");
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x202020ffu);
+  layer_begin(0x00000000u, RGE_BLEND_ADD); rect(4, 4, 0, 1, 1, 10, 10, 0x400000ffu); rect(8, 8, 0, 1, 1, 10, 10, 0x400000ffu); layer_end(RGE_BLEND_ADD, WHITE_RGBA); frame();
+  expect_near(6, 6, 0x602020ffu, "add: one light adds to the dark below");
+  expect_near(10, 10, 0xa02020ffu, "add: two overlapping lights add to each other (childBlend add), then to what is below");
+  expect_near(30, 30, 0x202020ffu, "add: nothing in the layer leaves what is below");
+  reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x000000ffu, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 8, 8, C_RED); layer_end(RGE_BLEND_NORMAL, 0xffffff80u); frame();
+  expect_near(4, 4, 0x881018ffu, "normal with half opacity: half the layer's red over the clear colour");
+  expect_near(20, 20, 0x081018ffu, "...and half its black elsewhere");
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x404040ffu); layer_begin(0x000000ffu, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 8, 8, 0x808080ffu); layer_end(RGE_BLEND_SCREEN, WHITE_RGBA); frame();
+  expect_near(4, 4, 0x9f9f9fffu, "screen: grey over grey is lighter than either, below white");
+  expect_near(20, 20, 0x404040ffu, "screen: black leaves what is below");
+  {
+    /* An opaque texture (a light) added into a layer adds; it does not replace what the layer holds. raylib's software renderer
+     * turns blending off for opaque textures when the blend reads alpha, which librge works around. */
+    Image dim = GenImageColor(8, 8, (Color){ 0x30, 0x00, 0x00, 0xff });
+    CHECK(ExportImage(dim, "rge_smoke_dim.png"), "write the dim texture");
+    UnloadImage(dim);
+    int32_t dim_tex = rge_load_texture("rge_smoke_dim.png");
+    CHECK(dim_tex >= 0, "load the dim texture");
+    reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x101010ffu, RGE_BLEND_ADD); sprite(0, 0, 1, 1, dim_tex); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); frame();
+    expect_near(4, 4, 0x401010ffu, "an opaque texture in an add layer adds to the layer's clear colour");
+    reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x808080ffu); layer_begin(0x00000000u, RGE_BLEND_NORMAL); sprite(0, 0, 1, 1, dim_tex); layer_end(RGE_BLEND_MULTIPLY, WHITE_RGBA); frame();
+    expect_near(4, 4, 0x180000ffu, "an opaque layer multiplied over grey: its colour times the grey");
+    remove("rge_smoke_dim.png");
+  }
+  /* The view carries into a layer, and layers nest. */
+  reset(); view(1, 0, 0, 1, 10, 0); layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 4, 4, C_RED);
+  layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 10, 0, 1, 1, 4, 4, C_GREEN); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); frame();
+  expect(12, 2, C_RED, "the view's offset applies inside a layer");
+  expect(12, 12, C_GREEN, "a layer inside a layer is laid over it, then both over the window");
+  expect(2, 2, CLEAR, "outside what they drew, the window shows through");
+  /* In a canvas, a layer is the canvas's size and in its pixels. */
+  reset(); canvas(16, 9, 0, 6, 64, 36, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 16, 9, 0x808080ffu);
+  layer_begin(0xffffffffu, RGE_BLEND_NORMAL); rect(1, 1, 0, 1, 1, 2, 2, 0x000000ffu); layer_end(RGE_BLEND_MULTIPLY, WHITE_RGBA); frame();
+  expect_near(5, 6 + 5, 0x000000ffu, "a layer in a canvas: its black, scaled with the canvas");
+  expect_near(20, 6 + 20, 0x808080ffu, "...and the grey elsewhere");
+  /* An open layer is closed at the end of the frame; too deep a nest stops the frame. */
+  reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(2, 2, C_RED, "a layer left open is laid over the window when the frame ends");
+  reset(); for (int i = 0; i <= RGE_LAYER_MAX; i++) layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(2, 2, CLEAR, "a layer nested deeper than RGE_LAYER_MAX stops the frame");
+  reset(); layer_end(RGE_BLEND_NORMAL, WHITE_RGBA); rect(0, 0, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(2, 2, CLEAR, "a layer end with no layer open stops the frame");
+  reset(); rect(0, 0, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(2, 2, C_RED, "and the next frame draws as usual");
 
   /* Measuring. */
   {

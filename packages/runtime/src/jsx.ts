@@ -7,6 +7,7 @@ import type { FadeProps } from "./components/Fade.ts";
 import type { FlexProps } from "./components/Flex.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { HudProps } from "./components/Hud.ts";
+import type { LayerProps } from "./components/Layer.ts";
 import type { MenuProps } from "./components/Menu.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
@@ -497,6 +498,14 @@ export function freeze(_steps: number): void {
  */
 export function Hud(_props: HudProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Hud");
+}
+
+/**
+ * A container whose children are drawn off screen and then laid over what is under it with a blend mode: a dark
+ * `<Layer blend="multiply" clear="#1a1a2e" childBlend="add">` with light sprites in it is a cave lit by lanterns.
+ */
+export function Layer(_props: LayerProps & { children?: Child } & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Layer");
 }
 
 /**

@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 9
+#define RGE_ABI_VERSION 10
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -46,6 +46,20 @@
  *                                                into an off-screen width x height texture (point filtered, cleared to
  *                                                the frame's clear colour); the window is cleared to borderColor and
  *                                                the texture is copied into the dest rectangle, right way up.
+ *   RGE_OP_LAYER_BEGIN  op, clearColor, childBlend
+ *                                                Draw what follows into an off-screen layer the size of the current
+ *                                                target (the canvas, the window, or the layer it is in), cleared to
+ *                                                clearColor, each drawable blended with childBlend (an RGE_BLEND_*)
+ *                                                onto what the layer holds. The view and any scissor carry on, in the
+ *                                                same pixels. Layers nest, RGE_LAYER_MAX deep; a deeper one is an error
+ *                                                that stops the frame.
+ *   RGE_OP_LAYER_END    op, blend, tint
+ *                                                Stop drawing into the innermost layer and lay it over the target it is
+ *                                                in, covering it exactly, blended with `blend` (an RGE_BLEND_*) and its
+ *                                                colours multiplied by tint (packed 0xRRGGBBAA, so its alpha is the
+ *                                                layer's opacity). Drawing then carries on in that target, with the
+ *                                                blend mode it had. A layer still open when the frame ends is closed as
+ *                                                if by an END with RGE_BLEND_NORMAL and white.
  */
 #define RGE_OP_VIEW     1
 #define RGE_OP_SPRITE   2
@@ -57,6 +71,8 @@
 #define RGE_OP_CANVAS       8
 #define RGE_OP_SPRITE_REGION 9
 #define RGE_OP_BOX          10
+#define RGE_OP_LAYER_BEGIN  11
+#define RGE_OP_LAYER_END    12
 
 /* Record lengths in doubles, op included. */
 #define RGE_OP_VIEW_LEN    7
@@ -69,6 +85,21 @@
 #define RGE_OP_CANVAS_LEN      8
 #define RGE_OP_SPRITE_REGION_LEN 15
 #define RGE_OP_BOX_LEN     12
+#define RGE_OP_LAYER_BEGIN_LEN 3
+#define RGE_OP_LAYER_END_LEN   3
+
+/* Blend modes of RGE_OP_LAYER_BEGIN and RGE_OP_LAYER_END, as the source s (what is drawn, alpha a) meets the destination d:
+ *   NORMAL    s * a + d * (1 - a)       painting over
+ *   ADD       s * a + d                 light: overlapping lights brighten
+ *   MULTIPLY  s * d + d * (1 - a)       shade: white leaves d as it is, black darkens it to black
+ *   SCREEN    s + d * (1 - s)           a softer light that never passes white */
+#define RGE_BLEND_NORMAL   0
+#define RGE_BLEND_ADD      1
+#define RGE_BLEND_MULTIPLY 2
+#define RGE_BLEND_SCREEN   3
+
+/* How deep RGE_OP_LAYER_BEGIN nests. */
+#define RGE_LAYER_MAX 4
 
 /* RGE_OP_SPRITE_REGION flags. */
 #define RGE_SPRITE_FLIP_X 1

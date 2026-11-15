@@ -1,0 +1,103 @@
+import assert from "node:assert/strict";
+/** `<Layer>` (ABI v10): its children are drawn between a layer-begin and a layer-end record, at its own z, its opacity on the end. */
+import { describe, it } from "node:test";
+
+import { Entity, Hud, Layer, Shape, type GameObject, type LayerProps } from "@rge/runtime";
+
+import { FrameBuilder } from "../src/draw.ts";
+import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
+
+function draw(root: GameObject, frames = 1): DecodedRecord[] {
+  const backend = new RecordingBackend({});
+  const builder = new FrameBuilder({
+    loadTexture: (path) => backend.loadTexture(path),
+    textureSize: (handle) => backend.textureSize(handle) ?? { width: 0, height: 0 },
+    measureText: (text, size) => ({ width: text.length * 8, height: size }),
+    retain: "check",
+  });
+  for (let i = 0; i < frames; i++) {
+    const built = builder.build(root, 400, 300);
+    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  }
+  return [...backend.lastFrame.records];
+}
+
+const shape = (color: string, z = 0): Shape => {
+  const s = new Shape({ kind: "rect", width: 10, height: 10, color });
+  s.transform.z = z;
+  return s;
+};
+function layer(props: LayerProps, ...children: GameObject[]): Layer {
+  const l = new Layer(props);
+  for (const child of children) l.addChild(child);
+  return l;
+}
+function entity(...children: GameObject[]): Entity {
+  const e = new Entity();
+  for (const child of children) e.addChild(child);
+  return e;
+}
+/** Each record as a short word: a layer's begin and end, or a rect's colour. */
+const ops = (records: readonly DecodedRecord[]): string[] =>
+  records.flatMap((r) =>
+    r.op === "layerBegin"
+      ? [`begin ${r.clear} ${r.childBlend}`]
+      : r.op === "layerEnd"
+        ? [`end ${r.blend} ${r.tint}`]
+        : r.op === "rect"
+          ? [r.color]
+          : []
+  );
+
+describe("<Layer>", () => {
+  it("wraps its children in a begin and an end, with its clear colour and its blend modes", () => {
+    const root = entity(shape("red"), layer({ blend: "multiply", clear: "#202038", childBlend: "add" }, shape("white"), shape("yellow")));
+    assert.deepEqual(ops(draw(root)), ["#ff0000ff", "begin #202038ff add", "#ffffffff", "#ffff00ff", "end multiply #ffffffff"]);
+  });
+
+  it("defaults to normal blending, a transparent clear and full opacity, and draws nothing when empty", () => {
+    assert.deepEqual(ops(draw(entity(layer({}, shape("red"))))), ["begin #00000000 normal", "#ff0000ff", "end normal #ffffffff"]);
+    assert.deepEqual(ops(draw(entity(layer({ blend: "add" }), shape("red")))), ["#ff0000ff"]);
+  });
+
+  it("puts its opacity, and any opacity above it, on the end record, and draws its children at full opacity", () => {
+    const inner = layer({ opacity: 0.5 }, shape("red"));
+    const outer = entity(inner);
+    outer.transform.opacity = 0.5;
+    assert.deepEqual(ops(draw(outer)), ["begin #00000000 normal", "#ff0000ff", "end normal #ffffff40"]);
+  });
+
+  it("keeps its records together at its own z, whatever z its children ask for, and the next sibling at its own", () => {
+    const root = entity(shape("blue", 2), layer({ blend: "add" }, shape("red", 5), shape("white", -3)), shape("green", 1));
+    // The layer is at z 0: before green (1) and blue (2). Inside, tree order: red, then white, though white asked for -3.
+    assert.deepEqual(ops(draw(root)), ["begin #00000000 normal", "#ff0000ff", "#ffffffff", "end add #ffffffff", "#008000ff", "#0000ffff"]);
+  });
+
+  it("nests", () => {
+    const root = entity(layer({ blend: "multiply" }, layer({ blend: "add" }, shape("red"))));
+    assert.deepEqual(ops(draw(root)), [
+      "begin #00000000 normal",
+      "begin #00000000 normal",
+      "#ff0000ff",
+      "end add #ffffffff",
+      "end multiply #ffffffff",
+    ]);
+  });
+
+  it("works in a HUD", () => {
+    const hud = new Hud();
+    hud.addChild(layer({ blend: "screen", clear: "black" }, shape("red")));
+    const records = draw(entity(hud));
+    assert.deepEqual(ops(records), ["begin #000000ff normal", "#ff0000ff", "end screen #ffffffff"]);
+  });
+
+  it("is drawn again each frame, a change of its props included, as the retained frame check expects", () => {
+    const l = layer({ blend: "add" }, shape("red"));
+    const root = entity(l);
+    assert.deepEqual(ops(draw(root, 3)), ["begin #00000000 normal", "#ff0000ff", "end add #ffffffff"]);
+    l.blend = "multiply";
+    l.markChanged();
+    assert.deepEqual(ops(draw(root)), ["begin #00000000 normal", "#ff0000ff", "end multiply #ffffffff"]);
+  });
+});
