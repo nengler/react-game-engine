@@ -28,6 +28,41 @@ static struct {
 
 #define MAX_CANVAS 16384
 
+/* A render target for 2D drawing: a colour texture and no depth. raylib 6.0's LoadRenderTexture fails on some drivers (Mesa 25.x's
+ * llvmpipe and softpipe): its colour texture is uploaded with no pixels, which those drivers refuse (GL_INVALID_ENUM), and its depth
+ * renderbuffer takes the unsized GL_DEPTH_COMPONENT format. The framebuffer is then incomplete and everything drawn through it is
+ * black. Here the texture starts from zeroed pixels, and there is no depth: nothing librge draws tests it. */
+static RenderTexture2D load_target(int32_t width, int32_t height) {
+#if defined(GRAPHICS_API_OPENGL_SOFTWARE)
+  return LoadRenderTexture(width, height);
+#else
+  RenderTexture2D target = { 0 };
+  void *zeros = calloc((size_t)width * (size_t)height, 4);
+  if (zeros == NULL) return target;
+  target.id = rlLoadFramebuffer();
+  if (target.id == 0) {
+    free(zeros);
+    return target;
+  }
+  rlEnableFramebuffer(target.id);
+  target.texture.id = rlLoadTexture(zeros, width, height, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+  free(zeros);
+  target.texture.width = width;
+  target.texture.height = height;
+  target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+  target.texture.mipmaps = 1;
+  rlFramebufferAttach(target.id, target.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+  bool complete = rlFramebufferComplete(target.id);
+  rlDisableFramebuffer();
+  if (!complete) {
+    rlUnloadTexture(target.texture.id);
+    rlUnloadFramebuffer(target.id);
+    return (RenderTexture2D){ 0 };
+  }
+  return target;
+#endif
+}
+
 int32_t rge_abi_version(void) {
   return RGE_ABI_VERSION;
 }
@@ -377,7 +412,7 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
     state.canvas.id = 0;
   }
   if (state.canvas.id == 0) {
-    state.canvas = LoadRenderTexture(width, height);
+    state.canvas = load_target(width, height);
     if (state.canvas.id != 0) SetTextureFilter(state.canvas.texture, TEXTURE_FILTER_POINT);
   }
   if (state.canvas.id == 0) {
@@ -406,7 +441,7 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
         UnloadRenderTexture(state.upscaled);
         state.upscaled.id = 0;
       }
-      if (state.upscaled.id == 0) state.upscaled = LoadRenderTexture(uw, uh);
+      if (state.upscaled.id == 0) state.upscaled = load_target(uw, uh);
       if (state.upscaled.id != 0) {
         BeginTextureMode(state.upscaled);
         /* Every draw of a render texture flips it (its rows are stored bottom up), into another render texture as onto the window:
