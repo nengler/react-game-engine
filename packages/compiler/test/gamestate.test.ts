@@ -1,4 +1,4 @@
-/** The game state: `createGameState({ state, actions })` in GameState.ts, read with selectors, changed by actions. */
+/** The game state: `createGameState(data, actions)` in GameState.ts, read with selectors, changed by actions. */
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -12,29 +12,16 @@ const ROOT = join(OUTPUT_ROOT, String(process.pid), "gs");
 const STATE_FILE = join(ROOT, "GameState.ts");
 const STATE = `import { createGameState } from "@rge/runtime";
 
-interface State {
-  coins: number;
-  player: { hp: number; name: string };
-  muted: boolean;
-  enemies: { id: number; hp: number }[];
-  collect: (n: number) => void;
-  spawn: (id: number) => void;
-  hurt: () => void;
-  rename: (name: string) => void;
-  noop: () => void;
-}
-
-export const useGame = createGameState<State>()((set) => ({
-  coins: 0,
-  player: { hp: 10, name: "Ada" },
-  muted: false,
-  enemies: [],
-  collect: (n) => set((s) => ({ coins: s.coins + n })),
-  spawn: (id) => set((s) => ({ enemies: [...s.enemies, { id, hp: 3 }] })),
-  hurt: () => set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } })),
-  rename: (name) => set((s) => ({ player: { ...s.player, name } })),
-  noop: () => set({}),
-}));
+export const useGame = createGameState(
+  { coins: 0, player: { hp: 10, name: "Ada" }, muted: false, enemies: [] as { id: number; hp: number }[] },
+  {
+    collect(s, n: number) { s.coins += n; },
+    spawn(s, id: number) { s.enemies.push({ id, hp: 3 }); },
+    hurt(s) { s.player.hp -= 1; },
+    rename(s, name: string) { s.player.name = name; },
+    noop() {},
+  },
+);
 `;
 
 let compiler: Compiler;
@@ -130,6 +117,43 @@ describe("GameState.ts", () => {
           },
         },
       });
+    }
+  });
+
+  it("reads `createGameState(data, actions)`: the data's tree, and each action by name", () => {
+    const { schema, diagnostics } = read(`export const useGame = createGameState(
+  { coins: 0, player: { hp: -3, name: "Ada" }, run: newRun(), items: [] as number[] },
+  { collect(s, n: number) { s.coins += n; }, hurt: (s) => { s.player.hp -= 1; }, heal: function (s) { s.player.hp = 10; } },
+);`);
+    assert.deepEqual(diagnostics, []);
+    assert.equal(schema!.name, "useGame");
+    assert.deepEqual(schema!.actions, ["collect", "hurt", "heal"]);
+    assert.deepEqual(schema!.tree, {
+      kind: "node",
+      children: {
+        coins: { kind: "leaf", type: "number", initial: 0 },
+        player: { kind: "node", children: { hp: { kind: "leaf", type: "number", initial: -3 }, name: { kind: "leaf", type: "string", initial: "Ada" } } },
+        run: { kind: "value" },
+        items: { kind: "value" },
+      },
+    });
+  });
+
+  it("rejects a `createGameState(data, actions)` it cannot read, saying why", () => {
+    const messages = (text: string) => read(text).diagnostics.map((d) => `${d.code} ${d.message}`);
+    const cases: [string, RegExp][] = [
+      [`export const useGame = createGameState(makeData(), { a(s) {} });`, /data is an object literal/],
+      [`export const useGame = createGameState({ a: 1 }, actions);`, /actions are an object literal/],
+      [`export const useGame = createGameState({ a: 1, act: () => 1 }, {});`, /function in the game state's data: actions go in the second argument/],
+      [`export const useGame = createGameState({ a: 1 }, { a(s) {} });`, /'a' is declared twice/],
+      [`export const useGame = createGameState({ a: 1 }, { b: 5 });`, /Each action is/],
+      [`export const useGame = createGameState({ a: 1 }, { ...more });`, /Each action is/],
+    ];
+    for (const [text, pattern] of cases) {
+      const found = messages(text);
+      assert.equal(found.length, 1, `${text}\n${found.join("\n")}`);
+      assert.match(found[0]!, new RegExp(`^${DiagnosticCode.InvalidGameStateSchema} `), text);
+      assert.match(found[0]!, pattern, text);
     }
   });
 
@@ -425,11 +449,11 @@ describe("running a game state", () => {
     assert.equal(world.flush(), 0, "writing the value it already has changes nothing");
   });
 
-  it("merges what set is given shallowly, as Zustand does: a nested object is replaced as a whole", async () => {
+  it("changes only what an action wrote, and setState still merges shallowly, as Zustand does", async () => {
     const { world, hpBar } = await game();
     act("rename", "Bo");
     assert.equal(store.get("player.name"), "Bo");
-    assert.equal(store.get("player.hp"), 10, "the action spread the rest of the object, so hp survived");
+    assert.equal(store.get("player.hp"), 10, "the action wrote the name only, so hp survived");
     assert.equal(hpBar.isDirty, false, "hp is the same value, so its reader is not told");
     useGame.setState({ player: { hp: 3, name: "Cy" } });
     assert.deepEqual(useGame.getState().player, { hp: 3, name: "Cy" });

@@ -43,22 +43,45 @@ export interface GameState<S> {
 /** The functions of a state: its actions. */
 export type ActionsOf<S> = { readonly [K in keyof S as S[K] extends (...args: never[]) => unknown ? K : never]: S[K] };
 
-/** Create the game's state. Both the curried form (`createGameState<State>()(creator)`) and `createGameState(creator)` work. */
+/**
+ * An action of `createGameState(data, actions)`: it takes the state, writable, then its own arguments, and changes the state
+ * in place (`select(s, pad: number) { s.cursor = pad; }`). What it returns is returned to the caller.
+ */
+export type GameAction<D> = (state: D, ...args: any[]) => unknown;
+
+/** The actions as components call them: the state argument is supplied (`select(3)`). */
+export type BoundActions<A> = { readonly [K in keyof A]: A[K] extends (state: never, ...args: infer P) => infer R ? (...args: P) => R : never };
+
+/**
+ * Create the game's state.
+ *
+ * - **`createGameState(data, actions)`**, the form to write: the data is a plain object, and each action takes the state as its
+ *   first argument and writes it directly (`select(s, pad: number) { s.cursor = pad; s.open = true; }`). A component calls it
+ *   without the state (`const { select } = useGame.actions(); select(3)`). Only actions change the state.
+ * - **`createGameState<State>()(creator)` and `createGameState(creator)`**, the Zustand form with `set` and `get`, kept while games
+ *   move to the form above.
+ */
+export function createGameState<D extends object, A extends Record<string, GameAction<D>>>(data: D, actions: A): GameState<D & BoundActions<A>>;
 export function createGameState<S extends object>(): (creator: GameStateCreator<S>) => GameState<S>;
 export function createGameState<S extends object>(creator: GameStateCreator<S>): GameState<S>;
-export function createGameState<S extends object>(creator?: GameStateCreator<S>): GameState<S> | ((creator: GameStateCreator<S>) => GameState<S>) {
-  const make = (creator: GameStateCreator<S>): GameState<S> => {
-    const store = new GameStore<S>(creator);
-    const use = (): never => {
-      throw new Error("useGame(selector) is a compile-time declaration: components are compiled by @rge/compiler, not executed.");
-    };
-    const actions = (): ActionsOf<S> => {
-      const state = store.getState() as Record<string, unknown>;
-      return Object.fromEntries(Object.entries(state).filter(([, value]) => typeof value === "function")) as ActionsOf<S>;
-    };
-    return Object.assign(use, { store, actions, getState: () => store.getState(), setState: (partial: Partial<S> | ((state: S) => Partial<S>)) => store.setState(partial) }) as unknown as GameState<S>;
+export function createGameState<S extends object>(
+  creator?: GameStateCreator<S> | object,
+  actions?: Record<string, GameAction<object>>,
+): GameState<S> | ((creator: GameStateCreator<S>) => GameState<S>) {
+  if (actions !== undefined) return wrap(GameStore.fromActions(creator as object, actions)) as unknown as GameState<S>;
+  const make = (creator: GameStateCreator<S>): GameState<S> => wrap(new GameStore<S>(creator));
+  return creator ? make(creator as GameStateCreator<S>) : make;
+}
+
+function wrap<S>(store: GameStore<S>): GameState<S> {
+  const use = (): never => {
+    throw new Error("useGame(selector) is a compile-time declaration: components are compiled by @rge/compiler, not executed.");
   };
-  return creator ? make(creator) : make;
+  const actions = (): ActionsOf<S> => {
+    const state = store.getState() as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(state).filter(([, value]) => typeof value === "function")) as ActionsOf<S>;
+  };
+  return Object.assign(use, { store, actions, getState: () => store.getState(), setState: (partial: Partial<S> | ((state: S) => Partial<S>)) => store.setState(partial) }) as unknown as GameState<S>;
 }
 
 /**
@@ -71,6 +94,43 @@ export class GameStore<S = object> {
   readonly #initial: S;
   #state: S;
   readonly #subscribers = new Map<string, Set<GameObject>>();
+
+  /**
+   * The store of `createGameState(data, actions)`. An action runs on a draft, a copy of the state it may change in place (an
+   * action called from inside another shares its draft); when the outermost one returns, the draft is compared with the state leaf
+   * by leaf, what did not change keeps its object (so a reader comparing by `===` sees no change), and the readers of what did are
+   * told, as `setState` tells them. The data is the state's values; the bound actions sit beside them, as the creator form's do.
+   */
+  static fromActions<D extends object>(data: D, actions: Record<string, GameAction<D>>): GameStore<D> {
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === "function") throw new Error(`The game state's data holds a function at '${key}': actions go in the second argument of createGameState.`);
+      if (key in actions) throw new Error(`'${key}' is both a value and an action of the game state.`);
+    }
+    let store: GameStore<D> | null = null;
+    store = new GameStore<D>(() => {
+      const bound: Record<string, unknown> = {};
+      for (const [name, action] of Object.entries(actions)) bound[name] = (...args: unknown[]) => store!.#act(action as GameAction<unknown>, args);
+      return { ...(cloneData(data) as object), ...bound } as D;
+    });
+    return store;
+  }
+
+  /** The draft the running actions write, or null between actions. */
+  #draft: Record<string, unknown> | null = null;
+
+  #act(action: GameAction<unknown>, args: readonly unknown[]): unknown {
+    if (this.#draft !== null) return action(this.#draft, ...args);
+    const draft = cloneData(this.values()) as Record<string, unknown>;
+    this.#draft = draft;
+    let result: unknown;
+    try {
+      result = action(draft, ...args);
+    } finally {
+      this.#draft = null;
+    }
+    this.setState(shareUnchanged(this.values(), draft) as Partial<S>);
+    return result;
+  }
 
   constructor(creator: GameStateCreator<S>) {
     const set: SetGameState<S> = (partial) => this.setState(partial);
@@ -207,6 +267,42 @@ export class GameStore<S = object> {
 }
 
 type Tree = { [key: string]: unknown };
+
+/**
+ * A deep copy of the game state's data: arrays and plain objects are copied, anything else (a number, a string, an instance of a
+ * class) is kept as it is. `structuredClone` would do, but QuickJS-ng, which runs packaged games, does not have it.
+ */
+function cloneData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cloneData);
+  if (typeof value !== "object" || value === null) return value;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  const out: Tree = {};
+  for (const key of Object.keys(value)) out[key] = cloneData((value as Tree)[key]);
+  return out;
+}
+
+/**
+ * `after`, with every object or array whose values equal `before`'s replaced by `before`'s own, so what an action did not change
+ * keeps its identity. Leaves are compared with `===`.
+ */
+function shareUnchanged(before: unknown, after: unknown): unknown {
+  if (before === after) return before;
+  const beforeObject = typeof before === "object" && before !== null;
+  const afterObject = typeof after === "object" && after !== null;
+  if (!beforeObject || !afterObject || Array.isArray(before) !== Array.isArray(after)) return after;
+  const a = before as Tree;
+  const b = after as Tree;
+  const keys = Object.keys(b);
+  let same = keys.length === Object.keys(a).length;
+  const out: Tree = Array.isArray(b) ? ([] as unknown as Tree) : {};
+  for (const key of keys) {
+    const shared = Object.hasOwn(a, key) ? shareUnchanged(a[key], b[key]) : b[key];
+    out[key] = shared;
+    if (shared !== a[key]) same = false;
+  }
+  return same ? before : out;
+}
 
 /**
  * `next` with the values of `old` where they still fit (see `GameStore.carryFrom`). Functions always come from `next`: they
