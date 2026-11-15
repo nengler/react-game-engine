@@ -21,6 +21,7 @@
     "check:demo": "rge check packages/demo && tsc -p tsconfig.json",
     "bundle": "node tools/bundle.ts",
     "bench:check": "node tools/bench-check.ts",
+    "ci:local": "bash tools/ci-local.sh",
     "docs:index": "node tools/docs-index.ts",
     "pack": "node tools/pack.ts",
     "dist": "node tools/pack.ts --build",

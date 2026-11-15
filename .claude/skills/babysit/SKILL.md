@@ -45,6 +45,16 @@ Node, packaging the demo), **native** and **native-desktop**
 (`librge`, the C smoke test, the Node host against the real library, packaged builds under a virtual display), and
 **outside** (`check:outside`: Bramble packed, installed and checked from a temporary folder).
 
+`npm run ci:local` (`tools/ci-local.sh`) runs the same jobs here, step for step; `npm run ci:local -- check host` runs only
+those. It skips native-desktop, and says so, when `xvfb-run` is missing. When `ci.yml` changes, change the script with it.
+
+## When Actions doesn't run
+
+Every job failing within seconds, with no steps, no logs (`get_job_logs` returns 404) and `runner_id: 0`, means GitHub never
+started them: usually the account is out of Actions minutes or has a billing hold. It is not the PR, and a rerun won't help.
+Run `npm run ci:local` on the PR head instead, then say once on the PR that Actions didn't run and which jobs passed locally
+(and any it skipped). Passing locally is not passing CI: merge on it only when the user says to.
+
 ## When CI fails
 
 - **A bench budget** (`bench:check`, budgets in `packages/player/bench/budget.json`). Small scenes take hundredths of
