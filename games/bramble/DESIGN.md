@@ -67,7 +67,8 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
    game state holds them. This is the main cost of the subset for a map with many kinds of thing on it. *Since:* a list's items are any array (`{spotsOf(run).map(…)}`), so `view` left the game state and the components compute what they draw.
 3. **`x !== undefined` is not a condition** (`RGE1302`): a map that may have a gate became a list of zero or one gates. *Since:* `undefined` is a value; the gate is one of the spots.
 4. **The built-in font is not readable under size 10** at 320 × 180 (it is drawn, but letters break up); Kite and Hearth use a
-   bitmap font. Bramble uses multiples of 10 until it has one (M7).
+   bitmap font. Bramble uses multiples of 10 until it has one (M7). *Since 2026-11-15:* `rge create` puts Kite's 5 × 7 pixel font in
+   a new game's `assets/` and its `<Game font textSize={8}>` uses it, so a new game starts with text that reads at any multiple of 8.
 5. **`rge check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
    report to the outer run. `rge check` now clears it. (An engine-tooling finding, fixed.)
 6. **Compile errors name the generated file** (`generated/Play.ts:9:23 … './World.ts'`) when the real cause is in `src/` (the

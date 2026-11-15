@@ -92,8 +92,10 @@ no React equivalent.
 - **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class, and
   an error thrown while the game ran read `at Main.onInput (generated/Main.ts:71:7)`. *Since:* `rge` compiles with source maps and runs
   the window and the tests under `--enable-source-maps`, so it reads `at Main.onInput (src/Main.tsx:14:3)`; the template's `game.ts`
-  says why the root is made with `new`; and "Coming from React" has a "When something goes wrong" table. Not yet: a packaged game and
-  the Rust host report the bundled `game.js`.
+  says why the root is made with `new`; and "Coming from React" has a "When something goes wrong" table. *Since 2026-11-15* a game
+  packaged on V8 (the default) names the same lines (`src/Main.tsx:12:3`, the engine's as `@rge/runtime/src/World.ts`): its bundle
+  carries a source map and a small loader turns maps on before compiling it. Not yet: the Rust host (`--engine quickjs`) reports
+  the bundled `game.js`.
 - **Setup is heavy.** cmake, a C compiler and cargo are needed to make the tarballs before `rge create` works, since nothing is
   published. *Since:* only Node is needed to write, test and check a game: `npm run dist` builds what the machine can, keeps going
   when cmake or cargo is missing, and ends with what the author has and what to install for the rest (the guide's step 0 is a table of

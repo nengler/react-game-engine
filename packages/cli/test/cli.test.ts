@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { findLibrary } from "../src/native.ts";
 
 const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../src/cli.ts");
 const repo = resolve(dirname(cli), "../../..");
@@ -125,6 +126,22 @@ console.log(String((player.failure?.error as Error | undefined)?.stack));
   const line = main.split("\n").findIndex((l) => l.includes("useInput((input)")) + 1;
   assert.match(frame!, new RegExp(`src/Main\\.tsx:${line}:\\d+\\)$`), frame);
   assert.doesNotMatch(ran.stdout, /generated\/Main\.ts:/, "no frame names the generated file");
+});
+
+test("a game packaged on V8 names the same src/ lines when it crashes", { timeout: 300_000, skip: findLibrary("headless") === null ? "librge is not built (npm run native:build:headless)" : false }, () => {
+  // The game the test above wrote, with its boom.ts entry: packaged, run from another folder, and its stack read.
+  const errors = join(root, "errors");
+  const packaged = rge(["package", "--entry", "boom.ts", "--name", "boom", "--engine", "node", "--headless"], errors);
+  assert.equal(packaged.status, 0, packaged.stdout + packaged.stderr);
+  const ran = spawnSync(join(errors, "dist/boom/boom"), [], { cwd: tmpdir(), encoding: "utf8" });
+  const frame = ran.stdout.split("\n").find((line) => line.includes("Main.onInput"));
+  assert.ok(frame, ran.stdout + ran.stderr);
+  const main = readFileSync(join(errors, "src/Main.tsx"), "utf8");
+  const line = main.split("\n").findIndex((l) => l.includes("useInput((input)")) + 1;
+  assert.match(frame!, new RegExp(`src/Main\\.tsx:${line}:\\d+\\)$`), frame);
+  assert.match(ran.stdout, /at boom \(.*src\/boom\.ts:2:\d+\)/);
+  assert.match(ran.stdout, /@rge\/runtime\/src\/World\.ts:\d+/, "the engine's frames by package");
+  assert.doesNotMatch(ran.stdout, /game\.cjs:/, "no frame names the bundle");
 });
 
 test("a folder that is not a game, and an unknown command, are usage errors", () => {

@@ -13,7 +13,7 @@
  * and `npm run host:build[:headless]`); nothing is compiled here.
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -134,7 +134,30 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
     banner: { js: `const __rgeModuleUrl = require("node:url").pathToFileURL(process.execPath).href;` },
     legalComments: "none",
     logLevel: "warning",
+    // A crash names the line in src/ (`at Play.onInput (src/Play.tsx:14:3)`), as under `rge dev`: the generated files' own maps
+    // chain through to the .tsx, and the sources are written relative to the game, so the trace reads the same on any machine.
+    sourcemap: "inline",
+    sourcesContent: false,
   });
+  writeFileSync(script, relativeSources(readFileSync(script, "utf8"), work, game.dir));
+
+  // Node applies source maps only to code compiled after they are turned on, so the executable's own script is a small loader:
+  // it turns them on, then compiles the game (a SEA asset) as a module beside the executable.
+  const loader = join(work, "loader.cjs");
+  writeFileSync(
+    loader,
+    [
+      `process.setSourceMapsEnabled(true);`,
+      `const Module = require("node:module");`,
+      `const { join, dirname } = require("node:path");`,
+      `const file = join(dirname(process.execPath), "game.cjs");`,
+      `const game = new Module(file, module);`,
+      `game.filename = file;`,
+      `game.paths = Module._nodeModulePaths(dirname(file));`,
+      `game._compile(require("node:sea").getAsset("game.cjs", "utf8"), file);`,
+      ``,
+    ].join("\n"),
+  );
 
   // The blob Node reads at startup, injected into a copy of this Node binary.
   const blob = join(work, "sea.blob");
@@ -142,7 +165,7 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
     const result = spawnSync(command, commandArgs, { cwd: game.dir, stdio: "inherit" });
     if (result.status !== 0) throw new Error(`\`${command} ${commandArgs.join(" ")}\` failed${result.error ? `: ${result.error.message}` : ` with status ${result.status}`}.`);
   };
-  writeFileSync(join(work, "sea-config.json"), JSON.stringify({ main: script, output: blob, disableExperimentalSEAWarning: true }));
+  writeFileSync(join(work, "sea-config.json"), JSON.stringify({ main: loader, output: blob, disableExperimentalSEAWarning: true, assets: { "game.cjs": script } }));
   sh(process.execPath, ["--experimental-sea-config", join(work, "sea-config.json")]);
   const exe = join(out, exeName(name));
   cpSync(process.execPath, exe);
@@ -152,4 +175,27 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
   sh(process.execPath, [postject, exe, "NODE_SEA_BLOB", blob, "--sentinel-fuse", "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2", ...(process.platform === "darwin" ? ["--macho-segment-name", "NODE_SEA"] : [])]);
   if (process.platform === "darwin") sh("codesign", ["--sign", "-", exe]);
   rmSync(work, { recursive: true, force: true });
+}
+
+/**
+ * The script with its inline source map's `sources` made relative to the game's folder (`src/Play.tsx`, not a path through the
+ * build folder), and the engine's by package (`@rge/runtime/src/World.ts`), with no `sourceRoot`: Node resolves them against the
+ * script's place, beside the executable.
+ */
+export function relativeSources(script: string, buildDir: string, gameDir: string): string {
+  const marker = "//# sourceMappingURL=data:application/json;base64,";
+  const at = script.lastIndexOf(marker);
+  if (at < 0) return script;
+  const map = JSON.parse(Buffer.from(script.slice(at + marker.length).trim(), "base64").toString("utf8")) as { sources: string[]; sourceRoot?: string };
+  map.sources = map.sources.map((source) => {
+    const path = relative(gameDir, resolve(buildDir, map.sourceRoot ?? "", source)).split("\\").join("/");
+    if (!path.startsWith("../")) return path;
+    // The engine's own files, from outside the game: by package (`@rge/runtime/src/World.ts`), not by a path on this machine.
+    const installed = path.lastIndexOf("node_modules/");
+    if (installed >= 0) return path.slice(installed + "node_modules/".length);
+    const workspace = /(?:^|\/)packages\/([^/]+)\/(.*)$/.exec(path);
+    return workspace ? `@rge/${workspace[1]}/${workspace[2]}` : basename(path);
+  });
+  delete map.sourceRoot;
+  return `${script.slice(0, at)}${marker}${Buffer.from(JSON.stringify(map)).toString("base64")}\n`;
 }

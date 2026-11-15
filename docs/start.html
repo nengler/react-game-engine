@@ -165,6 +165,7 @@ npm run check</code></pre>
 <p>Replace the <code>&lt;Sprite&gt;</code> with <code>&lt;Shape kind="rect" width={16} height={16} color="gold" /&gt;</code> to see a square, and back to see the sprite from <code>assets/hero.png</code>.</p>
 
 <h2>3. A sprite</h2>
+<p>The template also puts a pixel font in <code>assets/font.png</code>, and <code>&lt;Game font="font.png" textSize={8}&gt;</code> uses it for every <code>&lt;Text&gt;</code>: at 8 pixels, and at any multiple of 8 (<code>size={16}</code>), its letters stay sharp on a small screen.</p>
 <p>Put a PNG in <code>assets/</code> and name it: <code>&lt;Sprite image="hero.png" originX={8} originY={8} /&gt;</code>. A missing image is a compile error (<code>rge build</code> checks the assets folder), not a magenta square at run time. A sheet of equal frames takes <code>frameWidth</code>, <code>frameHeight</code> and <code>frame</code>.</p>
 
 <h2>4. A sound</h2>

@@ -304,9 +304,10 @@ state (screen, cursor, speed, pause, how the battle ended).
    - `nextId.current++` is refused (a postfix increment); `+= 1` works.
    - A derived value is read again where it is used, so `cost !== null && gold >= cost` does not narrow `cost` in the second
      half; Hearth writes `?? -1`.
-   - Reading a running game's component state from outside (a replay, parity, the balance bot) means walking the tree for
+   - ~~Reading a running game's component state from outside (a replay, parity, the balance bot) means walking the tree for
      `Play` and reading its generated fields (`test/battle-state.ts`). `@rge/testing`'s `state()` reads one component; there is
-     no "the state of `Play`" query on a running game.
+     no "the state of `Play`" query on a running game.~~ *Since 2026-11-15:* `findComponent(Play)`, `findComponents` and
+     `componentState` in `@rge/testing` read the running game's tree; `battle-state.ts` uses them.
 5. **Timing is a step longer, and the same every run.** An enemy hit at the end of a step reports its death in the next step's
    update, and `Play` sees the wave cleared a step after that (A6's snapshot rule). Nothing in the game minds.
 6. **The balance had luck in it.** The old table's "a mixed build wins" held for seed 1: the old rules lose with it on two of

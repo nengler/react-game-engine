@@ -27,6 +27,7 @@ import {
   resetGameState,
   setTextDefaults,
   setGameTree,
+  getGameTree,
   type TilemapData,
 } from "@rge/runtime";
 
@@ -187,19 +188,12 @@ export class Rendered<Root extends GameObject = GameObject> {
    * which is an instance of this class. Null when there is none.
    */
   find<T extends GameObject = GameObject>(what: string | (abstract new (...args: never[]) => T)): T | null {
-    return (this.findAll(what)[0] as T | undefined) ?? null;
+    return findComponent(what, this.root);
   }
 
   /** Every object `find` would match, in tree order. */
   findAll<T extends GameObject = GameObject>(what: string | (abstract new (...args: never[]) => T)): T[] {
-    const out: T[] = [];
-    const visit = (object: GameObject): void => {
-      const matches = typeof what === "string" ? (object as { name?: unknown }).name === what || object.constructor.name === what : object instanceof what;
-      if (matches) out.push(object as T);
-      for (const child of object.children) visit(child);
-    };
-    visit(this.root);
-    return out;
+    return findComponents(what, this.root);
   }
 
   /**
@@ -207,19 +201,7 @@ export class Rendered<Root extends GameObject = GameObject> {
    * `{ s: { vx: 0 } }`): what hot reload keeps, read back. Defaults to the rendered component; pass any compiled component in the tree.
    */
   state(component: GameObject = this.root): Record<string, unknown> {
-    const saved = component.saveHotState() ?? {};
-    const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(saved)) {
-      // `Hero.hp`, or `Hero.s.vx` for a `useMutable` field: a name cannot hold a dot, so a second one always means a field.
-      const [name, field] = key.slice(key.indexOf(".") + 1).split(".") as [string, string | undefined];
-      if (field === undefined) {
-        out[name] = value;
-        continue;
-      }
-      const group = (out[name] ??= {}) as Record<string, unknown>;
-      group[field] = value;
-    }
-    return out;
+    return componentState(component);
   }
 
   /** The words of every `<Text>` in the tree, in tree order. */
@@ -267,4 +249,49 @@ export function render<P extends object, R extends GameObject = GameObject>(
   if (options.tilemaps) registerTilemaps(options.tilemaps);
   const root: R = new Component(props ?? ({} as P));
   return new Rendered<R>(root, options);
+}
+
+/** What `findComponent` looks for: an object's `name` or class name (`"Play"`), or a class (`Play`). */
+export type ComponentQuery<T extends GameObject> = string | (abstract new (...args: never[]) => T);
+
+/**
+ * Every object under `root` (itself included) whose `name` is `what`, or whose class is called that, or which is an instance of
+ * that class, in tree order. Without a `root`, the running game's tree (`createPlayer`, `runScript`, a replay): what a whole-game
+ * test, a replay check or a balance tool reads, as `render(…).findAll` does for one component.
+ */
+export function findComponents<T extends GameObject = GameObject>(what: ComponentQuery<T>, root: GameObject | null = getGameTree()?.root ?? null): T[] {
+  const out: T[] = [];
+  if (root === null) return out;
+  const visit = (object: GameObject): void => {
+    const matches = typeof what === "string" ? (object as { name?: unknown }).name === what || object.constructor.name === what : object instanceof what;
+    if (matches) out.push(object as T);
+    for (const child of object.children) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
+/** The first of `findComponents`, or null: `findComponent(Play)` is the running game's `Play`, while it is on screen. */
+export function findComponent<T extends GameObject = GameObject>(what: ComponentQuery<T>, root: GameObject | null = getGameTree()?.root ?? null): T | null {
+  return (findComponents(what, root)[0] as T | undefined) ?? null;
+}
+
+/**
+ * A component's own state by the names its source gives them (`{ hp: 3 }`, and a `useMutable` as an object, `{ s: { vx: 0 } }`):
+ * what hot reload keeps, read back. `componentState(findComponent(Play)!)` reads a running game's `Play`.
+ */
+export function componentState(component: GameObject): Record<string, unknown> {
+  const saved = component.saveHotState() ?? {};
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(saved)) {
+    // `Hero.hp`, or `Hero.s.vx` for a `useMutable` field: a name cannot hold a dot, so a second one always means a field.
+    const [name, field] = key.slice(key.indexOf(".") + 1).split(".") as [string, string | undefined];
+    if (field === undefined) {
+      out[name] = value;
+      continue;
+    }
+    const group = (out[name] ??= {}) as Record<string, unknown>;
+    group[field] = value;
+  }
+  return out;
 }

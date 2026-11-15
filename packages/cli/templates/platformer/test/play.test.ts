@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseInputScript, runScript, type Player } from "@rge/player";
-import type { GameObject } from "@rge/runtime";
+import { findComponent } from "@rge/testing";
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { START } from "../src/level.ts";
 
 /** Where the hero is (the entity named Hero), and the jumps counted. */
 function seen(player: Player): { x: number; y: number; jumps: number } {
-  const find = (o: GameObject): GameObject | null => ((o as { name?: string }).name === "Hero" ? o : o.children.reduce<GameObject | null>((found, c) => found ?? find(c), null));
-  const hero = find(player.world.root);
+  const hero = findComponent("Hero", player.world.root);
   assert.ok(hero, "the Hero is in the world");
   return { x: hero.transform.x, y: hero.transform.y, jumps: useGame.getState().jumps };
 }
