@@ -836,6 +836,24 @@ stay one run at its own `z` when the frame is sorted. The pixel tests in `native
 layer, a view and a nest carried through, a layer in a canvas, an opaque texture added into a layer, and the malformed cases, on both
 renderers.
 
+### ABI v11: shaders
+
+`int32_t rge_load_shader(const char *path)` loads a file holding one GLSL function, `vec4 effect(vec2 uv)`, and `RGE_OP_LAYER_END` grows to 13
+doubles: `op, blend, tint, shader, time, p0..p7`. librge wraps the function (`SHADER_HEAD` and `SHADER_TAIL` in `assets.c`) in GLSL 3.30
+with the inputs it is given: `image` (the layer's texture), `pixel` (from the top left of the target, worked out from `gl_FragCoord`, whose
+origin is the bottom left), `resolution`, `time` and `params[8]`, and a `main` that multiplies its result by raylib's tint and vertex
+colour. `#line 1` before the author's text makes the compiler's messages count lines in their file. Only the function is the author's,
+so a WebGL build can wrap the same file in GLSL ES 3.00 (a different version line and a precision qualifier). The shader runs while the
+layer is laid over its target (`end_layer`), with its uniforms set each time; the locations are looked up once, at load.
+
+It returns -1 for a missing file or GLSL that does not compile (raylib then falls back to its default shader, which counts as a
+failure; its compiler message is in the log), and `RGE_SHADER_UNSUPPORTED` (-2) in the software build, which has no shaders: a layer
+with that handle is laid over without one. The player asks once per name and warns once for -1 and once for -2 (the warning step 4
+deferred). The `time` is the player's animation clock, so a replay draws the same frames, and the records stay byte-identical between
+Node and the Rust host. `<Layer shader params>` is checked against the assets folder by `rge build` like an image. The smoke test runs a
+shader on the GPU (a pixel-position split, `params` and `time`, in the window and in a canvas, a bad handle, a shader that does not
+compile) and checks the software build's -2 and fallback.
+
 ### Router and Route
 
 `<Router route={screen} transition={fadeThrough} duration={0.5} coverColor="#12151f"><Route name="title">…</Route>…</Router>`. A `Route` is a container that is **in the world only while the router shows it**: the router keeps the routes by name, attaches the one `route` names, and swaps them with `queueAddChild` / `queueRemoveChild`, so only the shown screen updates, draws, collides and is pressed, and `useMount` / `useUnmount` inside a screen mean "the screen came" and "the screen went". **A route's components are made when it comes and dropped once it has gone** (decided 2026-11-11, as React Router does): the compiler shows a `<Route>`'s children only while the route is `active` (a conditional child on `this.<route>.active`, `ExprIR` `ElementRead`), and the router sets `active` when a route is entered and clears it when the leave transition ends, marking the compiled components above it dirty so they render and make or drop the children. So each visit starts fresh: initial state, `useState(() => …)`, `useMount`. **`<Route keepAlive>`** keeps a screen's components and their state between visits (Vue's `<KeepAlive>`), as all routes did before. Kite found why fresh is the default: its character's body is the `Player`'s own state, and a second run started where the first had ended. A route that does not exist is an error naming the ones that do.

@@ -9,18 +9,29 @@ import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 function draw(root: GameObject, frames = 1): DecodedRecord[] {
-  const backend = new RecordingBackend({});
+  return drawWith(new RecordingBackend({}), root, frames).records;
+}
+
+function drawWith(
+  backend: RecordingBackend,
+  root: GameObject,
+  frames = 1,
+  options: { time?: number; shaders?: boolean } = {}
+): { records: DecodedRecord[]; warnings: string[] } {
+  const warnings: string[] = [];
   const builder = new FrameBuilder({
     loadTexture: (path) => backend.loadTexture(path),
+    ...(options.shaders === false ? {} : { loadShader: (path: string) => backend.loadShader(path) }),
+    warn: (message) => warnings.push(message),
     textureSize: (handle) => backend.textureSize(handle) ?? { width: 0, height: 0 },
     measureText: (text, size) => ({ width: text.length * 8, height: size }),
     retain: "check",
   });
   for (let i = 0; i < frames; i++) {
-    const built = builder.build(root, 400, 300);
+    const built = builder.build(root, 400, 300, options.time);
     backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
   }
-  return [...backend.lastFrame.records];
+  return { records: [...backend.lastFrame.records], warnings };
 }
 
 const shape = (color: string, z = 0): Shape => {
@@ -99,5 +110,36 @@ describe("<Layer>", () => {
     l.blend = "multiply";
     l.markChanged();
     assert.deepEqual(ops(draw(root)), ["begin #00000000 normal", "#ff0000ff", "end multiply #ffffffff"]);
+  });
+
+  it("runs its shader as it is laid over: the path under assets, the game's time and its params, padded to eight", () => {
+    const backend = new RecordingBackend({});
+    const root = entity(layer({ blend: "multiply", shader: "cave.glsl", params: [0.25, 2] }, shape("red")));
+    const { records, warnings } = drawWith(backend, root, 2, { time: 3.5 });
+    const end = records.find((r) => r.op === "layerEnd");
+    assert.deepEqual(end, {
+      op: "layerEnd",
+      blend: "multiply",
+      tint: "#ffffffff",
+      shader: "assets/cave.glsl",
+      time: 3.5,
+      params: [0.25, 2, 0, 0, 0, 0, 0, 0],
+    });
+    assert.deepEqual(backend.shaderLoads, ["assets/cave.glsl"], "loaded once, for two frames");
+    assert.deepEqual(warnings, []);
+  });
+
+  it("draws the layer without a shader that could not be loaded, or where none can run, saying so once", () => {
+    const missing = drawWith(
+      new RecordingBackend({ missingShaders: ["assets/gone.glsl"] }),
+      entity(layer({ shader: "gone.glsl" }, shape("red"))),
+      2
+    );
+    assert.equal((missing.records.find((r) => r.op === "layerEnd") as { shader: string | null }).shader, null);
+    assert.equal(missing.warnings.length, 1);
+    assert.match(missing.warnings[0]!, /'assets\/gone\.glsl' could not be loaded/);
+    const none = drawWith(new RecordingBackend({}), entity(layer({ shader: "x.glsl" }, shape("red"))), 2, { shaders: false });
+    assert.equal((none.records.find((r) => r.op === "layerEnd") as { shader: string | null }).shader, null);
+    assert.match(none.warnings.join("\n"), /runs no shaders/);
   });
 });

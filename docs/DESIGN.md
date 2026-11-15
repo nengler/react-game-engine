@@ -2028,6 +2028,10 @@ is a `multiply` layer cleared to the darkness, with the lights in it drawn with 
 - **Never reused from the last frame** (`FLAG_OPAQUE | FLAG_VOLATILE` in `draw.ts`): its records are rewritten each frame, as a
   `<Flex>`'s are. An empty layer writes nothing.
 - The compiler knows it from the manifest: a container, its `blend` and `childBlend` checked as literals, its props following state.
+- **Shaders** (2026-11-15, ABI v11) go on a layer, run as it is laid over: `<Layer shader="cave.glsl" params={[0.12]}>`. A shader is an
+  asset like an image, one GLSL function `vec4 effect(vec2 uv)` that the engine wraps for its platform, so a game's shaders are not
+  tied to desktop GLSL. Not a shader on each sprite: a layer is already the off-screen picture a post-process needs, and a sprite with
+  an effect is a layer with one child. The software renderer runs none and says so (NATIVE_PLAN.md, "ABI v11").
 
 ## Custom hooks (priority 7)
 

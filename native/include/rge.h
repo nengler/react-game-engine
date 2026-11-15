@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 10
+#define RGE_ABI_VERSION 11
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -53,13 +53,15 @@
  *                                                onto what the layer holds. The view and any scissor carry on, in the
  *                                                same pixels. Layers nest, RGE_LAYER_MAX deep; a deeper one is an error
  *                                                that stops the frame.
- *   RGE_OP_LAYER_END    op, blend, tint
+ *   RGE_OP_LAYER_END    op, blend, tint, shader, time, p0, p1, p2, p3, p4, p5, p6, p7
  *                                                Stop drawing into the innermost layer and lay it over the target it is
  *                                                in, covering it exactly, blended with `blend` (an RGE_BLEND_*) and its
  *                                                colours multiplied by tint (packed 0xRRGGBBAA, so its alpha is the
- *                                                layer's opacity). Drawing then carries on in that target, with the
- *                                                blend mode it had. A layer still open when the frame ends is closed as
- *                                                if by an END with RGE_BLEND_NORMAL and white.
+ *                                                layer's opacity). With `shader` a handle from rge_load_shader (-1 for
+ *                                                none), each of its pixels goes through the shader, given `time` and the
+ *                                                eight parameters (see rge_load_shader). Drawing then carries on in that
+ *                                                target, with the blend mode it had. A layer still open when the frame
+ *                                                ends is closed as if by an END with RGE_BLEND_NORMAL, white, no shader.
  */
 #define RGE_OP_VIEW     1
 #define RGE_OP_SPRITE   2
@@ -86,7 +88,7 @@
 #define RGE_OP_SPRITE_REGION_LEN 15
 #define RGE_OP_BOX_LEN     12
 #define RGE_OP_LAYER_BEGIN_LEN 3
-#define RGE_OP_LAYER_END_LEN   3
+#define RGE_OP_LAYER_END_LEN   13
 
 /* Blend modes of RGE_OP_LAYER_BEGIN and RGE_OP_LAYER_END, as the source s (what is drawn, alpha a) meets the destination d:
  *   NORMAL    s * a + d * (1 - a)       painting over
@@ -165,6 +167,18 @@ void    rge_close(void);
 int32_t rge_set_fullscreen(int32_t on);
 
 int32_t rge_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
+/* A shader for RGE_OP_LAYER_END, from a file holding one function, in GLSL (since ABI v11):
+ *
+ *     vec4 effect(vec2 uv) { vec4 c = texture(image, uv); return vec4(c.rgb * (1.0 - 0.5 * length(pixel / resolution - 0.5)), c.a); }
+ *
+ * It is given `image` (the layer, a sampler2D; sample it at `uv`), `pixel` (where the pixel is, in target pixels from the top left),
+ * `resolution` (the target's size in pixels), `time` (seconds, as the record gives it) and `params` (float[8], the record's
+ * p0..p7), and returns the pixel's colour, which the tint then multiplies. librge wraps the function in the shader language of the
+ * platform, so the same file can serve another one. Returns a handle >= 0; -1 when the file is missing or does not compile (the
+ * compiler's message is logged); RGE_SHADER_UNSUPPORTED when this build cannot run shaders (the software renderer), and a layer with
+ * that handle is laid over without one. */
+int32_t rge_load_shader(const char *path);
+#define RGE_SHADER_UNSUPPORTED (-2)
 int32_t rge_load_sound(const char *path);   /* handle >= 0, or -1 */
 void    rge_play_sound(int32_t handle);     /* ignores -1 */
 /* Play a sound at `volume` (0 to 1, clamped) over any plays of it still going: up to RGE_SOUND_VOICES at once, then the

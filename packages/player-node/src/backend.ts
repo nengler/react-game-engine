@@ -76,6 +76,10 @@ export class NodeBackend implements Backend {
     return this.#native.loadTexture(path);
   }
 
+  loadShader(path: string): number {
+    return this.#native.loadShader(path);
+  }
+
   loadSound(path: string): number {
     return this.#native.loadSound(path);
   }

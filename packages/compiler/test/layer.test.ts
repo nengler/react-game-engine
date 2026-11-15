@@ -4,6 +4,7 @@ import { after, describe, it } from "node:test";
 
 import { Layer, Shape, World, type Entity } from "@rge/runtime";
 
+import { checkAssets } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -41,5 +42,15 @@ describe("<Layer>", () => {
     const errors = compileErrors(`function Bad() { return <Layer blend="mulitply"><Entity /></Layer>; }`);
     assert.ok(errors.length > 0);
     assert.match(errors.map((e) => e.message).join("\n"), /mulitply/);
+  });
+
+  it("checks a shader named as a literal against the assets folder, with the nearest name", () => {
+    const compiled = compile(`function Night() { return <Layer shader="cvae.glsl" params={[1, 2]}><Entity /></Layer>; }`);
+    const found = checkAssets([compiled.ir], { folder: "assets", exists: (name) => name === "cave.glsl", list: () => ["cave.glsl"] });
+    assert.equal(found.length, 1);
+    assert.match(found[0]!.message, /shader/);
+    assert.match(found[0]!.message, /cave\.glsl/);
+    const fine = compile(`function Night() { return <Layer shader="cave.glsl"><Entity /></Layer>; }`);
+    assert.deepEqual(checkAssets([fine.ir], { folder: "assets", exists: (name) => name === "cave.glsl", list: () => ["cave.glsl"] }), []);
   });
 });

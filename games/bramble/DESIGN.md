@@ -60,7 +60,9 @@ took 18 ms (a garbage collection or a JIT step, nowhere near a door).
 
 The cave is drawn under a `<Layer blend="multiply" clear="#16162c" childBlend="add">` with the lantern's light in it, a soft white
 disc 96 pixels across (`assets/light.png`, made by `tools/make-assets.ts`) centred on the character (`Play.tsx`). It is the greybox for
-the engine's lighting (NEXT_PRIORITIES.md, "Now", steps 5 to 7): shaders and proper lights come next. The story `Play/Cave` keeps its
+the engine's lighting (NEXT_PRIORITIES.md, "Now", steps 5 to 7). Since step 6 the layer goes through `assets/cave.glsl`, which makes the
+lantern's light flicker a little (`params[0]`, 0.12 *(guess)*) and darkens the screen's edges; the stored story picture is the software
+renderer's, without it. The story `Play/Cave` keeps its
 picture. Not decided yet: how dark it should be when played, whether the bell and the key glow, and whether the wisp carries a light.
 
 ## Findings while writing

@@ -202,6 +202,8 @@ function recordLength(op: number): number {
   }
 }
 
+const NO_PARAMS: readonly number[] = [];
+
 /** A `<Layer>`'s blend mode as the native side takes it. */
 function blendCode(mode: BlendMode): number {
   return mode === "add"
@@ -714,14 +716,24 @@ export class DrawList {
     this.#layerDepth++;
   }
 
-  /** Close the innermost layer and lay it over what is under it with `blend`, at `opacity` times the opacity it is at. */
-  layerEnd(blend: number, opacity: number): void {
+  /**
+   * Close the innermost layer and lay it over what is under it with `blend`, at `opacity` times the opacity it is at, through `shader`
+   * (a handle, or -1 for none) given `time` and up to eight `params` (the rest 0).
+   */
+  layerEnd(blend: number, opacity: number, shader = -1, time = 0, params: readonly number[] = NO_PARAMS): void {
     this.#layerDepth--;
     this.alpha = this.#alphas.pop() as number;
     const at = this.#reserve(RGE_OP_LAYER_END_LEN);
-    this.records[at] = RGE_OP_LAYER_END;
-    this.records[at + 1] = blend;
-    this.records[at + 2] = fadeColor(0xffffffff, Math.min(1, Math.max(0, opacity)) * this.alpha);
+    const r = this.records;
+    r[at] = RGE_OP_LAYER_END;
+    r[at + 1] = blend;
+    r[at + 2] = fadeColor(0xffffffff, Math.min(1, Math.max(0, opacity)) * this.alpha);
+    r[at + 3] = shader;
+    r[at + 4] = time;
+    for (let i = 0; i < 8; i++) {
+      const p = params[i];
+      r[at + 5 + i] = typeof p === "number" && Number.isFinite(p) ? p : 0;
+    }
   }
 
   /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
@@ -825,6 +837,8 @@ function usableOpacity(a: number): number {
 export interface FrameBuilderOptions {
   /** Load a texture through the backend: a handle, or -1 if it could not be loaded. */
   loadTexture(path: string): number;
+  /** Load a layer's shader through the backend: a handle, -1 if it could not be loaded, -2 where shaders cannot run. Without it, none run. */
+  loadShader?: (path: string) => number;
   /** The width and line height in pixels of `text` drawn at `size`, from the backend. Without it, they are estimated (`estimateTextWidth`, and a line as tall as `size`). */
   measureText?: (text: string, size: number) => Size;
   /** The size in pixels of a loaded texture, from the backend. Without it, every texture measures 0 × 0. */
@@ -1150,6 +1164,9 @@ export class FrameBuilder {
   readonly #textureSizes = new Map<number, Size>();
   readonly #textSizes = new Map<string, Size>();
   readonly #loadTexture: (path: string) => number;
+  readonly #loadShader: ((path: string) => number) | undefined;
+  /** Each layer shader's handle by its name under the assets folder: -1 for one that failed, -2 where none can run. */
+  readonly #shaders = new Map<string, number>();
   readonly #measureText: ((text: string, size: number) => Size) | undefined;
   readonly #textureSize: ((handle: number) => Size) | undefined;
   readonly #assets: string;
@@ -1203,6 +1220,7 @@ export class FrameBuilder {
     this.#options = options;
     this.#retain = options.retain !== false;
     this.#loadTexture = options.loadTexture;
+    this.#loadShader = options.loadShader;
     this.#measureText = options.measureText;
     this.#textureSize = options.textureSize;
     this.#assets = options.assets ?? "assets";
@@ -1645,7 +1663,7 @@ export class FrameBuilder {
       }
       flatWalk = flat && !faded;
       if (kind === KIND_LAYER) {
-        list.layerEnd(blendCode((node as Layer).blend), (node as Layer).opacity);
+        this.#layerEnd(node as Layer);
         // Inside the layer `setZ` did nothing, whatever the children asked: the list is still at the layer's z.
         listZ = drawZ;
       }
@@ -1922,7 +1940,7 @@ export class FrameBuilder {
             true,
             (object, kind) => {
               if (kind === KIND_LAYER && object.children.length > 0) {
-                list.layerEnd(blendCode((object as Layer).blend), (object as Layer).opacity);
+                this.#layerEnd(object as Layer);
                 listZ = hudLayerZs.pop() as number;
               }
               if (kind === KIND_FLEX) {
@@ -2754,6 +2772,31 @@ export class FrameBuilder {
   }
 
   /** The texture handle for an image name, loading it the first time (-1, warned about once, if it cannot be loaded). */
+  /** The handle of a layer's shader, loaded the first time it is named: -1 for none (or one that failed), with a warning once. */
+  #shader(name: string): number {
+    if (name === "") return -1;
+    let handle = this.#shaders.get(name);
+    if (handle === undefined) {
+      const path = `${this.#assets}/${name}`;
+      handle = this.#loadShader ? this.#loadShader(path) : -2;
+      this.#shaders.set(name, handle);
+      if (handle === -1)
+        this.#warner.once(
+          `shader:${name}`,
+          `The shader '${path}' could not be loaded (a missing file, or GLSL that does not compile): its layer is drawn without it.`
+        );
+      else if (handle === -2)
+        this.#warner.once("shaders-unsupported", "This renderer runs no shaders (the software renderer): layers are drawn without them.");
+    }
+    return handle < 0 ? -1 : handle;
+  }
+
+  /** Close a `<Layer>`: its blend, its opacity and its shader. */
+  #layerEnd(layer: Layer): void {
+    const shader = this.#shader(layer.shader);
+    this.#list.layerEnd(blendCode(layer.blend), layer.opacity, shader, shader < 0 ? 0 : (this.#time ?? 0), layer.params);
+  }
+
   #texture(image: string): number {
     // By image name, not by path: the path would be put together again for every sprite of every frame.
     let handle = this.#textures.get(image);

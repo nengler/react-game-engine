@@ -21,6 +21,14 @@ export interface LayerProps extends EntityProps {
   clear?: string;
   /** How strongly the layer is laid over what is under it, 0 (not at all) to 1 (fully, the default). */
   opacity?: number;
+  /**
+   * A shader each of the layer's pixels goes through as it is laid over (ABI v11): a file under `assets/` holding one GLSL function,
+   * `vec4 effect(vec2 uv)`, given `image` (the layer: `texture(image, uv)`), `pixel` (from the top left), `resolution`, `time` (the
+   * game's seconds) and `params`. The software renderer runs none, and lays the layer over as it is.
+   */
+  shader?: string;
+  /** Up to eight numbers the shader reads as `params[0]` to `params[7]`; the rest are 0. */
+  params?: readonly number[];
 }
 
 /**
@@ -36,6 +44,8 @@ export class Layer<P extends object = {}> extends Entity<P> {
   childBlend: BlendMode;
   clear: string;
   opacity: number;
+  shader: string;
+  params: readonly number[];
 
   constructor(hostProps: LayerProps = {}, props?: P, defaults?: Partial<P>) {
     super(hostProps, props, defaults);
@@ -43,5 +53,7 @@ export class Layer<P extends object = {}> extends Entity<P> {
     this.childBlend = hostProps.childBlend ?? "normal";
     this.clear = hostProps.clear ?? "transparent";
     this.opacity = hostProps.opacity ?? 1;
+    this.shader = hostProps.shader ?? "";
+    this.params = hostProps.params ?? [];
   }
 }
