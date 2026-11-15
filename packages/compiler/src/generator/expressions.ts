@@ -256,7 +256,13 @@ export class ExpressionEmitter {
       case "NullLiteral":
         return "null";
       case "StateRead":
-        return e.live ? pendingRef(this.state(e.state)) : `this.${this.state(e.state).name}`;
+        if (e.live) {
+          const s = this.state(e.state);
+          // A context's value, read by a handler: as the provider's parent has it now (`ContextReader.live`).
+          if (s.refresh !== undefined && s.refresh.kind === "MemberRead") return `${this.expr(s.refresh.object)}.live`;
+          return pendingRef(s);
+        }
+        return `this.${this.state(e.state).name}`;
       case "LocalRead":
         return e.name;
       case "ParamRead":

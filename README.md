@@ -5,12 +5,18 @@ Components are written as TSX functions, but there is no React and no virtual
 DOM: a compiler turns each component into an ordinary TypeScript class whose
 children are persistent instances, updated in place when state changes.
 
-This repository contains the **compiler** (Phase 2, M0–M15), the runtime, and the
-**native player** (Phase 3, N0–N6): a compiled game draws, plays sound and reads the
-keyboard and mouse through raylib, under Node during development and as a small Rust +
-QuickJS-ng executable that ships without Node. **Start with the [authoring guide](docs/index.html)** (open it in a browser; five pages: start, language, systems, effects and input, reference), [Getting started](docs/start.html) for a game from an empty folder (`rge create my-game --template menu` or `--template platformer` for more than a moving square), and [Recipes](docs/recipes.html) for a menu, a settings screen, a health bar and other everyday pieces. See [docs/DESIGN.md](docs/DESIGN.md) for the
-architecture, the IR, the ground rules and the design decisions, and
-[docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's design, its ABI and its performance baseline. What comes next, including Phase 4 (a real game drives the backlog), is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); the next piece of work, priority 8 with a third game, is planned in [docs/ADVENTURE_PLAN.md](docs/ADVENTURE_PLAN.md). How writing a game should come to feel more like writing React (context, motion, timers, rewind, editor diagnostics, a web backend) is planned in [docs/REACT_FEEL_PLAN.md](docs/REACT_FEEL_PLAN.md).
+It has a compiler, a runtime, and a native player that draws, plays sound and reads the keyboard, mouse and gamepads
+through raylib: under Node while you develop (with hot reload and rewind), and packaged as one folder that runs on V8 or on a
+small Rust + QuickJS-ng host. Three games are built on it: [Kite](packages/kite) (a precision platformer),
+[Hearth](packages/hearth) (a tower defense) and [Bramble](games/bramble) (a top-down adventure made from the template, outside
+the workspaces). Linux is the supported platform.
+
+**Start with the [authoring guide](docs/index.html)** (open it in a browser): [Getting started](docs/start.html) goes from an
+empty folder to a packaged game (`rge create my-game`, or `--template menu` / `--template platformer`), and
+[Recipes](docs/recipes.html) has a menu, a settings screen, a health bar and other everyday pieces. For how it is built, read
+[docs/DESIGN.md](docs/DESIGN.md) (the compiler, the IR and every design decision) and [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md)
+(the player, its ABI and its performance). What is being worked on now is the "Now" table in
+[docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); what still trips a new author is [docs/PAIN_POINTS.md](docs/PAIN_POINTS.md).
 
 ```tsx
 import { useMutable, Entity, Sprite, Collider } from "@rge/runtime/jsx";
@@ -28,8 +34,8 @@ function Player() {
 }
 ```
 
-compiles to [`packages/example/generated/Player.ts`](packages/example/generated/Player.ts)
-(the IR is next to it as `Player.ir.json`).
+compiles to an ordinary TypeScript class (run `npm run example` and see `packages/example/generated/Player.ts`, with the IR
+next to it as `Player.ir.json`).
 
 Game code lives in components, as in React: a component keeps its own state (`useMutable`, written directly as `s.hp -= 1`
 and read back at once in a handler, or `useBody` for a position that walls stop), steps itself in `useUpdate`, takes hits in its collider's `onCollisionEnter`, and tells its parent what happened through
@@ -81,19 +87,22 @@ packages/
     src/typecheck/    type-checking generated code with TypeScript 7.1
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
-  runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements for
-              component source), and the mock GameObject / World (with `tick` / `reportCollision` / `reportPress`),
-              the built-ins (Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex),
-              Sound (a mock that records plays), `loadScene`, and `runtimeManifest`
-              (what the compiler is told about the runtime)
-  player/     (Phase 3) the native player's pure-TypeScript half: object tree → draw records, `Backend`, a recording backend for tests
-  player-node/ (Phase 3) the Node host: koffi binding to `librge`, and `play.ts`
-  host/       (Phase 3) the small host: Rust + QuickJS-ng, linked statically against librge, for `npm run package -- --engine quickjs` (V8 is the default)
-  demo/       (Phase 3) a small playable game in TSX with its generated output and assets; `npm run play:demo`
-  kite/       a one-screen-rooms precision platformer: `npm run play:kite`, `npm run check:kite`
-  hearth/     a small tower defense, the second game: `npm run play:hearth`, `npm run check:hearth`; see its DESIGN.md
+  runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements), GameObject and World,
+              the built-ins (Entity, Sprite, Text, Flex, Button, Menu, Tilemap, …), the game state, sound, saves,
+              `loadScene`, and `runtimeManifest` (what the compiler is told about the runtime)
+  player/     the player's pure-TypeScript half: object tree → draw records, layout, collisions, the fixed step, a recording backend
+  player-node/ the Node host: the binding to `librge`, `rge dev` (hot reload, rewind, the inspector), screenshots, previews
+  cli/        `rge`: create, dev, check, build, screenshot, preview, package, lsp; and the game templates
   testing/    `@rge/testing`: mount one compiled component in a headless world and test it, as React Testing Library does
+  language-server/ `rge lsp`: the compiler's RGE diagnostics in the editor (editors/vscode is the VS Code extension)
+  native/     `@rge/native`: where the built librge and host are found
+  demo/       a small playable game; `npm run play:demo`
+  kite/       a precision platformer: `npm run play:kite`, `npm run check:kite`
+  hearth/     a tower defense: `npm run play:hearth`, `npm run check:hearth`
   example/    example components (their generated output is not committed: `npm run generate`)
+native/       librge, in C over raylib: the ABI every host calls (native/include/rge.h)
+host/         the small host: Rust + QuickJS-ng, linked statically against librge, for `--engine quickjs`
+games/bramble a top-down adventure made from the template, checked from outside the repository by `npm run check:outside`
 ```
 
 ## Usage
@@ -103,7 +112,8 @@ Requires Node.js ≥ 22.18 (TypeScript files run directly via type stripping).
 ```sh
 npm install
 npm test            # full pipeline tests
-npm run typecheck   # tsc 7.1 over compiler, runtime, tests and generated example
+npm run typecheck   # tsc 7.1 over the packages, their tests and the generated games
+npm run ci:local    # the CI workflow's jobs, on this machine
 npm run lint        # oxlint
 npm run format      # oxfmt --write (format:check to only verify)
 npm run example     # recompile packages/example/src → packages/example/generated, and check its scenes

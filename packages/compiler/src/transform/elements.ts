@@ -262,7 +262,7 @@ export class ElementLowering extends HookLowering {
         if (value.kind === "StringLiteral") quasis[quasis.length - 1] += value.value;
         else if (value.kind === "NumberLiteral") quasis[quasis.length - 1] += String(value.value);
         else {
-          expressions.push(value);
+          expressions.push(textValue(value));
           quasis.push("");
         }
       } else {
@@ -1079,6 +1079,17 @@ function hasKey(jsx: Node): jsx is JsxElementNode {
 }
 
 /** A prop that reads nothing that changes is static (evaluated once); otherwise it is dynamic, re-applied when what it reads changes. */
+/**
+ * A `{value}` between a text element's tags, as it is drawn: wrapped in `textOf`, so `null`, `undefined` and booleans are no text, as in
+ * React. A value that is always a string or a number (a template, arithmetic) is left as it is.
+ */
+function textValue(value: ExprIR): ExprIR {
+  if (value.kind === "TemplateLiteral") return value;
+  if (value.kind === "Binary" && ["-", "*", "/", "%", "**"].includes(value.operator)) return value;
+  if (value.kind === "Call" && value.callee.kind === "Function" && value.callee.name === "textOf") return value;
+  return { kind: "Call", callee: { kind: "Function", name: "textOf" }, args: [value] };
+}
+
 function valueProp<N extends string>(name: N, value: ExprIR): ValuePropIR & { readonly name: N } {
   const dependencies = collectDependencies(value);
   return dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value };

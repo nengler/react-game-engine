@@ -6,11 +6,14 @@ import { Sound, Text, createGameState, type InputState } from "@rge/runtime";
 
 import { createPlayer, RecordingBackend, Rewind, type PlayerConfig } from "../src/index.ts";
 
-interface State {
-  count: number;
-  add: () => void;
-}
-const game = createGameState<State>()((set) => ({ count: 0, add: () => set((s) => ({ count: s.count + 1 })) }));
+const game = createGameState(
+  { count: 0 },
+  {
+    add(s) {
+      s.count += 1;
+    },
+  }
+);
 /** Something outside the game state and the tree, which a replay cannot put back: what a game's `Math.random` would be. */
 let outside = 0;
 

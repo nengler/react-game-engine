@@ -147,7 +147,11 @@ export class ExpressionLowering extends LoweringBase {
           );
         }
         case "state":
-          return { kind: "StateRead", state: binding.id };
+          return {
+            kind: "StateRead",
+            state: binding.id,
+            ...(this.mode.inHandler && this.contextValues.has(binding.id) ? { live: true as const } : {}),
+          };
         // Read whole (`takeHit(s)`, `<Camera shake={shake}>`). In a handler it is the component's own object for this `useMutable`,
         // whose fields read and write the component's (`takeHit(s)` changes them, as `s.hp -= 1` would). In render, where nothing
         // writes, it is a copy of the fields as the frame committed them, typed `Readonly`. The properties say which fields it reads.
@@ -195,7 +199,11 @@ export class ExpressionLowering extends LoweringBase {
         case "derived": {
           // In a handler, a value that depends on a `useMutable` field is worked out from the fields as they are now.
           // Lowered against the component's scope, so a handler's own locals cannot shadow what the `const` reads.
-          if (this.mode.inHandler && binding.relower !== undefined && stateReads(binding.value).some((id) => this.mutableStates.has(id))) {
+          if (
+            this.mode.inHandler &&
+            binding.relower !== undefined &&
+            stateReads(binding.value).some((id) => this.mutableStates.has(id) || this.contextValues.has(id))
+          ) {
             const outer = this.scope;
             this.scope = this.componentScope;
             try {
@@ -379,12 +387,6 @@ export class ExpressionLowering extends LoweringBase {
     if (!this.computes() || !isIdentifier(at)) return false;
     const binding = this.scope.get(at.text);
     return binding?.kind === "local" && binding.owned === true;
-  }
-
-  /** The functions a call may name, for diagnostics: `Math.*`, the global conversions and the runtime's functions. */
-  protected allowlistedCalls(): string {
-    const math = Object.keys(MATH_FUNCTIONS).map((n) => n.slice("Math.".length));
-    return `Math.${math.join("/")}, ${Object.keys(GLOBAL_FUNCTIONS).join("/")}, ${Object.keys(this.manifest.functions).join("/")}`;
   }
 
   /** Lowers each expression in order; null (after reporting) at the first that fails. */
@@ -753,14 +755,14 @@ export class ExpressionLowering extends LoweringBase {
         ]);
         this.report(
           DiagnosticCode.UnsupportedExpression,
-          `'${callee.text}' is not a function the compiler knows${near !== null ? ` (did you mean '${near}'?)` : ""}. A component calls functions imported from a \`.ts\` file (\`import { ${callee.text} } from "./rules.ts"\`), its own functions, and ${this.allowlistedCalls()}.`,
+          `'${callee.text}' is not a function the compiler knows${near !== null ? ` (did you mean '${near}'?)` : ""}. A component calls functions imported from a \`.ts\` file (\`import { ${callee.text} } from "./rules.ts"\`), its own functions, \`Math\`'s, \`String\`/\`Number\`/\`Boolean\`, and the engine's (\`clamp\`, \`freeze\`, …).`,
           node
         );
         return null;
       }
       this.report(
         DiagnosticCode.UnsupportedExpression,
-        `Only allowlisted calls are supported: ${this.allowlistedCalls()}, and methods of handler parameters.`,
+        "Only these calls work in a component: functions imported from a `.ts` file, its own functions, `Math`'s, `String`/`Number`/`Boolean`, the engine's (`clamp`, `freeze`, …), and the methods of a handler's parameters.",
         node
       );
       return null;
@@ -871,9 +873,11 @@ export class ExpressionLowering extends LoweringBase {
         const lowered = this.lowerNode(fresh);
         return lowered && this.lowerArrayCall(lowered, copying, node.arguments, node);
       }
+      const store = this.storeWrite(receiver, name);
       this.report(
         code,
-        `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,
+        store ??
+          `\`${name}\` changes the array in place, which never re-renders. Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}, or keep the list in a \`useMutable\` field, where \`s.items.${name}(…)\` works.`,
         callee.name
       );
       return null;
@@ -886,7 +890,7 @@ export class ExpressionLowering extends LoweringBase {
       }
       this.report(
         code,
-        `'${name}' is not an allowlisted call. Supported: ${this.allowlistedCalls()}, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,
+        `'${name}' is not a method a component can call. Array methods that make a new value (\`map\`, \`filter\`, \`find\`, \`reduce\`, \`toSorted\`, …) and string and number methods (\`padStart\`, \`toFixed\`, …) work, and in a handler so do the methods of a value the handler made itself. For anything else, write a function in a .ts file and import it.`,
         callee.name
       );
       return null;
@@ -955,6 +959,23 @@ export class ExpressionLowering extends LoweringBase {
     return this.lowerNode(node);
   }
 
+  /**
+   * The message for a write into a value read from the game state (`run.time = 0`, `items.push(x)`), or null when `node` is not
+   * one: only its actions change it, so the message names the action to add.
+   */
+  protected storeWrite(node: Expression, method?: string): string | null {
+    let root: Expression = unwrapParens(node);
+    while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root))
+      root = unwrapParens(root.expression);
+    if (!isIdentifier(root) || this.scope.get(root.text)?.kind !== "state") return null;
+    const path = this.storeNames.get(root.text);
+    if (path === undefined) return null;
+    const written = node.getText(this.sourceFile);
+    const inState = `s.${path}${written.slice(root.text.length)}`;
+    const write = method === undefined ? `${inState} = …;` : `${inState}.${method}(…);`;
+    return `'${root.text}' is read from the game state, which only its actions change: add an action to GameState.ts that writes it (\`name(s) { ${write} }\`) and call that here (\`const { name } = useGame.actions();\`).`;
+  }
+
   lowerAssignTarget(node: Expression): AssignTargetIR | null {
     // `best.hits = 0`, `grid[y]![x] = 1`: into a value the handler made.
     if ((isPropertyAccessExpression(node) || isElementAccessExpression(node)) && this.ownsValue(node)) {
@@ -972,6 +993,11 @@ export class ExpressionLowering extends LoweringBase {
     while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root))
       root = unwrapParens(root.expression);
     if (isIdentifier(root) && !this.scope.has(root.text) && this.declaredAfterError(root.text)) return null;
+    const store = this.storeWrite(node);
+    if (store !== null) {
+      this.report(DiagnosticCode.UnsupportedStatement, store, node);
+      return null;
+    }
     this.report(
       DiagnosticCode.UnsupportedStatement,
       "Only `let` locals and the members of a handler's own values can be assigned. To change state, write through its `useMutable` field (`s.foes[i].hp = 0`, `s.pos.x = 3`) or give the field a new value (`s.foes = s.foes.map(…)`): a name for one of its items (`const e = s.foes[0]`) or a loop variable is a read, not a way to write.",

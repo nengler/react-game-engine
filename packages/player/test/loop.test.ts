@@ -55,7 +55,7 @@ describe("createPlayer", () => {
   });
 
   it("starts every game from the initial game state, whatever an earlier game left", () => {
-    const useGame = createGameState<{ coins: number }>()(() => ({ coins: 0 }));
+    const useGame = createGameState({ coins: 0 }, {});
     useGame.setState({ coins: 1 });
     assert.equal(useGame.getState().coins, 1);
     const { player: p } = player(() => new Entity());

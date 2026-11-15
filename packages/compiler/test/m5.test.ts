@@ -433,7 +433,7 @@ describe("M5a: diagnostics", () => {
 
   it("rejects array methods outside the allowlist, wrong argument counts and optional calls", () => {
     const state = `const s = useMutable({ items: [] as Item[] });`;
-    assert.deepEqual(codes(withHandler(state, `s.items = s.items.group((e) => e);`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.copyWithin(0, 1);`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter();`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(withHandler(state, `s.items = s.items.slice(1, 2, 3);`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(withHandler(state, `s.items = s.items?.filter((e) => e.n > 0);`)), [DiagnosticCode.UnsupportedExpression]);

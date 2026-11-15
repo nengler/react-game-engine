@@ -102,7 +102,10 @@ export async function checkCommand(args: readonly string[]): Promise<number> {
       name: "compile",
       run: () => {
         const r = node(compileArgs(game.dir), game.dir);
-        return { ok: r.ok, detail: r.output.trim().split("\n").at(-1) ?? "", output: r.output };
+        if (r.ok) return { ok: true, detail: r.output.trim().split("\n").at(-1) ?? "", output: r.output };
+        // The errors are printed below, once each: the summary line only counts them.
+        const errors = r.output.split("\n").filter((line) => / - error RGE\d+:/.test(line)).length;
+        return { ok: false, detail: errors === 1 ? "1 error" : errors > 1 ? `${errors} errors` : "the compiler failed", output: r.output };
       },
     },
     {

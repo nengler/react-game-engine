@@ -337,7 +337,9 @@ describe("conditionals in a list's map: generated code and diagnostics", () => {
   it("filters the `&&` form and tests the branch of a ternary with the condition itself (so TypeScript narrows it)", () => {
     assert.match(compiled.code, /const \$list = this\.\$st_spots\.filter\(\(s\) => s\.on\);/);
     assert.match(compiled.code, /const \$branch = s\.on \? 0 : 1;/);
-    assert.match(compiled.code, /if \(s\.on\) \{\n\s+\$item = new Dot\(/);
+    // Each branch's item is given getters that say nothing once it is in the other branch.
+    assert.match(compiled.code, /if \(s\.on\) \{\n\s+\$item = this\.withPropGetters\(new Dot\(/);
+    assert.match(compiled.code, /if \(!\(s\.on\)\) return undefined; \$assume\(s\.on\);/);
   });
 
   it("type-checks the generated module", () => {

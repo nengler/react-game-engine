@@ -96,6 +96,22 @@ export class ContextReader<T> {
     return this.#provider === null ? this.#context.default : (this.#provider.value as T);
   }
 
+  /**
+   * The value as a handler reads it: what the provider's parent has now (its getter, `withPropGetters`), so a handler sees a write an
+   * earlier handler of this step made, where `value` is what the provider's last render was given. The default without a provider;
+   * the last value where the parent gave no getter or its getter says nothing (the provider is on its way out).
+   */
+  get live(): T {
+    const provider = this.#provider;
+    if (provider === null) return this.#context.default;
+    const getter = provider.propGetters?.["value"];
+    if (getter !== undefined) {
+      const now = getter();
+      if (now !== undefined) return now as T;
+    }
+    return provider.value as T;
+  }
+
   /** Called when the component joins a world (`GameObject.ownedHandles`): find the provider, and render with its value. */
   attachOwner(owner: GameObject, _world: World): void {
     this.#owner = owner;

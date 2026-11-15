@@ -563,6 +563,7 @@ export class HookLowering extends ExpressionLowering {
     this.stateTypes.set(id, type);
     hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(at) });
     if (!this.storePaths.has(globalKey)) this.storePaths.set(globalKey, id);
+    this.storeNames.set(name, globalKey);
     return id;
   }
 
@@ -664,7 +665,10 @@ export class HookLowering extends ExpressionLowering {
       kind: "State",
       id: readerId,
       name: readerField,
-      type: { kind: "SourceType", text: `{ readonly value: (typeof ${context.name})["default"] }` },
+      type: {
+        kind: "SourceType",
+        text: `{ readonly value: (typeof ${context.name})["default"]; readonly live: (typeof ${context.name})["default"] }`,
+      },
       initialValue: { kind: "Call", callee: { kind: "Function", name: "readContext" }, args: [context] },
       handle: true,
       transient: true,
@@ -680,6 +684,7 @@ export class HookLowering extends ExpressionLowering {
     const valueId = stateId(this.component.name, valueName);
     state.push({ kind: "State", id: valueId, name: valueField, type: valueType, initialValue: read, transient: true, refresh: read });
     this.stateTypes.set(valueId, valueType);
+    this.contextValues.add(valueId);
     hooks.push({ kind: "UseState", state: valueId, setterName: null, span: this.span(hook.declaration) });
     if (hook.name !== null) {
       this.componentScope.declare(hook.name, { kind: "state", id: valueId });
@@ -694,6 +699,13 @@ export class HookLowering extends ExpressionLowering {
         kind: "derived",
         name: entry.name,
         value: { kind: "MemberRead", object: { kind: "StateRead", state: valueId }, name: entry.key, optional: false },
+        // In a handler, the provider's value as it is now.
+        relower: () => ({
+          kind: "MemberRead",
+          object: { kind: "StateRead", state: valueId, live: true },
+          name: entry.key,
+          optional: false,
+        }),
       });
     }
   }

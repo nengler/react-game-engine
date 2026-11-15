@@ -27,14 +27,15 @@ function project(files: Record<string, string>) {
 
 const STATE = `import { createGameState } from "@rge/runtime";
 interface Blow { power: number; crit: boolean }
-interface State { hits: number; strike: (power: number) => Blow }
-export const useGame = createGameState<State>()((set) => ({
-  hits: 0,
-  strike: (power) => {
-    set((s) => ({ hits: s.hits + 1 }));
-    return { power, crit: power > 1 };
+export const useGame = createGameState(
+  { hits: 0 },
+  {
+    strike(s, power: number): Blow {
+      s.hits += 1;
+      return { power, crit: power > 1 };
+    },
   },
-}));
+);
 `;
 
 const TALLY = `export function makeTally() {

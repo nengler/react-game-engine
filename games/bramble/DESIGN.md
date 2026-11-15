@@ -158,7 +158,7 @@ answered, the components read like React:
 
 - **What is drawn is computed where it is drawn.** `World` is one list, `{spotsOf(run).map((s) => <Sprite key={s.id} … />)}`; the
   character is one `<Sprite>` in the camera (not a list of one); `Inventory` holds its `{slot.filled && …}` in the list item.
-- **A menu's cursor is the screen's own state** (`useState`), and the rows are computed from the game state (`titleRows(hasSave)`,
+- **A menu's cursor is the screen's own state** (`useMutable`), and the rows are computed from the game state (`titleRows(hasSave)`,
   `settingsRows(settings, bindings, capturing)`) and passed to `<Menu rows cursor>` as props. The game state keeps only what is shared:
   the run, the screen and whether there is a save.
 - **The settings screen listens to the settings itself**: it keeps the values and the keys as its own state and subscribes in
