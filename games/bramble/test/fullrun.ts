@@ -6,6 +6,7 @@
  */
 import { findPath } from "@rge/runtime";
 
+import { CAVE_INTRO_SECONDS } from "../src/cutscenes.ts";
 import { cellAt, findDoor, MAPS, type MapId } from "../src/rules/maps.ts";
 import { bodyAt, bushKey, newRun, type Run } from "../src/rules/run.ts";
 import { route, type Leg } from "./replays.ts";
@@ -66,6 +67,8 @@ export function fullRun(): { script: string; run: Run } {
   };
   go(pickupCell("overworld", "lantern"));
   through("overworld", "cave"); // the cave: the lantern lights it
+  // Its first visit plays a cutscene the world waits for (Play.tsx): wait it out, and a few steps more.
+  scripts.push(`_*${Math.ceil(CAVE_INTRO_SECONDS * 60) + 6}`);
   go(pickupCell("cave", "key"));
   go(pickupCell("cave", "bell-cave"));
   through("cave", "cave-exit");
