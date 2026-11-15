@@ -44,9 +44,10 @@ export function Play() {
         />
       </Camera>
       <ParticleLayer particles={fx} />
-      {/* The cave is dark: a layer of near-black multiplied over it, with the lantern's light added where the character is. */}
+      {/* The cave is dark: a layer of near-black multiplied over it, with the lantern's light added where the character is, through a
+          shader that makes the light flicker and the edges darker (the software renderer, in tests, draws it without). */}
       {run.map === "cave" && (
-        <Layer blend="multiply" clear="#16162c" childBlend="add">
+        <Layer blend="multiply" clear="#16162c" childBlend="add" shader="cave.glsl" params={[0.12]}>
           <Sprite image="light.png" originX={48} originY={48} x={x + 8} y={y + 8} />
         </Layer>
       )}
