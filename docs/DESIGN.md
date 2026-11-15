@@ -1781,6 +1781,17 @@ and without it neither exists.
   leaf changed, before and after.
 - **Editing** sets a state through `loadHotState` (`editState`), as hot reload does, or a game-state leaf through `setState`; each
   is logged as an edit from the inspector that a replay does not repeat (rewind, D1, will record them).
+- **The profiler** (2026-11-15; `runtime/src/profile.ts`). Speed was learned from CI's bench budgets, after the fact; the profiler
+  says where a frame's script time goes while the game runs. The inspector's "profile" button calls `startProfiling()`, and while a
+  profiler is active the World times each `onInput`, `onUpdate` (with its timers) and render (`renderInPass`) and adds it to a row
+  per component class name, and the player times its phases: `steps` (`world.tick`), `collisions` (the walk that places colliders,
+  the contacts and the renders they cause), `build` (the frame's last walk) and `draw` (`backend.frame`, which includes waiting for
+  the display). Once a second the inspector sends `take()`: milliseconds a frame per component (input, update, render, total), how
+  many ran at most in one frame and renders a frame, the most expensive first. Off, the World checks `activeProfiler()` once per
+  tick and once per flush pass and runs the loops it always ran, so the bench budgets see no cost; on, each handler costs two clock
+  reads. Times are inclusive of what a handler calls, and a render is the component's own (its children render on their own turn).
+  Tried on Hearth's wave 10 under Node: `Tower` (16) 0.30 ms a frame, `Enemy` (110) 0.16, `Play` 0.10, collisions 0.41 of a
+  1.35 ms frame: the towers' target queries, not the enemies, are the place to look.
 
 ## Rewind in `rge dev` (2026-11-13)
 
