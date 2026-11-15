@@ -445,21 +445,6 @@ export class ElementLowering extends HookLowering {
       // <Text> takes its own. Type-checking says whether the component takes text.
       props.push(...this.lowerTextContent(isJsxElement(jsx) ? jsx.children : [], "children", props, tag.text, jsx));
     } else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent, forward: slotOk && isComponent });
-    if (isComponent && children.some((c) => c.kind === "KeyedListChild") && children.length > 1) {
-      const what = children.some((c) => c.kind === "KeyedListChild" && !isKeyedElement(c)) ? "A list" : "A keyed element";
-      this.report(
-        DiagnosticCode.InvalidList,
-        `${what} passed to <${tag.text}> must be its only child: its items and the other children would share positions. Wrap it in an <${this.hostIntrinsic}>.`,
-        jsx,
-      );
-    }
-    if (isComponent && children.length > 1 && children.some((c) => c.kind === "ChildrenSlot")) {
-      this.report(
-        DiagnosticCode.UnsupportedJsxChild,
-        `\`{children}\` forwarded to <${tag.text}> must be the only child passed to it: put the other children inside <${tag.text}> itself, or pass them through \`{children}\` from the parent.`,
-        jsx,
-      );
-    }
     if (!isComponent) this.checkContainer(tag.text, children.length, jsx);
 
     const fieldName = this.allocateFieldName(tag.text, listItem ? "Items" : null);

@@ -252,7 +252,9 @@ export class ElementEmitter extends HandlerEmitter {
       // Hot reload and saves find a list item by its key, so removing one item does not move state between the others.
       w.line("$item.hotKey = $key;");
       if (records) w.line(`${records}.set($key, $rec);`);
-      w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
+      // Among a component's passed children, an item's order is the list's own position and then its index (`[2, 5]`), so the list
+      // keeps its place between the children written beside it.
+      w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, [${slot}, ${position}])` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
       if (records || hasDynamicProps(el.props) || (alt !== null && hasDynamicProps(alt.props))) {
         w.close();
         w.open("} else {");
@@ -283,7 +285,7 @@ export class ElementEmitter extends HandlerEmitter {
     });
     w.block(`if ($keys.length !== ${order}.length || $keys.some(($k, $i) => $k !== ${order}[$i]))`, () => {
       const ordered = `$keys.map(($k) => ${items}.get($k)!)`;
-      w.line(`${mount.passed ? `$parent.queueReorderPassedChildren(${ordered})` : `$parent.queueReorder(${slot}, ${ordered})`};`);
+      w.line(`${mount.passed ? `$parent.queueReorderPassedChildren(${ordered}, [${slot}])` : `$parent.queueReorder(${slot}, ${ordered})`};`);
       w.line(`${order} = $keys;`);
     });
     w.close("}");

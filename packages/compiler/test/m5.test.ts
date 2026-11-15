@@ -990,9 +990,9 @@ function Table() {
 
   it("generates passed attaches", () => {
     const { code } = compile(LIST, "Table.tsx");
-    assert.match(code, /\$parent\.queueAttachPassedChild\(\$item, \$n\);/);
+    assert.match(code, /\$parent\.queueAttachPassedChild\(\$item, \[0, \$n\]\);/, "an item's order among passed children is the list's position, then its index");
     assert.match(code, /\$parent\.queueDetachPassedChild\(\$item\);/);
-    assert.match(code, /\$parent\.queueReorderPassedChildren\(\$keys\.map/);
+    assert.match(code, /\$parent\.queueReorderPassedChildren\(\$keys\.map\(.*\), \[0\]\);/);
     assert.deepEqual(typeCheck(compile(LIST, "Table.tsx")), []);
   });
 
@@ -1030,10 +1030,10 @@ describe("M8: diagnostics", () => {
     assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
   });
 
-  it("forwards children to another component only as the whole of what it passes (see tier3.test.ts)", () => {
+  it("forwards children to another component, alone or beside children of its own (see tier3.test.ts)", () => {
     const source = `${box("children: Child", "{children}")}
 function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box><Sprite image="a" />{children}</Box></Entity>; }`;
-    assert.deepEqual(diag(source), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.match(compile(source).code, /this\.passedChildrenForwardAt = 1;/);
     const ok = `${box("children: Child", "{children}")}
 function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
     assert.doesNotThrow(() => compile(ok));
@@ -1049,7 +1049,7 @@ function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{child
     assert.ok(diag(source).includes(DiagnosticCode.InvalidProps));
   });
 
-  it("takes a list only as the whole of the passed children", () => {
+  it("takes a list as the whole of the passed children, or beside others", () => {
     const parent = (children: string) => `${box("children: Child", "{children}")}
 interface Row { id: string }
 function Table() {
@@ -1057,7 +1057,7 @@ function Table() {
   const rows = s.rows;
   return <Entity name="Table"><Box>${children}</Box></Entity>;
 }`;
-    assert.ok(diag(parent(`<Sprite image="x" />{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)).includes(DiagnosticCode.InvalidList));
+    assert.doesNotThrow(() => compile(parent(`<Sprite image="x" />{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
     assert.doesNotThrow(() => compile(parent(`{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
   });
 

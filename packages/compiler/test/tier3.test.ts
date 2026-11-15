@@ -363,6 +363,44 @@ function UseList() {
   const s = useMutable({ ids: [1, 2] as number[] });
   return <Entity name="use"><Outer title="t">{s.ids.map((i) => <Entity key={i} name={"n" + i} />)}</Outer></Entity>;
 }
+
+function UseMixed() {
+  const s = useMutable({ on: false, ids: [1, 2] as number[] });
+  return (
+    <Entity name="use">
+      <Outer title="t">
+        <Entity name="head" />
+        {s.ids.map((i) => <Entity key={i} name={"n" + i} />)}
+        {s.on && <Entity name="maybe" />}
+        <Entity name="foot" />
+      </Outer>
+    </Entity>
+  );
+}
+
+function Card({ title, children }: BoxProps) {
+  return (
+    <Entity name="card">
+      <Box title={title}>
+        <Entity name="title" />
+        {children}
+        <Entity name="footer" />
+      </Box>
+    </Entity>
+  );
+}
+
+function UseCard() {
+  const s = useMutable({ ids: [1, 2] as number[] });
+  return (
+    <Entity name="use">
+      <Card title="t">
+        <Entity name="first" />
+        {s.ids.map((i) => <Entity key={i} name={"n" + i} />)}
+      </Card>
+    </Entity>
+  );
+}
 `;
 
 interface UseInstance extends Entity {
@@ -371,12 +409,15 @@ interface UseInstance extends Entity {
 interface UseListInstance extends Entity {
   s: { [field: string]: unknown };
 }
+type UseMixedInstance = UseListInstance;
 
 describe("forwarding {children}", () => {
   let Use: new () => UseInstance;
   let UseList: new () => UseListInstance;
+  let UseMixed: new () => UseMixedInstance;
+  let UseCard: new () => UseMixedInstance;
   before(async () => {
-    ({ Use, UseList } = await load<{ Use: typeof Use; UseList: typeof UseList }>(compile(FORWARD, "Forward.tsx")));
+    ({ Use, UseList, UseMixed, UseCard } = await load<{ Use: typeof Use; UseList: typeof UseList; UseMixed: typeof UseMixed; UseCard: typeof UseCard }>(compile(FORWARD, "Forward.tsx")));
   });
 
   /** The names under the `body` entity of the innermost Box. */
@@ -437,11 +478,37 @@ describe("forwarding {children}", () => {
     assert.deepEqual(typeCheck(compiled), []);
   });
 
-  it("rejects a forwarded {children} beside other children, and one inside a condition", () => {
+  it("passes a list beside other children, keeping its place through two forwards as it grows, shrinks and reorders", () => {
+    const world = new World();
+    const m = new UseMixed();
+    world.mount(m);
+    world.flush();
+    assert.deepEqual(bodyNames(m), ["head", "n1", "n2", "foot"]);
+    m.s.ids = [3, 2, 1];
+    world.flush();
+    assert.deepEqual(bodyNames(m), ["head", "n3", "n2", "n1", "foot"]);
+    m.s.on = true;
+    m.s.ids = [2];
+    world.flush();
+    assert.deepEqual(bodyNames(m), ["head", "n2", "maybe", "foot"]);
+    m.s.ids = [2, 4];
+    world.flush();
+    assert.deepEqual(bodyNames(m), ["head", "n2", "n4", "maybe", "foot"]);
+  });
+
+  it("forwards {children} between a component's own children: <Box><Title />{children}<Footer /></Box>", () => {
+    const world = new World();
+    const c = new UseCard();
+    world.mount(c);
+    world.flush();
+    assert.deepEqual(bodyNames(c), ["title", "first", "n1", "n2", "footer"]);
+    c.s.ids = [2, 1, 5];
+    world.flush();
+    assert.deepEqual(bodyNames(c), ["title", "first", "n2", "n1", "n5", "footer"]);
+  });
+
+  it("rejects a forwarded {children} inside a condition", () => {
     const head = `interface P { children: Child }\nfunction Box({ children }: P) { return <Entity name="b">{children}</Entity>; }\n`;
-    const beside = compileErrors(`${head}function Mod({ children }: P) { return <Entity name="m"><Box><Entity name="x" />{children}</Box></Entity>; }`);
-    assert.equal(beside[0]?.code, DiagnosticCode.UnsupportedJsxChild);
-    assert.match(beside[0]!.message, /must be the only child passed to it/);
     const conditional = compileErrors(`${head}function Mod({ children }: P) { const s = useMutable({ on: true }); return <Entity name="m">{s.on && <Box>{children}</Box>}</Entity>; }`);
     assert.equal(conditional[0]?.code, DiagnosticCode.UnsupportedJsxChild);
     assert.match(conditional[0]!.message, /always present/);
