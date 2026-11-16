@@ -12,6 +12,7 @@
  * Options:
  *   --script "<script>"     the input script (default: 1 idle step)
  *   --script-file <file>    the script, from a file
+ *   --frames-file <file>    recorded input instead of a script: a JSON array of input frames (what `tse session` keeps)
  *   --at 0,10,20            steps to capture (0 is after the first scripted frame); default is the last step
  *   --every N               capture every Nth step instead
  *   --out <dir>             where to write (default ./shots); frames are step-<n>.png
@@ -29,11 +30,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
+import { parseInputScript, type InputBindings, type InputFrame, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
 import { contactSheet, decodePng, encodePng, findNativeLibraryOf, pixelDifference, renderRun, type Pixels } from "@tsengine/player-node";
 
 const usage =
-  'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
+  'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file> | --frames-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
 
 /** Options that take no value. */
 const SWITCHES = new Set(["gpu", "update"]);
@@ -121,9 +122,19 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     screen?: ScriptOptions["screen"];
   };
   process.chdir(gameDir);
-  const script =
-    flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
-  const frames = parseInputScript(script, { bindings: mod.bindings, screen: mod.screen });
+  let frames: readonly InputFrame[];
+  if (flags.get("frames-file") !== undefined) {
+    const recorded = JSON.parse(readFileSync(flags.get("frames-file") as string, "utf8")) as unknown;
+    if (!Array.isArray(recorded) || recorded.length === 0) {
+      console.error(`--frames-file needs a JSON array of at least one input frame.\n${usage}`);
+      return 2;
+    }
+    frames = recorded as InputFrame[];
+  } else {
+    const script =
+      flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
+    frames = parseInputScript(script, { bindings: mod.bindings, screen: mod.screen });
+  }
   let at: number[] | undefined;
   if (flags.has("at")) at = (flags.get("at") as string).split(",").map(Number);
   else if (flags.has("every")) {

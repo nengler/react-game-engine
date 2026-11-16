@@ -6,6 +6,7 @@ export { objectAt, pathIn, captureHotState, restoreHotState, type HotState } fro
 export {
   createGameState,
   GameStore,
+  liveGameStores,
   resetGameState,
   type GameState,
   type ActionsOf,
@@ -217,3 +218,14 @@ export {
   type ProfileKind,
   type ProfileReport,
 } from "./profile.ts";
+export {
+  componentState,
+  describeScene,
+  findComponent,
+  findComponents,
+  matchesQuery,
+  sceneText,
+  type ComponentQuery,
+  type DescribeOptions,
+  type SceneNode,
+} from "./describe.ts";

@@ -41,6 +41,7 @@ export {
 export { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
 export { Warner } from "./warn.ts";
 export { runScript, ScriptedInputBackend, type RunOptions, type RunResult } from "./harness.ts";
+export { Session, valueAt, type SessionOptions, type StepOptions, type StepResult, type Until } from "./session.ts";
 export { parseInputScript, scriptLength, type InputBindings, type ScriptFrame, type ScriptOptions } from "./script.ts";
 export {
   gameLook,

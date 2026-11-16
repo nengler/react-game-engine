@@ -343,6 +343,14 @@ function carry(next: unknown, old: unknown): unknown {
 /** Every store made in this process, so a new game can reset them all. */
 const stores = new Set<{ reset(): void }>();
 
+/**
+ * Every game state made in this process and still current (one a hot reload replaced is dropped), in the order they were made:
+ * what a headless session snapshots and hashes besides the tree.
+ */
+export function liveGameStores(): GameStore<unknown>[] {
+  return [...stores].filter((store): store is GameStore<unknown> => store instanceof GameStore);
+}
+
 /** Put every game state back to its initial values. `createPlayer` calls it, so each game starts fresh; tests call it between cases. */
 export function resetGameState(): void {
   for (const store of stores) store.reset();
