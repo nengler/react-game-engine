@@ -22,6 +22,7 @@ import {
   Fade,
   Layer,
   Light,
+  Line,
   type BlendMode,
   Route,
   Router,
@@ -927,6 +928,8 @@ const KIND_ROUTER = 14;
 const KIND_LAYER = 15;
 /** A `<Light>`: one light record. */
 const KIND_LIGHT = 16;
+/** A `<Line>`: one rect record, turned along the line. */
+const KIND_LINE = 17;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -954,35 +957,37 @@ function classCode(object: GameObject): number {
         ? KIND_SPRITE
         : object instanceof Shape
           ? KIND_SHAPE
-          : object instanceof Text
-            ? KIND_TEXT
-            : object instanceof Camera
-              ? KIND_CAMERA
-              : object instanceof Pointer
-                ? KIND_POINTER
-                : object instanceof Collider
-                  ? KIND_COLLIDER
-                  : object instanceof Screen
-                    ? KIND_SCREEN
-                    : object instanceof Hud
-                      ? KIND_HUD
-                      : object instanceof Flex
-                        ? KIND_FLEX
-                        : object instanceof Tilemap
-                          ? KIND_TILEMAP
-                          : object instanceof Particles
-                            ? KIND_PARTICLES
-                            : object instanceof Fade
-                              ? KIND_FADE
-                              : object instanceof Route
-                                ? KIND_ROUTE
-                                : object instanceof Router
-                                  ? KIND_ROUTER
-                                  : object instanceof Layer
-                                    ? KIND_LAYER
-                                    : object instanceof Light
-                                      ? KIND_LIGHT
-                                      : KIND_NONE;
+          : object instanceof Line
+            ? KIND_LINE
+            : object instanceof Text
+              ? KIND_TEXT
+              : object instanceof Camera
+                ? KIND_CAMERA
+                : object instanceof Pointer
+                  ? KIND_POINTER
+                  : object instanceof Collider
+                    ? KIND_COLLIDER
+                    : object instanceof Screen
+                      ? KIND_SCREEN
+                      : object instanceof Hud
+                        ? KIND_HUD
+                        : object instanceof Flex
+                          ? KIND_FLEX
+                          : object instanceof Tilemap
+                            ? KIND_TILEMAP
+                            : object instanceof Particles
+                              ? KIND_PARTICLES
+                              : object instanceof Fade
+                                ? KIND_FADE
+                                : object instanceof Route
+                                  ? KIND_ROUTE
+                                  : object instanceof Router
+                                    ? KIND_ROUTER
+                                    : object instanceof Layer
+                                      ? KIND_LAYER
+                                      : object instanceof Light
+                                        ? KIND_LIGHT
+                                        : KIND_NONE;
     code = kind;
     // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
     if (
@@ -1197,6 +1202,8 @@ export class FrameBuilder {
   #reference: FrameBuilder | undefined;
   readonly #particle = { x: 0, y: 0, t: 0 };
   readonly #placed = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
+  /** Where a `<Line>`'s rect goes: its own, as `#placed` is kept upright and unscaled for the records that share it. */
+  readonly #linePlaced = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   // What reusing needs from the last frame (see `DrawInfo`): its world records in tree order, before the z sort, its texts and colliders.
   #token: object = {};
   #lastRoot: GameObject | null = null;
@@ -1470,6 +1477,10 @@ export class FrameBuilder {
         case KIND_SHAPE:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#shape(node as Shape, at);
+          break;
+        case KIND_LINE:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#line(node as Line, at);
           break;
         case KIND_TEXT:
           if ((node as Text).text !== "") {
@@ -1900,6 +1911,10 @@ export class FrameBuilder {
                 case KIND_SHAPE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#shape(object as Shape, world);
+                  break;
+                case KIND_LINE:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#line(object as Line, world);
                   break;
                 case KIND_TILEMAP:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -2594,6 +2609,40 @@ export class FrameBuilder {
     const color = this.#color(shape.color);
     if (shape.kind === "circle") this.#list.ellipse(world, shape.width, shape.height, color);
     else this.#list.rect(world, shape.width, shape.height, color);
+  }
+
+  /**
+   * A `<Line>` at `world` (where its start is): one rect record from there to (`x2`, `y2`) in its parent's space, turned along
+   * the line, its thickness centred on it. The parent's turn and scale are `world`'s less the line's own (its layout offset,
+   * placement and transform), so the end is where the parent puts (`x2`, `y2`) whatever the line's own rotation and scale.
+   */
+  #line(line: Line, world: WorldTransform): void {
+    const local = composeTransforms(
+      composeTransforms(offsetTransform(IDENTITY_TRANSFORM, line.layoutX, line.layoutY), line.placement),
+      line.transform
+    );
+    if (local.scaleX === 0 || local.scaleY === 0) return;
+    const parentRotation = world.rotation - local.rotation;
+    const parentScaleX = world.scaleX / local.scaleX;
+    const parentScaleY = world.scaleY / local.scaleY;
+    // The line in the parent's space, scaled as the parent scales, then turned as it turns.
+    const lx = (line.x2 - local.x) * parentScaleX;
+    const ly = (line.y2 - local.y) * parentScaleY;
+    const cos = Math.cos(parentRotation);
+    const sin = Math.sin(parentRotation);
+    const dx = lx * cos - ly * sin;
+    const dy = lx * sin + ly * cos;
+    const length = Math.hypot(dx, dy);
+    const thickness = line.width * Math.sqrt(Math.abs(parentScaleX * parentScaleY));
+    if (!(length > 0) || !(thickness > 0)) return;
+    const angle = Math.atan2(dy, dx);
+    // The rect's corner: half the thickness to the left of the start, across the line.
+    const half = thickness / 2;
+    const place = this.#linePlaced;
+    place.x = world.x + Math.sin(angle) * half;
+    place.y = world.y - Math.cos(angle) * half;
+    place.rotation = angle;
+    this.#list.rect(place, length, thickness, this.#color(line.color));
   }
 
   /** A bitmap text's height: its size, or without one given the font's cell height. */
