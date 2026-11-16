@@ -130,8 +130,17 @@ npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host 
 Pushing a tag `vX.Y.Z`, or running the Release workflow from the Actions tab with a version (it tags the branch it runs on),
 runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as `npm run dist`, stamped with
 that version), attaches them to a GitHub release and publishes them to npm as `@tsengine/*`, with provenance (Linux x64
-only, as the native binaries are built there). Publishing needs the `NPM_TOKEN` repository secret: an npm granular access
-token that can publish to the `@tsengine` organization. Once a release is on npm, a game starts with:
+only, as the native binaries are built there). Publishing needs, once:
+
+1. the `tsengine` organization on npm (npmjs.com, Add Organization; the free plan publishes public packages), which owns the
+   `@tsengine` scope;
+2. an npm granular access token (Access Tokens, Generate New Token, Granular Access Token) with Read and write on packages
+   and scopes, the `tsengine` organization selected; npm limits a token that writes to 90 days, so it needs renewing;
+3. that token as the repository secret `NPM_TOKEN` (Settings, Secrets and variables, Actions).
+
+If publishing fails after the release was made, run the workflow again with the same version: it publishes the packs
+already attached to the release, so npm and the release's URLs serve the same files, and skips what is already on npm.
+Once a release is on npm, a game starts with:
 
 ```sh
 npx @tsengine/cli@latest create my-game     # pins every @tsengine/* package to that release

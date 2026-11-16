@@ -388,6 +388,8 @@ export const runtimeManifest: RuntimeManifest = {
       "prewarm",
       "count",
       "read",
+      "hasOwnColors",
+      "colorsOf",
       "emit",
       "emitAt",
     ],

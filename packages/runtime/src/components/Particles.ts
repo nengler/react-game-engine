@@ -89,8 +89,10 @@ export class Particles<P extends object = {}> extends GameObject<P> {
   height: number;
   prewarm: boolean;
 
-  // x, y, vx, vy, age, life per particle.
+  // x, y, vx, vy, age, life, colours per particle. Colours: 0 for the emitter's own, or 1 + an index into #colors.
   #data: Float64Array;
+  /** The colours of bursts made with their own (`emitAt`'s `colors`), each pair once; emptied whenever no particle is alive. */
+  #colors: ParticleColors[] = [];
   #count = 0;
   #carry = 0;
   #wasEmitting = false;
@@ -119,7 +121,7 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     this.width = hostProps.width ?? 0;
     this.height = hostProps.height ?? 0;
     this.prewarm = hostProps.prewarm ?? false;
-    this.#data = new Float64Array(this.max * 6);
+    this.#data = new Float64Array(this.max * STRIDE);
     this.#random = makeRandom(this.seed);
     // Not on yet, so a particle emitter that starts emitting bursts as it joins the world: `{dead && <Particles burst={12} />}` is a death.
     this.#wasEmitting = false;
@@ -133,10 +135,21 @@ export class Particles<P extends object = {}> extends GameObject<P> {
   /** Particle `i`'s position (in the emitter's space, or the world's for `space="world"`) and how far through its life it is, 0 to 1. */
   read(i: number, out: { x: number; y: number; t: number }): void {
     const d = this.#data;
-    const at = i * 6;
+    const at = i * STRIDE;
     out.x = d[at] as number;
     out.y = d[at + 1] as number;
     out.t = (d[at + 4] as number) / (d[at + 5] as number);
+  }
+
+  /** Whether some live particle has colours of its own (from a burst given them), so a renderer must ask `colorsOf`. */
+  get hasOwnColors(): boolean {
+    return this.#colors.length > 0;
+  }
+
+  /** Particle `i`'s colours: its burst's own, or null for the emitter's (`color` and `endColor`). */
+  colorsOf(i: number): ParticleColors | null {
+    const k = this.#data[i * STRIDE + 6] as number;
+    return k === 0 ? null : (this.#colors[k - 1] ?? null);
   }
 
   /** Make `n` particles now, at the emitter. */
@@ -153,15 +166,17 @@ export class Particles<P extends object = {}> extends GameObject<P> {
 
   /**
    * Make `n` particles now at (`x`, `y`) in the space they live in (the emitter's own, or the world's for `space="world"`),
-   * going `angle` degrees (default: the emitter's). How a `<ParticleLayer>` makes a burst wherever it is asked to.
+   * going `angle` degrees (default: the emitter's), in `colors` if given (each one given replaces the emitter's: a burst given
+   * only `color` and an emitter with no `endColor` stays that colour). How a `<ParticleLayer>` makes a burst wherever it is asked to.
    */
-  emitAt(n: number, originX: number, originY: number, direction: number = this.angle): void {
-    if (this.max * 6 > this.#data.length) this.#data = grow(this.#data, this.max * 6);
+  emitAt(n: number, originX: number, originY: number, direction: number = this.angle, colors?: Partial<ParticleColors>): void {
+    if (this.max * STRIDE > this.#data.length) this.#data = grow(this.#data, this.max * STRIDE);
+    const paint = n > 0 && colors !== undefined ? this.#colorIndex(colors) : 0;
     for (let k = 0; k < n; k++) {
       const slot = this.#count < this.max ? this.#count++ : 0; // full: the first one is replaced
       const angle = ((direction + (this.#random() * 2 - 1) * this.spread) * Math.PI) / 180;
       const speed = this.speed * (0.6 + this.#random() * 0.4);
-      const at = slot * 6;
+      const at = slot * STRIDE;
       const d = this.#data;
       // A point uses no randomness for its place, so emitters without an area repeat exactly as they always have.
       d[at] = this.width > 0 ? originX + this.#random() * this.width : originX;
@@ -170,8 +185,23 @@ export class Particles<P extends object = {}> extends GameObject<P> {
       d[at + 3] = Math.sin(angle) * speed;
       d[at + 4] = 0;
       d[at + 5] = Math.max(1e-6, this.lifetime * (0.75 + this.#random() * 0.25));
+      d[at + 6] = paint;
     }
     if (n > 0) this.markChanged();
+  }
+
+  /** The colours' number for a particle: 0 when they are the emitter's own, or 1 + their place in #colors (added if new). */
+  #colorIndex(colors: Partial<ParticleColors>): number {
+    const color = colors.color ?? this.color;
+    const endColor = colors.endColor ?? this.endColor;
+    if (color === this.color && endColor === this.endColor) return 0;
+    const list = this.#colors;
+    for (let k = 0; k < list.length; k++) {
+      const known = list[k] as ParticleColors;
+      if (known.color === color && known.endColor === endColor) return k + 1;
+    }
+    list.push({ color, endColor });
+    return list.length;
   }
 
   override onUpdate(dt: number, _input?: InputState): void {
@@ -194,10 +224,10 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     const d = this.#data;
     let live = 0;
     for (let i = 0; i < this.#count; i++) {
-      const at = i * 6;
+      const at = i * STRIDE;
       const age = (d[at + 4] as number) + dt;
       if (age >= (d[at + 5] as number)) continue;
-      const to = live * 6;
+      const to = live * STRIDE;
       const vy = (d[at + 3] as number) + this.gravity * dt;
       d[to] = (d[at] as number) + (d[at + 2] as number) * dt;
       d[to + 1] = (d[at + 1] as number) + vy * dt;
@@ -205,9 +235,11 @@ export class Particles<P extends object = {}> extends GameObject<P> {
       d[to + 3] = vy;
       d[to + 4] = age;
       d[to + 5] = d[at + 5] as number;
+      d[to + 6] = d[at + 6] as number;
       live++;
     }
     this.#count = live;
+    if (live === 0) this.#colors.length = 0;
     this.markChanged();
   }
 
@@ -218,7 +250,7 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     this.emit(n);
     const d = this.#data;
     for (let i = start; i < this.#count; i++) {
-      const at = i * 6;
+      const at = i * STRIDE;
       const age = this.#random() * (d[at + 5] as number);
       d[at] = (d[at] as number) + (d[at + 2] as number) * age;
       d[at + 1] = (d[at + 1] as number) + (d[at + 3] as number) * age + 0.5 * this.gravity * age * age;
@@ -226,6 +258,15 @@ export class Particles<P extends object = {}> extends GameObject<P> {
       d[at + 4] = age;
     }
   }
+}
+
+/** Numbers kept per particle: x, y, vx, vy, age, life, colours. */
+const STRIDE = 7;
+
+/** The colours of one burst: what `color` and `endColor` are for its particles (see `ParticlesProps`). */
+export interface ParticleColors {
+  readonly color: string;
+  readonly endColor: string | undefined;
 }
 
 function grow(old: Float64Array, length: number): Float64Array {

@@ -3183,8 +3183,10 @@ export class FrameBuilder {
   #particles(node: Particles, at: WorldTransform): void {
     const count = node.count;
     if (count === 0) return;
-    const start = this.#color(node.color);
-    const end = node.endColor === undefined ? start : this.#color(node.endColor);
+    const ownStart = this.#color(node.color);
+    const ownEnd = node.endColor === undefined ? ownStart : this.#color(node.endColor);
+    // Bursts given their own colours (`fx.burst(name, x, y, { color })`) say so per particle; most emitters have none.
+    const painted = node.hasOwnColors;
     const scratch = this.#particle;
     const place = this.#placed;
     const world = node.space === "world";
@@ -3193,6 +3195,15 @@ export class FrameBuilder {
       const t = scratch.t;
       const size = node.shrink ? node.size * (1 - t) : node.size;
       if (!(size > 0.01)) continue;
+      let start = ownStart;
+      let end = ownEnd;
+      if (painted) {
+        const own = node.colorsOf(i);
+        if (own !== null) {
+          start = this.#color(own.color);
+          end = own.endColor === undefined ? start : this.#color(own.endColor);
+        }
+      }
       let color = start;
       if (end !== start) color = mixColors(start, end, t);
       if (node.fade) color = ((color & 0xffffff00) | Math.round((color & 255) * (1 - t))) >>> 0;
