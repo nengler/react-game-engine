@@ -743,13 +743,14 @@ export const runtimeManifest: RuntimeManifest = {
   ],
   handleTypes: {
     InputState: {
-      methods: { pressed: 1, down: 1, released: 1, lastPressed: 0 },
-      properties: ["pointerX", "pointerY", "typed"],
+      methods: { pressed: 1, down: 1, released: 1, lastPressed: 0, pressedWithin: 2, consumePress: 1 },
+      properties: ["pointerX", "pointerY", "typed", "pressHandled"],
     },
     Contact: { methods: {}, properties: ["tag", "owner", "data"] },
   },
   functions: {
     clamp: 3,
+    grace: 4,
     textOf: 1,
     freeze: 1,
     springBack: 3,

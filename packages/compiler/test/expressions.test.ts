@@ -121,3 +121,36 @@ export function Clock({ seconds, label, ids }: ClockProps) {
     );
   });
 });
+
+describe("game-feel input helpers", () => {
+  const SOURCE = `
+import { Entity, grace, useMutable, useUpdate } from "@tsengine/runtime/jsx";
+export function Jumper() {
+  const s = useMutable({ coyote: 0, jumps: 0, clicks: 0, onGround: true });
+  useUpdate((dt, input) => {
+    s.coyote = grace(s.onGround, s.coyote, dt, 0.1);
+    if (s.coyote > 0 && input.pressedWithin("Z", 0.1)) {
+      s.jumps += 1;
+      s.coyote = 0;
+      input.consumePress("Z");
+    }
+    if (input.pressed("MouseLeft") && !input.pressHandled) s.clicks += 1;
+  });
+  return <Entity name={\`\${s.jumps} \${s.clicks}\`} />;
+}`;
+
+  it("compiles pressedWithin, consumePress, pressHandled and grace in a component, and runs them", async () => {
+    const compiled = compile(SOURCE);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Jumper } = await load<{ Jumper: new () => Entity }>(compiled);
+    const world = new World();
+    const jumper = new Jumper();
+    world.mount(jumper);
+    world.tick(1 / 60, createInputState({ pressed: ["Z", "MouseLeft"], pressHandled: true }));
+    world.flush();
+    assert.equal(jumper.name, "1 0");
+    world.tick(1 / 60, createInputState({ pressed: ["MouseLeft"] }));
+    world.flush();
+    assert.equal(jumper.name, "1 1");
+  });
+});

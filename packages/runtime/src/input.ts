@@ -9,6 +9,19 @@ export interface InputState {
   down(key: string): boolean;
   /** True only on the frame the key went up (for an action: one of its keys did, and none is still held). */
   released(key: string): boolean;
+  /**
+   * True when the key (for an action: one of its keys) went down within the last `seconds` of game time, this step included, and that
+   * press has not been taken with `consumePress`: an input buffer. A jump pressed a moment before landing still jumps:
+   * `if (onGround && input.pressedWithin("jump", 0.1)) { jump(); input.consumePress("jump"); }`. `pressedWithin(key, 0)` is `pressed(key)`.
+   */
+  pressedWithin(key: string, seconds: number): boolean;
+  /** Take the key's last press (for an action: each of its keys'), so `pressedWithin` no longer sees it. `pressed` is not changed. */
+  consumePress(key: string): void;
+  /**
+   * True on the step that sees a left click which a `<Pointer>`, `<Button>` or other pressable already took (it was pressed on one):
+   * `if (input.pressed("MouseLeft") && !input.pressHandled) placeTower()`, so a click on a HUD button does not also act on the world.
+   */
+  readonly pressHandled?: boolean;
   readonly pointerX: number;
   readonly pointerY: number;
   /**
@@ -123,6 +136,8 @@ export interface InputSnapshot {
   readonly pointer?: { readonly x: number; readonly y: number };
   /** What was typed (see `InputState.typed`). */
   readonly typed?: string;
+  /** See `InputState.pressHandled`. */
+  readonly pressHandled?: boolean;
 }
 
 /**
@@ -241,10 +256,18 @@ export function actionAware(
 export function createInputState(snapshot: InputSnapshot = {}, controls?: Controls): InputState {
   const sets = { pressed: new Set(snapshot.pressed), down: new Set(snapshot.down), released: new Set(snapshot.released) };
   const { pressed, down, released } = actionAware(controls, (key, which) => sets[which].has(key));
+  const consumed = new Set<string>();
+  const keysOf = (name: string): readonly string[] => controls?.keysOf(name) ?? [name];
   return {
     pressed,
     down,
     released,
+    // A snapshot is one step: a press in it is "within" any window, until it is consumed.
+    pressedWithin: (key, seconds) => seconds >= 0 && keysOf(key).some((k) => sets.pressed.has(k) && !consumed.has(k)),
+    consumePress: (key) => {
+      for (const k of keysOf(key)) consumed.add(k);
+    },
+    pressHandled: snapshot.pressHandled ?? false,
     pointerX: snapshot.pointer?.x ?? 0,
     pointerY: snapshot.pointer?.y ?? 0,
     typed: snapshot.typed ?? "",

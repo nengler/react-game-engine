@@ -81,7 +81,6 @@ Each row waits because nothing above depends on it or no game has asked for it y
 | A compiler error for a field read in a closure after narrowing without a `const` | TypeScript catches most of it | A confusing runtime error from it |
 | The codemod flagging `setX(x + 1); use(x + 1)` | Only matters for old code | Converting a large old file |
 | Asset names in a `.ts` file (`createSounds`) checked at build time | Names in components are checked | A typo that ships |
-| A "press already handled" flag, so a click on a HUD button is not also seen by `input.pressed("MouseLeft")` | Hearth's panel and field do not overlap | A game whose HUD sits over a clickable world |
 | A body that others hit as a collider, one-way platforms | `useBody` moves against tiles and solid colliders only | A platformer that needs them |
 
 ### Layout

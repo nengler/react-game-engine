@@ -284,6 +284,11 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
   and a settled subtree is skipped by `blend`, and by `capture` too while nothing in it has been changed since (`subtreeChangedAt`).
   Hearth's tenth wave: about 0.15 ms on a 1.2 ms frame. A hidden window turns it off, so tests and screenshots draw the latest
   step exactly as before.
+- **Forgiving input** (2026-11-16). `PlayerInput.beginStep(dt)` runs before every `world.tick`: it moves a game clock on by the
+  step's `dt`, writes down when each key that went down in the step did (`pressedWithin` compares with that, `consumePress` forgets
+  it), and makes a left click that a pressable took since the last step this step's `pressHandled`. Under a fixed step a frame with
+  no step leaves all three for the next step, as it does the key edges. `grace` is a plain function in `math.ts`. A snapshot from
+  `createInputState` (tests, `@tsengine/testing`) is one step: its presses are within any window until consumed.
 - **Sprite sheets.** `<Sprite frame…>` and `<AnimatedSprite animations…>` write `SPRITE_REGION`; a sprite with no options still writes
   `SPRITE` through the fast path. A flip mirrors about the origin, so a character turned left stays on its feet.
 - **Flash** (ABI v13). A sprite's `flash` writes its region a second time with `TSE_SPRITE_SILHOUETTE`: libtse draws the region's

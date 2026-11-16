@@ -39,6 +39,14 @@ export class PlayerInput implements InputState {
   typedNext = "";
   /** The game's actions (`<Game controls>`): a name of one of them is answered for any of its keys. */
   controls: Controls | undefined = undefined;
+  /** `InputState.pressHandled` for the step being run. */
+  pressHandled = false;
+  /** A left click a pressable took since the last step: the next step's `pressHandled`. */
+  pressHandledNext = false;
+  /** Game time: the sum of every step's `dt` so far, the clock `pressedWithin` measures by. */
+  #clock = 0;
+  /** When each key last went down, by `#clock`, or -Infinity (never, or consumed). */
+  readonly #pressedAt = new Float64Array(KEYS.length).fill(Number.NEGATIVE_INFINITY);
   readonly #warner: Warner;
 
   constructor(warner: Warner) {
@@ -52,6 +60,38 @@ export class PlayerInput implements InputState {
   lastPressed(): (typeof KEYS)[number] | undefined {
     for (let i = 0; i < KEYS.length; i++) if (((this.handlerKeys[i] as number) & TSE_KEY_PRESSED) !== 0) return KEYS[i];
     return undefined;
+  }
+
+  pressedWithin(key: string, seconds: number): boolean {
+    if (!(seconds >= 0)) return false;
+    const keys = this.controls?.keysOf(key) ?? [key];
+    for (const k of keys) {
+      const index = this.#index(k);
+      // A hair over the window, so a window of whole steps counts the step it ends on (sums of 1/60 s are not exact).
+      if (index !== undefined && this.#clock - (this.#pressedAt[index] as number) <= seconds + 1e-9) return true;
+    }
+    return false;
+  }
+
+  consumePress(key: string): void {
+    const keys = this.controls?.keysOf(key) ?? [key];
+    for (const k of keys) {
+      const index = this.#index(k);
+      if (index !== undefined) this.#pressedAt[index] = Number.NEGATIVE_INFINITY;
+    }
+  }
+
+  /**
+   * Start a step of `dt` seconds: the clock moves on, the keys that went down in it (`handlerKeys`) are written down for
+   * `pressedWithin`, and a click a pressable took since the last step is this step's `pressHandled`. The player calls it before each
+   * `world.tick`.
+   */
+  beginStep(dt: number): void {
+    this.#clock += dt > 0 ? dt : 0;
+    const keys = this.handlerKeys;
+    for (let i = 0; i < keys.length; i++) if (((keys[i] as number) & TSE_KEY_PRESSED) !== 0) this.#pressedAt[i] = this.#clock;
+    this.pressHandled = this.pressHandledNext;
+    this.pressHandledNext = false;
   }
 
   isAction(name: string): boolean {
@@ -118,6 +158,21 @@ export class PlayerInput implements InputState {
     if (flag === TSE_KEY_RELEASED)
       return keys.some((k) => this.#keyFlags(k, TSE_KEY_RELEASED)) && !keys.some((k) => this.#keyFlags(k, TSE_KEY_DOWN));
     return keys.some((k) => this.#keyFlags(k, flag));
+  }
+
+  /** The key's index in the keys buffer, or undefined (with a warning, once) for a name that is not a key. */
+  #index(key: string): number | undefined {
+    const index = KEY_INDEX.get(key);
+    if (index === undefined) this.#unknown(key);
+    return index;
+  }
+
+  #unknown(key: string): void {
+    const actions = this.controls ? Object.keys(this.controls.bindings) : [];
+    this.#warner.once(
+      `key:${key}`,
+      `Unknown key '${key}': it is never pressed. ${actions.length > 0 ? `Actions: ${actions.join(", ")}. ` : ""}Known keys: ${KEYS.join(", ")}.`
+    );
   }
 
   #keyFlags(key: string, flag: number): boolean {

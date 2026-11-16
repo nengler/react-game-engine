@@ -172,6 +172,7 @@ export {
   NO_SHAKE,
   shakeOn,
   springBack,
+  grace,
   springFrom,
   startSpring,
   startTween,

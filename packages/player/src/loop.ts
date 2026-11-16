@@ -304,6 +304,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   };
   /** A step of the world (`useInput`, `useUpdate`, the renders they cause), timed when the profiler is on. */
   const tick = (dt: number, beforeUpdate?: () => void): void => {
+    input.beginStep(dt);
     const profiler = activeProfiler();
     if (profiler === null) {
       world.tick(dt, input, beforeUpdate);
@@ -418,7 +419,10 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       if (pointer.onPress === undefined && pointer instanceof Flex && pointer.widget === WIDGET_NONE) continue;
       const point = i >= hudPointersFrom ? hudAt : at;
       if (clippedOff(pointer as unknown as GameObject, point.x, point.y)) continue;
-      if (world.reportPress(pointer, point.x, point.y)) return;
+      if (world.reportPress(pointer, point.x, point.y)) {
+        input.pressHandledNext = true;
+        return;
+      }
     }
   };
 
