@@ -279,8 +279,10 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
   the same with it on or off (a test checks both the steps and the camera). It draws up to one step behind: at alpha 0 the step
   before. An object is drawn unblended when it has no step before (new), when a frame with no step changed it since, or when one
   field jumped further than `INTERPOLATE_SNAP` (64 px) or half a turn in one step. A camera is drawn unblended when its bounds
-  changed. Particles, sprite frames and the shake are not blended: they are discrete or short. The cost is a second walk of the
-  tree each frame, and a pass over every object each step. A hidden window turns it off, so tests and screenshots draw the latest
+  changed. Particles, sprite frames and the shake are not blended: they are discrete or short. The cost is a second build of the
+  frame, and a pass over what moved: each object records whether its subtree had settled (nothing in it moved in its last step),
+  and a settled subtree is skipped by `blend`, and by `capture` too while nothing in it has been changed since (`subtreeChangedAt`).
+  Hearth's tenth wave: about 0.15 ms on a 1.2 ms frame. A hidden window turns it off, so tests and screenshots draw the latest
   step exactly as before.
 - **Sprite sheets.** `<Sprite frame…>` and `<AnimatedSprite animations…>` write `SPRITE_REGION`; a sprite with no options still writes
   `SPRITE` through the fast path. A flip mirrors about the origin, so a character turned left stays on its feet.
