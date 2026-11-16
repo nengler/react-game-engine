@@ -78,6 +78,47 @@ describe("createParticles and <ParticleLayer>", () => {
     );
   });
 
+  it("draws a burst given its own colours in them, the preset's other bursts in the preset's, and forgets them once over", () => {
+    const fx = createParticles({ puff: { burst: 2, lifetime: 0.1, speed: 0, color: "#ff0000", size: 2 } });
+    const backend = new RecordingBackend({});
+    for (let i = 0; i < 14; i++) backend.queueInput({ dt: 1 / 60 });
+    let layer: ParticleLayer | null = null;
+    class Asker extends Entity {
+      override onUpdate(): void {
+        if (fx.bursts["puff"] !== undefined) return;
+        fx.burst("puff", 10, 10);
+        fx.burst("puff", 40, 30, { color: "#00ff00" });
+        fx.burst("puff", 70, 30, { endColor: "#0000ff" });
+      }
+    }
+    const player = createPlayer(backend, {
+      root: () => {
+        const root = new Entity();
+        root.addChild(new Asker());
+        layer = new ParticleLayer({ particles: fx });
+        root.addChild(layer);
+        return root;
+      },
+      retain: "check",
+    });
+    for (let i = 0; i < 3; i++) player.step();
+    const rects = ofOp(backend.frames[1]?.records ?? [], "rect");
+    const at = (x: number) => rects.filter((r) => r.x === x - 1).map((r) => r.color.slice(0, 7));
+    assert.deepEqual(at(10), ["#ff0000", "#ff0000"], "no colours given: the preset's");
+    assert.deepEqual(at(40), ["#00ff00", "#00ff00"], "color given: that colour throughout (the preset has no endColor)");
+    const toward = at(70);
+    assert.equal(toward.length, 2);
+    assert.ok(
+      toward.every((c) => c !== "#ff0000" && c.startsWith("#") && c.slice(5, 7) !== "00"),
+      `aged toward blue: ${toward}`
+    );
+    const emitter = (layer as unknown as ParticleLayer).children[0] as unknown as { hasOwnColors: boolean };
+    assert.equal(emitter.hasOwnColors, true);
+    for (let i = 0; i < 11; i++) player.step();
+    player.close();
+    assert.equal(emitter.hasOwnColors, false, "every particle gone: the burst colours are forgotten");
+  });
+
   it("stops while the world is frozen, as every emitter does, and names the bursts it has when asked for another", () => {
     const fx = createParticles({ dust: { burst: 1, lifetime: 0.1, speed: 0 } });
     const world = new World();
