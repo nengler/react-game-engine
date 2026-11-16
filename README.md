@@ -135,13 +135,19 @@ version), attaches the packs to a GitHub release and publishes them to npm as `@
 matrix is about 25 runner-minutes a release (free while the repository is public). To try it without releasing, run the
 workflow from the Actions tab with **dry_run** ticked: it builds, tests and packs everything, keeps the packs as the run's
 artifact, and neither releases nor publishes. A game made on the engine is packaged on the platform it is for: run
-`tse package` on each (for example in a matrix in the game's own CI). Publishing needs, once:
+`tse package` on each (for example in a matrix in the game's own CI).
+
+Publishing uses npm's trusted publishing: no npm token is stored anywhere; npm accepts the Release workflow's own identity.
+Setting it up, once:
 
 1. the `tsengine` organization on npm (npmjs.com, Add Organization; the free plan publishes public packages), which owns the
    `@tsengine` scope;
-2. an npm granular access token (Access Tokens, Generate New Token, Granular Access Token) with Read and write on packages
-   and scopes, the `tsengine` organization selected; npm limits a token that writes to 90 days, so it needs renewing;
-3. that token as the repository secret `NPM_TOKEN` (Settings, Secrets and variables, Actions).
+2. each package's first version published by hand, since a trusted publisher is set on a package that exists: download
+   the release's eight `.tgz` files and, after `npm login`, `npm publish <file> --access public` for runtime, compiler,
+   player, native, player-node, testing, language-server and cli, in that order (each names the ones before it);
+3. on npmjs.com, each package's Settings, Trusted Publisher, GitHub Actions: owner `nengler`, repository `tse`, workflow
+   `release.yml`; then, under publishing access, require two-factor authentication and disallow tokens, so only the
+   workflow can publish.
 
 If publishing fails after the release was made, run the workflow again with the same version: it publishes the packs
 already attached to the release, so npm and the release's URLs serve the same files, and skips what is already on npm.
