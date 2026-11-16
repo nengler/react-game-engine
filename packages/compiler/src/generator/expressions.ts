@@ -386,7 +386,16 @@ export class ExpressionEmitter {
           });
           return found;
         };
-        const conditions = this.mode.inCallback ? [] : this.mode.conditions.filter((c) => !readsSelf(c));
+        // A conjunct the memo tests again (`kind === "blast"` over `kind === "aura" ? a : b`) is left out: assumed first, it would
+        // narrow `kind` to "blast", and TypeScript would call the memo's own `kind === "aura"` a comparison that cannot be true.
+        const compared = comparedReads(e.value);
+        const retested = (c: ExprIR): boolean => [...readsOf(c)].some((read) => compared.has(read));
+        const conditions = this.mode.inCallback
+          ? []
+          : this.mode.conditions
+              .filter((c) => !readsSelf(c))
+              .flatMap(conjuncts)
+              .filter((c) => !retested(c));
         if (conditions.length > 0) {
           this.usesAssume = true;
           return `this.$memo(${JSON.stringify(e.key)}, [${deps.join(", ")}], () => { $assume(${conditions.map((c) => this.expr(c)).join(" && ")}); return ${this.expr(e.value, true)}; })`;
@@ -397,4 +406,34 @@ export class ExpressionEmitter {
         return assertNever(e, "expression");
     }
   }
+}
+
+/** The parts of `a && b && c`, or the expression itself. */
+function conjuncts(e: ExprIR): ExprIR[] {
+  return e.kind === "Binary" && e.operator === "&&" ? [...conjuncts(e.left), ...conjuncts(e.right)] : [e];
+}
+
+/** What an expression reads that a condition could narrow: state, props, locals, parameters and memos, each as one key. */
+function readsOf(e: ExprIR): Set<string> {
+  const reads = new Set<string>();
+  walkExpr(e, (x) => {
+    if (x.kind === "StateRead") reads.add(`state:${String(x.state)}`);
+    else if (x.kind === "PropRead") reads.add(`prop:${x.name}`);
+    else if (x.kind === "LocalRead") reads.add(`local:${String(x.local)}`);
+    else if (x.kind === "ParamRead") reads.add(`param:${String(x.param)}`);
+    else if (x.kind === "Memo") reads.add(`memo:${x.key}`);
+  });
+  return reads;
+}
+
+/** What an expression compares with `===`, `!==`, `==` or `!=` (either side), as `readsOf` keys. */
+function comparedReads(e: ExprIR): Set<string> {
+  const compared = new Set<string>();
+  walkExpr(e, (x) => {
+    if (x.kind === "Binary" && (x.operator === "===" || x.operator === "!==" || x.operator === "==" || x.operator === "!=")) {
+      for (const read of readsOf(x.left)) compared.add(read);
+      for (const read of readsOf(x.right)) compared.add(read);
+    }
+  });
+  return compared;
 }

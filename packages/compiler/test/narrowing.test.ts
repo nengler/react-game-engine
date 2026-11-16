@@ -53,6 +53,25 @@ export function Prompt({ onKey }: PromptProps) {
 `;
 
 describe("narrowing in the generated code", () => {
+  it("a memo under a condition it tests again does not assume that condition (tower-defense: TS2367 'no overlap')", () => {
+    const r = compileProject({
+      "Settings.tsx": `import { Entity, Text } from "@tsengine/runtime/jsx";
+export function Settings(props: { kind: "aura" | "blast"; a: number; b: number; boss: { hp: number } | null }) {
+  const x = props.kind === "aura" ? props.a : props.b;
+  const hp = props.boss === null ? 0 : props.boss.hp;
+  return (
+    <Entity name="Settings">
+      {props.kind === "blast" && <Text>{\`\${x - 6}\`}</Text>}
+      {props.boss !== null && props.kind === "aura" && <Text>{\`\${hp} \${x}\`}</Text>}
+    </Entity>
+  );
+}
+`,
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.out("Settings.ts"), /\$assume\(\(?this\.props\.kind === "blast"/);
+  });
+
   it("a callback under a condition reads state the condition narrowed (through a const, as TypeScript narrows only a const in a closure)", () => {
     const r = compileProject({
       "keys.ts": KEYS,
