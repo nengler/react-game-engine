@@ -11,6 +11,8 @@ void assets_init(bool smooth, bool audio);
 void assets_shutdown(void);
 /* Handles are indices; an invalid handle returns false / does nothing. */
 bool assets_texture(int32_t handle, Texture2D *out);
+/* The texture's shape in white (its alpha kept), made on first use; false when it has none. For TSE_SPRITE_SILHOUETTE. */
+bool assets_silhouette(int32_t handle, Texture2D *out);
 /* A shader from tse_load_shader, with the locations of its uniforms (-1 where the shader does not use one). */
 typedef struct {
   Shader shader;

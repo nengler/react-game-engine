@@ -67,6 +67,7 @@ import {
   TSE_OP_SPRITE_REGION_LEN,
   TSE_SPRITE_FLIP_X,
   TSE_SPRITE_FLIP_Y,
+  TSE_SPRITE_SILHOUETTE,
   TSE_OP_TEXT,
   TSE_OP_TEXT_LEN,
   TSE_OP_VIEW,
@@ -2859,6 +2860,31 @@ export class FrameBuilder {
     const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
     const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
     this.#region(node.image, sheet, node.frameWidth, node.frameHeight, frame, node.originX, node.originY, node.flipX, node.flipY, tint, at);
+    // `flash`: the same region again, as its shape filled with the flash colour at that fraction (and the sprite's opacity), so
+    // the opaque pixels are mixed toward the colour and the transparent ones stay so.
+    const flash = node.flash;
+    if (flash > 0) {
+      const color = this.#color(node.flashColor);
+      const amount = Math.min(1, flash) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity));
+      const alpha = Math.round((color & 255) * amount);
+      if (alpha > 0) {
+        const silhouette = ((color & 0xffffff00) | alpha) >>> 0;
+        this.#region(
+          node.image,
+          sheet,
+          node.frameWidth,
+          node.frameHeight,
+          frame,
+          node.originX,
+          node.originY,
+          node.flipX,
+          node.flipY,
+          silhouette,
+          at,
+          TSE_SPRITE_SILHOUETTE
+        );
+      }
+    }
   }
 
   /** One frame of an image (or all of it), as a sprite-region record. */
@@ -2873,7 +2899,8 @@ export class FrameBuilder {
     flipX: boolean,
     flipY: boolean,
     tint: number,
-    at: WorldTransform
+    at: WorldTransform,
+    flags = 0
   ): void {
     if (image === "") return;
     const handle = this.#texture(image);
@@ -2907,7 +2934,7 @@ export class FrameBuilder {
       frameHeight,
       originX,
       originY,
-      (flipX ? TSE_SPRITE_FLIP_X : 0) | (flipY ? TSE_SPRITE_FLIP_Y : 0),
+      flags | (flipX ? TSE_SPRITE_FLIP_X : 0) | (flipY ? TSE_SPRITE_FLIP_Y : 0),
       tint
     );
   }
