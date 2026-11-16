@@ -13,6 +13,7 @@ import {
   Pointer,
   Screen,
   Shape,
+  Line,
   Sprite,
   Text,
   Tilemap,
@@ -223,6 +224,51 @@ describe("FrameBuilder: what each element draws", () => {
         ["rect", 20, 10, "#ff0000ff"],
         ["ellipse", 8, 6, "#ffffffff"],
       ]
+    );
+  });
+
+  it("draws a line as a rect turned along it, from where it is placed to (x2, y2) in its parent's space", () => {
+    const rects = (root: GameObject) => draw(root).records.filter((r): r is Extract<DecodedRecord, { op: "rect" }> => r.op === "rect");
+    const flat = new Line({ x2: 40, y2: 20, width: 2, color: "red" });
+    flat.transform.x = 10;
+    flat.transform.y = 20;
+    const [a] = rects(flat);
+    assert.deepEqual([a!.x, a!.y, a!.rotation, a!.width, a!.height, a!.color], [10, 19, 0, 30, 2, "#ff0000ff"]);
+
+    // Down the screen, 4 thick: turned a quarter, its corner half the thickness to the side, so it is centred on x = 0.
+    const down = new Line({ x2: 0, y2: 10, width: 4 });
+    const [b] = rects(down);
+    close(b!.x, 2, "x");
+    close(b!.y, 0, "y");
+    close(b!.rotation, Math.PI / 2, "rotation");
+    assert.deepEqual([b!.width, b!.height], [10, 4]);
+
+    // Under a parent at 2x, turned a quarter: the end is where the parent puts (15, 0), and the thickness scales with it.
+    const parent = new Entity();
+    parent.transform.x = 100;
+    parent.transform.scaleX = parent.transform.scaleY = 2;
+    parent.transform.rotation = Math.PI / 2;
+    const turned = new Line({ x2: 15, y2: 0 });
+    turned.transform.x = 5;
+    turned.transform.rotation = 1; // its own turn does not move the end
+    parent.addChild(turned);
+    const [c] = rects(parent);
+    close(c!.rotation, Math.PI / 2, "rotation");
+    close(c!.width, 20, "length");
+    close(c!.height, 2, "thickness");
+    close(c!.x, 101, "x");
+    close(c!.y, 10, "y");
+  });
+
+  it("fades a line with its parent's transform opacity, and draws nothing for a line of no length", () => {
+    const root = new Entity();
+    root.transform.opacity = 0.5;
+    root.addChild(new Line({ x2: 10, y2: 0 }));
+    root.addChild(new Line({ x2: 0, y2: 0 }));
+    const rects = draw(root).records.filter((r): r is Extract<DecodedRecord, { op: "rect" }> => r.op === "rect");
+    assert.deepEqual(
+      rects.map((r) => r.color),
+      ["#ffffff80"]
     );
   });
 

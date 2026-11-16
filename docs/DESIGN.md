@@ -32,7 +32,7 @@ Decisions, each still in force:
 | Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`TSE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
-| Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
+| Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Line>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`, a `for … of` over a field writing its items) is lowered to the copy the author would write: the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value and an alias (`const e = s.enemies[i]; e.hp = 0`) are refused (`TSE1301` / `TSE1402`, with what to write instead); any other in-place write to something that is not a field or a `let` local is refused too. No dev-mode `Object.freeze`. See "State: `useMutable`" |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
@@ -1243,6 +1243,20 @@ restricting another built-in's prop is a manifest edit (a test does it to
 the class extends `Shape`, the required props that vary get the usual
 constructor placeholders, and `kind`, `width`, `height` and `color` become names
 a state, ref or prop may not use.
+
+## Line
+
+`<Line x={ax} y={ay} x2={tx} y2={ty} width={1} color="#fff" />` is a straight line between two points of its parent's space,
+square-ended, `width` pixels thick (default 1). `x2` and `y2` are required; `width` is the thickness, not a horizontal size, which
+is why it is its own element and not a `<Shape>` kind (a `<Shape>` needs `width` and `height` as a box).
+
+**Runtime.** `Line extends GameObject` with `x2`, `y2`, `width` and `color`. It draws nothing itself and is a leaf.
+
+**Player.** One `TSE_OP_RECT` record, turned along the line, its corner half the thickness to the side of the start so the
+thickness is centred: no native change. The draw pass takes the parent's turn and scale as the line's world transform less its
+own local one (layout offset, placement, transform), so the end is where the parent puts (`x2`, `y2`) whatever the line's own
+rotation and scale, and the thickness scales by the parent's (the square root of the two scales' product, for an uneven one).
+Opacity comes through `transform={{ opacity }}` as for any element. A line of no length, or no thickness, draws nothing.
 
 ## Pointer
 

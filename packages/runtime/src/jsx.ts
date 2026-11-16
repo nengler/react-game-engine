@@ -9,6 +9,7 @@ import type { GameProps } from "./components/Game.ts";
 import type { HudProps } from "./components/Hud.ts";
 import type { LayerProps } from "./components/Layer.ts";
 import type { LightingProps, LightProps } from "./components/Light.ts";
+import type { LineProps } from "./components/Line.ts";
 import type { MenuProps } from "./components/Menu.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
@@ -319,6 +320,11 @@ export function Text(_props: TextAttributes & TransformShorthand): JSX.Element {
 /** A filled rectangle or circle, for debugging colliders and prototyping before art exists. */
 export function Shape(_props: ShapeProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Shape");
+}
+
+/** A straight line from (`x`, `y`) to (`x2`, `y2`), both in the parent's space, `width` pixels thick (default 1) with square ends. */
+export function Line(_props: LineProps & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Line");
 }
 
 /**
