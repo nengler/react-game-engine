@@ -25,9 +25,12 @@ fn main() {
         .build();
     let build = out.join("build");
 
-    // libtse, then raylib (which carries GLFW inside it), in link order.
-    println!("cargo:rustc-link-search=native={}", build.display());
-    println!("cargo:rustc-link-search=native={}", build.join("_deps/raylib-build/raylib").display());
+    // libtse, then raylib (which carries GLFW inside it), in link order. A multi-config generator (Visual Studio, the default
+    // with MSVC) puts each library in a `Release` folder below these, so both are searched.
+    let raylib = build.join("_deps/raylib-build/raylib");
+    for dir in [build.clone(), build.join("Release"), raylib.clone(), raylib.join("Release")] {
+        println!("cargo:rustc-link-search=native={}", dir.display());
+    }
     println!("cargo:rustc-link-lib=static=tse_static");
     println!("cargo:rustc-link-lib=static=raylib");
 
@@ -42,7 +45,7 @@ fn main() {
                 println!("cargo:rustc-link-lib=dylib={lib}");
             }
         }
-        // Unverified: these follow raylib's own link lists.
+        // These follow raylib's own link lists; the release workflow builds and smoke-tests them on macOS and Windows.
         "macos" => {
             if !headless {
                 for framework in ["Cocoa", "IOKit", "CoreVideo", "OpenGL"] {

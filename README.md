@@ -128,9 +128,14 @@ npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host 
 ### Releases
 
 Pushing a tag `vX.Y.Z`, or running the Release workflow from the Actions tab with a version (it tags the branch it runs on),
-runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as `npm run dist`, stamped with
-that version), attaches them to a GitHub release and publishes them to npm as `@tsengine/*`, with provenance (Linux x64
-only, as the native binaries are built there). Publishing needs, once:
+runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds libtse and tse-host on Linux x64, macOS
+arm64 and x64, and Windows x64 and smoke-tests each (C smoke test, the Node host against the software renderer, the demo's
+parity run under tse-host), packs the engine with every platform's binaries in `@tsengine/native` (stamped with that
+version), attaches the packs to a GitHub release and publishes them to npm as `@tsengine/*`, with provenance. The platform
+matrix is about 25 runner-minutes a release (free while the repository is public). To try it without releasing, run the
+workflow from the Actions tab with **dry_run** ticked: it builds, tests and packs everything, keeps the packs as the run's
+artifact, and neither releases nor publishes. A game made on the engine is packaged on the platform it is for: run
+`tse package` on each (for example in a matrix in the game's own CI). Publishing needs, once:
 
 1. the `tsengine` organization on npm (npmjs.com, Add Organization; the free plan publishes public packages), which owns the
    `@tsengine` scope;

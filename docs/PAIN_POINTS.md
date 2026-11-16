@@ -57,8 +57,9 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 
 ## 6. Tooling and getting started
 
-- **Linux x64 only.** The packs a release publishes to npm carry native binaries for Linux x64; elsewhere a checkout and
-  `npm run dist` (about two minutes, most of it building raylib) come before `tse create`.
+- **macOS and Windows binaries are new.** The release workflow builds and smoke-tests libtse and tse-host on Linux x64, macOS
+  (arm64, x64) and Windows x64, and `@tsengine/native` carries them all, but only Linux has been played in a real window; CI on
+  pull requests is Linux only. `tse package` makes a game for the platform it runs on, so a game is packaged once per platform.
   Only Node is needed to write, test and check a game; the window, screenshots and the Rust host need more, and `dist` says what.
 - **The Rust host (`--engine quickjs`) reports errors in the bundled `game.js`**, not the `.tsx` line; Node and the V8 package map
   them back.

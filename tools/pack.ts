@@ -6,10 +6,16 @@
 // import.meta.url stay as they are), .d.ts from tsc, and a package.json whose exports name the built files. The workspace
 // keeps exporting source; nothing here changes how Kite, Hearth or the tests run.
 //
-//   node tools/pack.ts [--out <dir>] [--build [--strict]] [--version <x.y.z>] [package ...]     (default: dist/packs, every package below)
+//   node tools/pack.ts [--out <dir>] [--build [--strict]] [--version <x.y.z>] [--native-from <dir>]... [--platforms <list>] [package ...]
+//                                                                                    (default: dist/packs, every package below)
 //   --build builds libtse and tse-host first (headless always, desktop if it can); without it, @tsengine/native ships what is built.
 //     It builds what this machine can: without cmake there is no libtse, without cargo no tse-host, and a build that fails is a
-//     warning. It ends by saying what the packs let you do and what to install for the rest. --strict makes any failure an error.
+//     warning. It ends by saying what the packs let you do and what to install for the rest. --strict makes any failure an error,
+//     the desktop build's included.
+//   --native-out <dir> writes this machine's built binaries to <dir> as @tsengine/native lays them out (lib/<platform>-<arch>/…,
+//     bin/…) and packs nothing: what each runner of the release workflow's platform matrix uploads.
+//   --native-from <dir> adds the binaries in <dir> (that same layout, from other machines) to @tsengine/native; it may be given
+//     more than once. --platforms linux-x64,darwin-arm64,… makes a pack lacking any of the four binaries of a listed platform an error.
 //   --version stamps the packs with a release's version: each package's own, and its dependencies on the other @tsengine packages,
 //     so a game that installs one release's tarballs gets that release throughout (.github/workflows/release.yml uses it).
 //   npm run dist is `--build`: from a fresh checkout, `npm install && npm run dist` is all a game outside the repository needs.
@@ -81,7 +87,8 @@ export function buildNative(flavor: Flavor, tools: BuildTools = { cmake: true, c
   if (tools.cmake) {
     const folder = flavor === "headless" ? "native/build-headless" : "native/build";
     run("cmake", ["-S", "native", "-B", folder, ...(flavor === "headless" ? ["-DTSE_PLATFORM=Memory"] : [])]);
-    run("cmake", ["--build", folder, "-j", "--target", "tse"]);
+    // --config Release: a multi-config generator (Visual Studio, Xcode) builds Debug otherwise; single-config ones ignore it.
+    run("cmake", ["--build", folder, "-j", "--config", "Release", "--target", "tse"]);
   }
   if (tools.cargo) {
     const cargo = [
@@ -157,17 +164,75 @@ function builtBinaries(): { readonly path: string; readonly from: string }[] {
   return found;
 }
 
-/** Copy the built libtse and tse-host for each flavor that exists into the staged `@tsengine/native`. Returns what it shipped. */
-function addBinaries(stage: string): string[] {
-  const shipped: string[] = [];
-  for (const { path, from } of builtBinaries()) {
-    const to = join(stage, path);
-    mkdirSync(dirname(to), { recursive: true });
-    cpSync(from, to);
-    chmodSync(to, 0o755);
-    shipped.push(path);
+/** The file names of libtse and tse-host on a platform folder (`win32-x64`), as `@tsengine/native` looks them up. */
+function binaryNames(platformFolder: string): { readonly lib: string; readonly bin: string } {
+  const os = platformFolder.split("-")[0];
+  return {
+    lib: os === "win32" ? "tse.dll" : os === "darwin" ? "libtse.dylib" : "libtse.so",
+    bin: os === "win32" ? "tse-host.exe" : "tse-host",
+  };
+}
+
+/**
+ * What is wrong with a set of `@tsengine/native` files (paths like `lib/linux-x64/headless/libtse.so`): a path that is not a
+ * binary where the package looks for one, and each of the four binaries (libtse and tse-host, desktop and headless) missing
+ * for a platform in `platforms`. Empty when all is well.
+ */
+export function nativeProblems(files: readonly string[], platforms: readonly string[] = []): string[] {
+  const problems: string[] = [];
+  for (const file of files) {
+    const match = /^(lib|bin)\/([a-z0-9]+-[a-z0-9]+)\/(desktop|headless)\/([^/]+)$/.exec(file);
+    const names = match ? binaryNames(match[2] as string) : null;
+    if (!match || !names || match[4] !== (match[1] === "lib" ? names.lib : names.bin))
+      problems.push(`${file}: not where @tsengine/native looks for a binary`);
   }
-  return shipped;
+  for (const platformFolder of platforms) {
+    const names = binaryNames(platformFolder);
+    for (const flavor of ["desktop", "headless"])
+      for (const path of [`lib/${platformFolder}/${flavor}/${names.lib}`, `bin/${platformFolder}/${flavor}/${names.bin}`])
+        if (!files.includes(path)) problems.push(`${path}: missing`);
+  }
+  return problems;
+}
+
+/** Every file under `dir`, as a path relative to it with forward slashes. */
+function filesUnder(dir: string): string[] {
+  return walk(dir).map((file) => relative(dir, file).split(/[\\/]/).join("/"));
+}
+
+/** Copy one binary into place, executable. */
+function copyBinary(from: string, to: string): void {
+  mkdirSync(dirname(to), { recursive: true });
+  cpSync(from, to);
+  chmodSync(to, 0o755);
+}
+
+/**
+ * Copy the built libtse and tse-host for each flavor that exists into `stage` (the staged `@tsengine/native`, or the folder of
+ * `--native-out`), and then the binaries under each of `from` (`--native-from`). Returns what it shipped.
+ */
+function addBinaries(stage: string, from: readonly string[] = []): string[] {
+  const shipped = new Set<string>();
+  for (const { path, from: source } of builtBinaries()) {
+    copyBinary(source, join(stage, path));
+    shipped.add(path);
+  }
+  for (const dir of from) {
+    const files = filesUnder(dir);
+    const problems = nativeProblems(files);
+    if (problems.length > 0) throw new Error(`pack: --native-from ${dir}:\n  ${problems.join("\n  ")}`);
+    for (const file of files) {
+      copyBinary(join(dir, file), join(stage, file));
+      shipped.add(file);
+    }
+  }
+  return [...shipped].sort();
+}
+
+/** Where the binaries of `@tsengine/native` come from, besides this machine's builds, and which platforms it must have. */
+export interface NativeSources {
+  readonly from?: readonly string[];
+  readonly platforms?: readonly string[];
 }
 
 type Json = Record<string, unknown>;
@@ -314,7 +379,7 @@ function emitDeclarations(name: string, stage: string): void {
   }
 }
 
-export function packAll(outDir: string, names: readonly string[] = PACKABLE, version?: string): string[] {
+export function packAll(outDir: string, names: readonly string[] = PACKABLE, version?: string, native: NativeSources = {}): string[] {
   const staging = mkdtempSync(join(tmpdir(), "tse-pack-"));
   mkdirSync(outDir, { recursive: true });
   const tarballs: string[] = [];
@@ -322,7 +387,9 @@ export function packAll(outDir: string, names: readonly string[] = PACKABLE, ver
     for (const name of names) {
       const stage = stagePackage(name, staging, version);
       if (name === "native") {
-        const shipped = addBinaries(stage);
+        const shipped = addBinaries(stage, native.from);
+        const problems = nativeProblems(shipped, native.platforms);
+        if (problems.length > 0) throw new Error(`pack: @tsengine/native is incomplete:\n  ${problems.join("\n  ")}`);
         if (!shipped.some((file) => file.startsWith("lib/") && file.includes("/headless/"))) {
           console.warn("pack: no headless libtse found; run with --build (or npm run native:build:headless) first");
         }
@@ -348,9 +415,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   let build = false;
   let strict = false;
   let version: string | undefined;
+  let nativeOut: string | undefined;
+  const nativeFrom: string[] = [];
+  let platforms: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "--out") out = resolve(args[++i] ?? "");
+    else if (arg === "--native-out") nativeOut = resolve(args[++i] ?? "");
+    else if (arg === "--native-from") nativeFrom.push(resolve(args[++i] ?? ""));
+    else if (arg === "--platforms") platforms = (args[++i] ?? "").split(",").filter(Boolean);
     else if (arg === "--build") build = true;
     else if (arg === "--strict") strict = true;
     else if (arg === "--version") version = args[++i] ?? "";
@@ -386,11 +459,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     attempt("the headless build", () => buildNative("headless", tools));
     try {
       buildNative("desktop", tools);
-    } catch {
+    } catch (error) {
+      if (strict) throw error;
       console.warn("pack: the desktop build failed (it needs the platform's window libraries); packing the headless one only");
     }
   }
-  const tarballs = packAll(out, chosen, version);
+  if (nativeOut !== undefined) {
+    const written = addBinaries(nativeOut);
+    for (const path of written) console.log(path);
+    const problems = nativeProblems(written, strict ? [platform] : []);
+    if (problems.length > 0) {
+      console.error(`pack --native-out:\n  ${problems.join("\n  ")}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
+  const tarballs = packAll(out, chosen, version, { from: nativeFrom, platforms });
   for (const tarball of tarballs) console.log(relative(ROOT, tarball));
   if (build) {
     console.log("");

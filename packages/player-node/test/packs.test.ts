@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { packAll, rewriteSpecifiers, setupNotes, stampVersion } from "../../../tools/pack.ts";
+import { nativeProblems, packAll, rewriteSpecifiers, setupNotes, stampVersion } from "../../../tools/pack.ts";
 import { findNativeLibrary } from "../src/index.ts";
 
 test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages alone", () => {
@@ -106,4 +106,25 @@ test("setupNotes: a headless build without a window or a host says what is missi
   assert.match(notes, /A window \(`tse dev`\): not built/);
   assert.match(notes, /no tse-host, because the build failed/);
   assert.doesNotMatch(notes, /was not found/);
+});
+
+test("nativeProblems: binaries from every platform are accepted where the package looks, and a listed platform needs all four", () => {
+  const all = (folder: string, lib: string, bin: string): string[] =>
+    ["desktop", "headless"].flatMap((flavor) => [`lib/${folder}/${flavor}/${lib}`, `bin/${folder}/${flavor}/${bin}`]);
+  const files = [
+    ...all("linux-x64", "libtse.so", "tse-host"),
+    ...all("darwin-arm64", "libtse.dylib", "tse-host"),
+    ...all("win32-x64", "tse.dll", "tse-host.exe"),
+  ];
+  assert.deepEqual(nativeProblems(files, ["linux-x64", "darwin-arm64", "win32-x64"]), []);
+  assert.deepEqual(nativeProblems(files, ["darwin-x64"]), [
+    "lib/darwin-x64/desktop/libtse.dylib: missing",
+    "bin/darwin-x64/desktop/tse-host: missing",
+    "lib/darwin-x64/headless/libtse.dylib: missing",
+    "bin/darwin-x64/headless/tse-host: missing",
+  ]);
+  assert.deepEqual(nativeProblems(["lib/win32-x64/headless/libtse.so", "lib/linux-x64/headless/Release/libtse.so"]), [
+    "lib/win32-x64/headless/libtse.so: not where @tsengine/native looks for a binary",
+    "lib/linux-x64/headless/Release/libtse.so: not where @tsengine/native looks for a binary",
+  ]);
 });
