@@ -212,6 +212,15 @@ returns what an observer reads after each step. `renderRun` (`@tsengine/player-n
 through a hidden window; `tse screenshot --gpu` does it with the desktop libtse under Xvfb (Mesa's llvmpipe, real shaders) and
 `--compare` checks frames against stored PNGs within a tolerance.
 
+**A live session** (2026-11-16). `Session` (`session.ts`) is a game kept open on a recording backend and driven a step at a time:
+input scripts, steps until a text, a component's state or a game-state path passes, typed text, named snapshots (the game states,
+`captureHotState` and the player's clock, put back with `restoreTo`, as rewind does) and an exact `replay` of the run's input. It
+writes each step's input straight into the player's buffers, so the frame it plays is the frame that step reads; typed text is
+handed over one step early, because the player asks for it at the end of the step before. `tse session` serves it on stdin and stdout,
+a request a line, and `tse mcp` as MCP tools (`packages/cli/src/session-server.ts`); a screenshot replays the run's input through
+`tse screenshot --frames-file` in a process of its own, so the session's world is untouched. What a session reads as text is
+`describeScene` / `sceneText` in the runtime.
+
 ### The Node dev host (`@tsengine/player-node`)
 
 - `ffi.ts` is the only file that imports koffi. It finds the library (`TSE_NATIVE_LIB`, else the prebuilt one in `@tsengine/native`, else

@@ -92,7 +92,7 @@ packages/
               `loadScene`, and `runtimeManifest` (what the compiler is told about the runtime)
   player/     the player's pure-TypeScript half: object tree → draw records, layout, collisions, the fixed step, a recording backend
   player-node/ the Node host: the binding to `libtse`, `tse dev` (hot reload, rewind, the inspector), screenshots, previews
-  cli/        `tse`: create, dev, check, build, screenshot, preview, package, lsp; and the game templates
+  cli/        `tse`: create, dev, check, build, screenshot, preview, session, mcp, package, lsp; and the game templates
   testing/    `@tsengine/testing`: mount one compiled component in a headless world and test it, as React Testing Library does
   language-server/ `tse lsp`: the compiler's TSE diagnostics in the editor (editors/vscode is the VS Code extension)
   native/     `@tsengine/native`: where the built libtse and host are found
@@ -159,6 +159,21 @@ cd my-game && npm install && npm run check
 ```
 
 Every `@tsengine/*` package a game uses should be at the same release; each depends on the others at its own version.
+
+### Headless, for tools and AI agents
+
+Everything a game does runs without a window, the same way every time, so a tool or a language model can play it:
+
+```sh
+printf '%s\n' 'input right*30, _*10' 'observe components' 'state Hero' | npx tse session    # one JSON answer a line
+claude mcp add tse -- npx tse mcp                                                          # the same, as MCP tools
+npx tse check --json                                                                       # diagnostics and test failures as data
+```
+
+`tse session` steps the game on request, describes the scene as text (each object's world position, texts, colliders and
+state), keeps and restores snapshots, reloads changed code and plays the same input with it, and draws the current frame to a
+PNG. A new game comes with an `AGENTS.md` (how to build, test and drive it, and what trips a model up in the TSX) and a `.mcp.json`;
+this repository's own is [AGENTS.md](AGENTS.md).
 
 Programmatic use:
 

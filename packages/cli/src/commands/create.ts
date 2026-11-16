@@ -56,6 +56,7 @@ export function createCommand(args: readonly string[]): number {
   cpSync(TEMPLATE, target, { recursive: true });
   if (template !== "blank") cpSync(join(TEMPLATES, template), target, { recursive: true });
   renameSync(join(target, "gitignore"), join(target, ".gitignore")); // npm leaves a packed .gitignore out
+  renameSync(join(target, "mcp.json"), join(target, ".mcp.json")); // kept without its dot in the pack, as gitignore is
   for (const file of ["package.json", "src/Main.tsx"]) {
     const path = join(target, file);
     writeFileSync(path, readFileSync(path, "utf8").replaceAll("__NAME__", name));

@@ -32,6 +32,11 @@ test("create fills in the template", () => {
   assert.equal(pkg.name, "fixture");
   assert.equal(pkg.tse.name, "fixture");
   assert.ok(existsSync(join(game, ".gitignore")), "gitignore is renamed");
+  assert.deepEqual(JSON.parse(readFileSync(join(game, ".mcp.json"), "utf8")), {
+    mcpServers: { tse: { command: "npx", args: ["tse", "mcp"] } },
+  });
+  assert.match(readFileSync(join(game, "AGENTS.md"), "utf8"), /tse session/, "a guide for AI agents");
+  assert.equal(readFileSync(join(game, "CLAUDE.md"), "utf8").trim(), "@AGENTS.md");
   assert.match(readFileSync(join(game, "src/Main.tsx"), "utf8"), /title="fixture"/);
   assert.ok(!readFileSync(join(game, "package.json"), "utf8").includes("__NAME__"));
 });

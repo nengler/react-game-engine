@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tse": {
+      "command": "npx",
+      "args": ["tse", "mcp"]
+    }
+  }
+}

@@ -11,3 +11,7 @@ When a pull request is opened (by you or in this session), subscribe to its acti
 - Unsubscribe with `unsubscribe_pr_activity` once the PR is merged or closed, or when the user says to stop.
 
 Do not create a pull request unless the user asks for one.
+
+## The engine
+
+How the repository is laid out, checked and driven headless: @AGENTS.md
