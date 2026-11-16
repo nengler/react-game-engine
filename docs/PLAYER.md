@@ -340,7 +340,8 @@ why V8 is the default.
 
 **The games** (script only, recording backend):
 
-- Kite, the whole game under Node (2026-11): mean 0.86 ms, 99th percentile 9–11 ms; the slow steps change rooms.
+- Kite, the whole game under Node (2026-11-16): mean 0.25 ms, 99th percentile 1.2 ms. The slowest steps after start-up (about 2 ms)
+  are collisions on a room's first step; the room-change spike of about 25 ms measured earlier is gone.
 - Bramble, the replay to the cave under Node (2026-11-12): mean 0.9 ms, 99th percentile 5 ms; a step that changes map costs 1.2 to
   1.5 ms. A 200 × 200 map scrolled across costs 0.12 ms a frame under Node and 1.8 ms under QuickJS.
 - Hearth's wave 10 (109 enemies; 2026-11-15): Node mean about 1.0 ms; QuickJS mean 11.1 ms, 99th percentile about 29 ms (a garbage
@@ -368,6 +369,16 @@ why V8 is the default.
   whose `x` started at 0 (a small integer) and later held a fraction changed shape, and the walk that composes thousands of them kept
   deoptimising. 2,000 objects moving by fractions took 2.7 ms a frame to build under a fixed step instead of 0.6, and the
   interpolated scene 5.5 ms instead of 1.8. The fields are first set to 0.5, then to their defaults in the constructor.
+- **Mounting and unmounting while the game runs** (2026-11-16). A run of removals from one parent (a list dropping many items, shots
+  leaving the screen) compacts the children array once instead of searching and splicing it per child. An object makes no arrays
+  for structural changes, `useMount` cleanups or timers until it has one. 200 rects made and 200 dropped a frame went from 1.3 to
+  about 1.0 ms in the bench ("200 rects spawned and removed a frame"), and from 1.0 to 0.5 ms with plain entities.
+- **`findPath`** (2026-11-16) keeps its heap in typed arrays and asks `blocked` once per cell (it was asked up to three times a
+  cell with diagonals). It returns the same paths, checked against the old search on 3,000 random maps; the bench's 100 searches
+  went from about 146 to 78 ms.
+- **Remaining spikes under V8 are full garbage collections** (10 to 20 ms, a few times a minute in Hearth's tenth wave under the
+  recording backend, which decodes every frame and allocates much more than a real one). A larger young generation
+  (`--max-semi-space-size`) halved the scavenges but not the full collections.
 - **Small things that matter under an interpreter**: no default parameters on recursive calls, indexed loops instead of `for…of`
   (QuickJS allocates an iterator), a class's draw kind cached on the object.
 

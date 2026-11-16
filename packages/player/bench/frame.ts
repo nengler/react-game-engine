@@ -23,7 +23,19 @@ import {
  *
  * `npm run bench:check` runs it under Node and fails when a scene is over its budget in `budget.json` (CI does).
  */
-import { findPath, AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@tsengine/runtime";
+import {
+  findPath,
+  AnimatedSprite,
+  Camera,
+  Collider,
+  Entity,
+  Shape,
+  Sprite,
+  Tilemap,
+  World,
+  registerTilemaps,
+  type GameObject,
+} from "@tsengine/runtime";
 
 /**
  * The host's broad phase for collisions, when the bench runs under a host that has one (the Rust host): a player there asks
@@ -116,6 +128,31 @@ class StateMover extends Entity {
  * A compiled component with an animated, styled sprite, like Hearth's enemy: moved by state, and on each render it also writes the
  * sprite's `flipX` and `tint` (a hit flash), the way `<AnimatedSprite flipX={left} tint={flash > 0 ? … : …} />` does.
  */
+/** Each step adds `n` moving rects and removes the `n` it added the step before last: a steady churn of short-lived objects. */
+class Spawner extends Entity {
+  readonly n: number;
+  readonly #live: GameObject[][] = [];
+  #at = 0;
+  constructor(n: number) {
+    super();
+    this.n = n;
+  }
+  override onUpdate(): void {
+    const batch: GameObject[] = [];
+    for (let i = 0; i < this.n; i++) {
+      const shot = new Mover();
+      shot.transform.x = ((this.#at + i) * 7) % 800;
+      shot.transform.y = (i * 13) % 600;
+      shot.addChild(new Shape({ kind: "rect", width: 4, height: 4 }));
+      this.queueAddChild(shot);
+      batch.push(shot);
+    }
+    this.#at += this.n;
+    this.#live.push(batch);
+    if (this.#live.length > 2) for (const old of this.#live.shift() as GameObject[]) this.queueRemoveChild(old);
+  }
+}
+
 class AnimatedMover extends StateMover {
   readonly sprite = new AnimatedSprite({
     sheet: "walk.png",
@@ -155,6 +192,8 @@ interface Scene {
   readonly moving?: number;
   /** A `side` × `side` tilemap with a camera scrolling across it (`n` is then the side): only the cells in view should cost anything. */
   readonly map?: boolean;
+  /** Spawn `n` rects a frame and remove the `n` oldest (shots, sparks): what mounting and unmounting cost while a game runs. */
+  readonly churn?: boolean;
   /** Sweep in script even under a host with a broad phase of its own. */
   readonly scriptSweep?: boolean;
   /** Under `<Game fixedStep={60} interpolate>`: each frame runs one step and is drawn blended from the step before. */
@@ -230,9 +269,15 @@ function buildScene({
   state = false,
   pile = false,
   map = false,
+  churn = false,
   moving = n,
 }: Scene): Entity {
   if (tower) return buildTowerScene(n);
+  if (churn) {
+    const root = new Entity();
+    root.addChild(new Spawner(n));
+    return root;
+  }
   if (map) return buildMapScene(n);
   const root = new Entity();
   const side = Math.ceil(Math.sqrt(n));
@@ -322,6 +367,8 @@ const scenes: [string, Scene][] = [
   // Plan M2.1: only the cells in view are written, so a large map costs what its view does. The 800 × 600 window shows about 50 × 38 cells.
   ["200 x 200 tilemap scrolled", { n: 200, map: true }],
   ["20 x 20 tilemap scrolled", { n: 20, map: true }],
+  // Mounting and unmounting while the game runs: 200 rects made and 200 dropped every frame.
+  ["200 rects spawned and removed a frame", { n: 200, churn: true }],
 ];
 // Under a host with a broad phase, the same scenes with the script's sweep, to compare.
 if (hostOverlaps !== undefined) {
@@ -364,7 +411,17 @@ for (const n of [5000, 20000]) {
   const runs = [0, 1, 2].map(() => mount({ n })).sort((a, b) => a - b);
   console.log(`${`mount ${n} rects`.padEnd(35)}: ${(runs[1] as number).toFixed(2)} ms once`);
 }
-for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 15)] as [string, Scene][]) {
+const PHASED = [
+  "2000 rects moved by state",
+  "2000 rects by state with colliders",
+  "2000 rects, 20 moving, colliders",
+  "2000 still rects with colliders",
+  "2000 rects, 20 moving by state, colliders",
+  "200 animated sprites by state",
+  "80 enemies, 20 towers, 50 shots",
+  "200 x 200 tilemap scrolled",
+];
+for (const [name, scene] of scenes.filter(([name]) => PHASED.includes(name))) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
 }

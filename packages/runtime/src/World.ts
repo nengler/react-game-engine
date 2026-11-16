@@ -468,18 +468,23 @@ export class World implements BodySpace {
   #treeOrder(): { readonly input: readonly GameObject[]; readonly update: readonly GameObject[] } {
     const input: GameObject[] = [];
     const update: GameObject[] = [];
-    const seen = new Set<GameObject>();
     const stack: GameObject[] = [this.root];
     while (stack.length > 0) {
       const object = stack.pop() as GameObject;
-      seen.add(object);
       if (this.#onInput.has(object)) input.push(object);
       if (this.#onUpdate.has(object)) update.push(object);
       for (let i = object.children.length - 1; i >= 0; i--) stack.push(object.children[i] as GameObject);
     }
-    // An object registered but not under the root (it should not happen) still runs, after the rest, as it did before.
-    for (const object of this.#onInput) if (!seen.has(object)) input.push(object);
-    for (const object of this.#onUpdate) if (!seen.has(object)) update.push(object);
+    // An object registered but not under the root (it should not happen) still runs, after the rest, as it did before. Each object is
+    // in the tree once, so when every registered one was found there is nothing to add, and no set of what was seen is needed.
+    if (input.length !== this.#onInput.size) {
+      const found = new Set(input);
+      for (const object of this.#onInput) if (!found.has(object)) input.push(object);
+    }
+    if (update.length !== this.#onUpdate.size) {
+      const found = new Set(update);
+      for (const object of this.#onUpdate) if (!found.has(object)) update.push(object);
+    }
     return { input, update };
   }
 
