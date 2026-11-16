@@ -21,8 +21,8 @@ const skip = library === null && !required ? "libtse is not built (npm run nativ
 const scratch = mkdtempSync(join(tmpdir(), "tse-node-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
-/** A solid-colour PNG, so sprites can be tested without binary fixtures. */
-function writePng(path: string, size: number, [r, g, b]: [number, number, number]): void {
+/** A solid-colour PNG, so sprites can be tested without binary fixtures; with `clear`, the pixels it picks are transparent. */
+function writePng(path: string, size: number, [r, g, b]: [number, number, number], clear?: (x: number, y: number) => boolean): void {
   const chunk = (type: string, data: Buffer): Buffer => {
     const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
     const out = Buffer.alloc(12 + data.length);
@@ -35,9 +35,11 @@ function writePng(path: string, size: number, [r, g, b]: [number, number, number
   header.writeUInt32BE(size, 0);
   header.writeUInt32BE(size, 4);
   header[8] = 8; // bit depth
-  header[9] = 2; // RGB
-  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: size }, () => [r, g, b]).flat())]);
-  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  header[9] = clear === undefined ? 2 : 6; // RGB, or RGBA
+  const texel = (x: number, y: number): number[] => (clear === undefined ? [r, g, b] : clear(x, y) ? [0, 0, 0, 0] : [r, g, b, 255]);
+  const rowAt = (y: number): Buffer =>
+    Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: size }, (_, x) => texel(x, y)).flat())]);
+  const raw = Buffer.concat(Array.from({ length: size }, (_, y) => rowAt(y)));
   writeFileSync(
     path,
     Buffer.concat([
@@ -407,6 +409,32 @@ describe("libtse through koffi", { skip }, () => {
     const flipped = render(build(-1), { assets: scratch });
     assert.equal(pixel(flipped, 16, 14), "ff0000ff", "drawn to the left of its origin");
     assert.equal(pixel(flipped, 24, 14), "000000ff");
+  });
+
+  it("mixes a sprite toward its flash colour where it is opaque, and leaves its transparent pixels alone", () => {
+    // Red, its left half transparent, over a blue background.
+    writePng(join(scratch, "half.png"), 8, [255, 0, 0], (x) => x < 4);
+    const build = (flash: number, flashColor?: string) => () => {
+      const root = new Entity();
+      const sprite = new Sprite({ image: "half.png", flash, ...(flashColor === undefined ? {} : { flashColor }) });
+      sprite.transform.x = 20;
+      sprite.transform.y = 10;
+      root.addChild(sprite);
+      return root;
+    };
+    const options = { assets: scratch, background: "#0000ff" };
+    const white = render(build(1), options);
+    assert.equal(pixel(white, 26, 14), "ffffffff", "flash 1: the opaque half is white");
+    assert.equal(pixel(white, 21, 14), "0000ffff", "the transparent half still shows the background");
+    const half = render(build(0.5), options);
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(pixel(half, 26, 14).slice(i, i + 2), 16)) as [number, number, number];
+    assert.ok(
+      r === 255 && Math.abs(g - 128) <= 2 && Math.abs(b - 128) <= 2,
+      `flash 0.5: halfway from red to white, got ${pixel(half, 26, 14)}`
+    );
+    const green = render(build(1, "#00ff00"), options);
+    assert.equal(pixel(green, 26, 14), "00ff00ff", "toward the flash colour");
+    assert.equal(pixel(render(build(0), options), 26, 14), "ff0000ff", "flash 0: the sprite as it is");
   });
 
   it("draws a magenta square for a texture that does not exist, with one warning", () => {
