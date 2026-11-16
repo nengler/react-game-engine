@@ -108,6 +108,7 @@ export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHo
  * `transform={{ x, y }}` attribute. Pixels, y down; `rotation` in radians.
  * Relative to the nearest ancestor `<Entity>` unless `global` is true.
  */
+// `opacity` is written as a prop (`<Entity opacity={…}>`), never inside `transform={{ … }}`; it is lowered to the same write.
 export const TRANSFORM_FIELDS = ["x", "y", "z", "rotation", "scaleX", "scaleY", "global", "opacity"] as const;
 
 export type TransformField = (typeof TRANSFORM_FIELDS)[number];

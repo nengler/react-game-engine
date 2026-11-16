@@ -1453,7 +1453,7 @@ export class FrameBuilder {
       const kind = code & KIND_MASK;
       const children = node.children;
       const count = children.length;
-      // `transform={{ opacity }}`: this object and all under it are drawn at it, pushed here and popped where the walk leaves it.
+      // `opacity={…}` (stored in the transform): this object and all under it are drawn at it, pushed here and popped where the walk leaves it.
       // Its records have the alpha in them, so neither they nor any under them are copied to another frame (as a <Flex>'s are not).
       const faded = transform.opacity !== 1;
       if (faded) list.pushAlpha(usableOpacity(transform.opacity));
