@@ -186,11 +186,7 @@ describe("a shot", () => {
 
   it("a mortar shell hits as a blast for the one step it lands, then is taken away", () => {
     const { t, onLanded } = shot("mortar", 0.5);
-    let steps = 0;
-    while (t.find(Collider) === null && steps < 60) {
-      t.step();
-      steps += 1;
-    }
+    const steps = t.stepUntil(() => t.find(Collider) !== null, { maxSteps: 60 });
     assert.ok(steps >= 30 && steps <= 31, `nothing is hit while it flies: it landed after ${steps} steps`);
     const landing = t.find(Collider)!;
     assert.deepEqual(landing.data, { target: -1, x: 50, y: 0, radius: 14, damage: 18, slow: 0 });
@@ -228,9 +224,8 @@ function battle(startGold = START_GOLD) {
     sell: (pad: number) => (on(pad), t.input("sell")),
     startWave: () => t.input("wave"),
     /** Step until the wave is over or the battle ends (at most `seconds`). */
-    waitWave: (seconds = 120) => {
-      for (let i = 0; i < seconds * STEPS_A_SECOND && play.s.active && useGame.getState().screen !== "lost"; i++) t.step();
-    },
+    waitWave: (seconds = 120) =>
+      t.stepUntil(() => !play.s.active || useGame.getState().screen === "lost", { maxSteps: seconds * STEPS_A_SECOND, throws: false }),
   };
 }
 

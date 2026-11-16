@@ -32,7 +32,7 @@ Decisions, each still in force:
 | Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`TSE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
-| Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
+| Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Line>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`, a `for … of` over a field writing its items) is lowered to the copy the author would write: the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value and an alias (`const e = s.enemies[i]; e.hp = 0`) are refused (`TSE1301` / `TSE1402`, with what to write instead); any other in-place write to something that is not a field or a `let` local is refused too. No dev-mode `Object.freeze`. See "State: `useMutable`" |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
@@ -1244,6 +1244,20 @@ the class extends `Shape`, the required props that vary get the usual
 constructor placeholders, and `kind`, `width`, `height` and `color` become names
 a state, ref or prop may not use.
 
+## Line
+
+`<Line x={ax} y={ay} x2={tx} y2={ty} width={1} color="#fff" />` is a straight line between two points of its parent's space,
+square-ended, `width` pixels thick (default 1). `x2` and `y2` are required; `width` is the thickness, not a horizontal size, which
+is why it is its own element and not a `<Shape>` kind (a `<Shape>` needs `width` and `height` as a box).
+
+**Runtime.** `Line extends GameObject` with `x2`, `y2`, `width` and `color`. It draws nothing itself and is a leaf.
+
+**Player.** One `TSE_OP_RECT` record, turned along the line, its corner half the thickness to the side of the start so the
+thickness is centred: no native change. The draw pass takes the parent's turn and scale as the line's world transform less its
+own local one (layout offset, placement, transform), so the end is where the parent puts (`x2`, `y2`) whatever the line's own
+rotation and scale, and the thickness scales by the parent's (the square root of the two scales' product, for an uneven one).
+Opacity comes through `transform={{ opacity }}` as for any element. A line of no length, or no thickness, draws nothing.
+
 ## Pointer
 
 `<Pointer>` (M14) is a hit area for presses, positioned with `transform`:
@@ -2007,8 +2021,9 @@ did this by hand over a step's events; with twenty towers each playing its own s
 for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
 ```
 
-- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count? })`, and `bursts` (counts by name,
-  for tests). A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
+- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count?, color?, endColor? })`, and `bursts`
+  (counts by name, for tests). A burst's colours replace the preset's for that burst alone: each particle keeps a small index
+  into its emitter's list of burst colours (emptied whenever no particle is alive), so one preset serves every colour. A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
   one emitter per preset and attaches itself to the store while mounted (the last mounted wins); a burst's point is in the
   layer's space. It follows the world: frozen with it, gone with it. With no layer mounted a burst is counted, not drawn.
   Put the layer **next to** a `<Camera>`, not inside it, since a camera follows its children.
@@ -2079,6 +2094,10 @@ cleared to the darkness, with the lights in it drawn with `childBlend="add"`, an
   children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`TSE_OP_LIGHT`), so a
   light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
   glow over what is under it, with normal blending (black at its edge, so it is meant for a lighting layer).
+- **Flash** (2026-11-16, ABI v13): `<Sprite flash={0.8} flashColor="white">` (and on `<AnimatedSprite>`) mixes the image toward a
+  colour, which a multiplying tint cannot: a hit flash. Two numbers, not a colour whose alpha is the amount, so a fade is a number and
+  not a hex string built each render. Drawn as the sprite's silhouette laid over it (`TSE_SPRITE_SILHOUETTE`), not a shader, so it
+  shows in headless tests and screenshots ([PLAYER.md](PLAYER.md), "Flash").
 
 ## Collider shapes (2026-11-15)
 
@@ -2170,6 +2189,9 @@ from an input script and reading the game state or the draw records, which alone
 - `step(n)` ticks with no input; `input(script)` parses the script with `@tsengine/player`'s `parseInputScript` (the games' replay
   format), using `options.controls.toJSON()` as its bindings, and ticks once per frame with `createInputState(frame, controls)`,
   so action names mean what they mean in the game.
+- `stepUntil(done, { maxSteps?, throws? })` ticks with no input until `done()` holds, asked before the first tick and after
+  each, and returns the ticks run. At `maxSteps` (default 3600) it throws, or with `throws: false` returns: tests want the
+  failure, a balance run wants the timeout as a result.
 - `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
   from `{ tag, data, width, height }` (made once per spec, under the holder); `press` calls `World.reportPress` at a pressable's
   middle; `setProps` calls the generated `updateProps`.

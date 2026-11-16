@@ -22,6 +22,7 @@ import {
   Fade,
   Layer,
   Light,
+  Line,
   type BlendMode,
   Route,
   Router,
@@ -67,6 +68,7 @@ import {
   TSE_OP_SPRITE_REGION_LEN,
   TSE_SPRITE_FLIP_X,
   TSE_SPRITE_FLIP_Y,
+  TSE_SPRITE_SILHOUETTE,
   TSE_OP_TEXT,
   TSE_OP_TEXT_LEN,
   TSE_OP_VIEW,
@@ -926,6 +928,8 @@ const KIND_ROUTER = 14;
 const KIND_LAYER = 15;
 /** A `<Light>`: one light record. */
 const KIND_LIGHT = 16;
+/** A `<Line>`: one rect record, turned along the line. */
+const KIND_LINE = 17;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -953,35 +957,37 @@ function classCode(object: GameObject): number {
         ? KIND_SPRITE
         : object instanceof Shape
           ? KIND_SHAPE
-          : object instanceof Text
-            ? KIND_TEXT
-            : object instanceof Camera
-              ? KIND_CAMERA
-              : object instanceof Pointer
-                ? KIND_POINTER
-                : object instanceof Collider
-                  ? KIND_COLLIDER
-                  : object instanceof Screen
-                    ? KIND_SCREEN
-                    : object instanceof Hud
-                      ? KIND_HUD
-                      : object instanceof Flex
-                        ? KIND_FLEX
-                        : object instanceof Tilemap
-                          ? KIND_TILEMAP
-                          : object instanceof Particles
-                            ? KIND_PARTICLES
-                            : object instanceof Fade
-                              ? KIND_FADE
-                              : object instanceof Route
-                                ? KIND_ROUTE
-                                : object instanceof Router
-                                  ? KIND_ROUTER
-                                  : object instanceof Layer
-                                    ? KIND_LAYER
-                                    : object instanceof Light
-                                      ? KIND_LIGHT
-                                      : KIND_NONE;
+          : object instanceof Line
+            ? KIND_LINE
+            : object instanceof Text
+              ? KIND_TEXT
+              : object instanceof Camera
+                ? KIND_CAMERA
+                : object instanceof Pointer
+                  ? KIND_POINTER
+                  : object instanceof Collider
+                    ? KIND_COLLIDER
+                    : object instanceof Screen
+                      ? KIND_SCREEN
+                      : object instanceof Hud
+                        ? KIND_HUD
+                        : object instanceof Flex
+                          ? KIND_FLEX
+                          : object instanceof Tilemap
+                            ? KIND_TILEMAP
+                            : object instanceof Particles
+                              ? KIND_PARTICLES
+                              : object instanceof Fade
+                                ? KIND_FADE
+                                : object instanceof Route
+                                  ? KIND_ROUTE
+                                  : object instanceof Router
+                                    ? KIND_ROUTER
+                                    : object instanceof Layer
+                                      ? KIND_LAYER
+                                      : object instanceof Light
+                                        ? KIND_LIGHT
+                                        : KIND_NONE;
     code = kind;
     // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
     if (
@@ -1196,6 +1202,8 @@ export class FrameBuilder {
   #reference: FrameBuilder | undefined;
   readonly #particle = { x: 0, y: 0, t: 0 };
   readonly #placed = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
+  /** Where a `<Line>`'s rect goes: its own, as `#placed` is kept upright and unscaled for the records that share it. */
+  readonly #linePlaced = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   // What reusing needs from the last frame (see `DrawInfo`): its world records in tree order, before the z sort, its texts and colliders.
   #token: object = {};
   #lastRoot: GameObject | null = null;
@@ -1469,6 +1477,10 @@ export class FrameBuilder {
         case KIND_SHAPE:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#shape(node as Shape, at);
+          break;
+        case KIND_LINE:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#line(node as Line, at);
           break;
         case KIND_TEXT:
           if ((node as Text).text !== "") {
@@ -1899,6 +1911,10 @@ export class FrameBuilder {
                 case KIND_SHAPE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#shape(object as Shape, world);
+                  break;
+                case KIND_LINE:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#line(object as Line, world);
                   break;
                 case KIND_TILEMAP:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -2595,6 +2611,40 @@ export class FrameBuilder {
     else this.#list.rect(world, shape.width, shape.height, color);
   }
 
+  /**
+   * A `<Line>` at `world` (where its start is): one rect record from there to (`x2`, `y2`) in its parent's space, turned along
+   * the line, its thickness centred on it. The parent's turn and scale are `world`'s less the line's own (its layout offset,
+   * placement and transform), so the end is where the parent puts (`x2`, `y2`) whatever the line's own rotation and scale.
+   */
+  #line(line: Line, world: WorldTransform): void {
+    const local = composeTransforms(
+      composeTransforms(offsetTransform(IDENTITY_TRANSFORM, line.layoutX, line.layoutY), line.placement),
+      line.transform
+    );
+    if (local.scaleX === 0 || local.scaleY === 0) return;
+    const parentRotation = world.rotation - local.rotation;
+    const parentScaleX = world.scaleX / local.scaleX;
+    const parentScaleY = world.scaleY / local.scaleY;
+    // The line in the parent's space, scaled as the parent scales, then turned as it turns.
+    const lx = (line.x2 - local.x) * parentScaleX;
+    const ly = (line.y2 - local.y) * parentScaleY;
+    const cos = Math.cos(parentRotation);
+    const sin = Math.sin(parentRotation);
+    const dx = lx * cos - ly * sin;
+    const dy = lx * sin + ly * cos;
+    const length = Math.hypot(dx, dy);
+    const thickness = line.width * Math.sqrt(Math.abs(parentScaleX * parentScaleY));
+    if (!(length > 0) || !(thickness > 0)) return;
+    const angle = Math.atan2(dy, dx);
+    // The rect's corner: half the thickness to the left of the start, across the line.
+    const half = thickness / 2;
+    const place = this.#linePlaced;
+    place.x = world.x + Math.sin(angle) * half;
+    place.y = world.y - Math.cos(angle) * half;
+    place.rotation = angle;
+    this.#list.rect(place, length, thickness, this.#color(line.color));
+  }
+
   /** A bitmap text's height: its size, or without one given the font's cell height. */
   #bitmapHeight(text: Text, font: string): number {
     if (text.sized) return text.size;
@@ -2859,6 +2909,31 @@ export class FrameBuilder {
     const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
     const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
     this.#region(node.image, sheet, node.frameWidth, node.frameHeight, frame, node.originX, node.originY, node.flipX, node.flipY, tint, at);
+    // `flash`: the same region again, as its shape filled with the flash colour at that fraction (and the sprite's opacity), so
+    // the opaque pixels are mixed toward the colour and the transparent ones stay so.
+    const flash = node.flash;
+    if (flash > 0) {
+      const color = this.#color(node.flashColor);
+      const amount = Math.min(1, flash) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity));
+      const alpha = Math.round((color & 255) * amount);
+      if (alpha > 0) {
+        const silhouette = ((color & 0xffffff00) | alpha) >>> 0;
+        this.#region(
+          node.image,
+          sheet,
+          node.frameWidth,
+          node.frameHeight,
+          frame,
+          node.originX,
+          node.originY,
+          node.flipX,
+          node.flipY,
+          silhouette,
+          at,
+          TSE_SPRITE_SILHOUETTE
+        );
+      }
+    }
   }
 
   /** One frame of an image (or all of it), as a sprite-region record. */
@@ -2873,7 +2948,8 @@ export class FrameBuilder {
     flipX: boolean,
     flipY: boolean,
     tint: number,
-    at: WorldTransform
+    at: WorldTransform,
+    flags = 0
   ): void {
     if (image === "") return;
     const handle = this.#texture(image);
@@ -2907,7 +2983,7 @@ export class FrameBuilder {
       frameHeight,
       originX,
       originY,
-      (flipX ? TSE_SPRITE_FLIP_X : 0) | (flipY ? TSE_SPRITE_FLIP_Y : 0),
+      flags | (flipX ? TSE_SPRITE_FLIP_X : 0) | (flipY ? TSE_SPRITE_FLIP_Y : 0),
       tint
     );
   }
@@ -3156,8 +3232,10 @@ export class FrameBuilder {
   #particles(node: Particles, at: WorldTransform): void {
     const count = node.count;
     if (count === 0) return;
-    const start = this.#color(node.color);
-    const end = node.endColor === undefined ? start : this.#color(node.endColor);
+    const ownStart = this.#color(node.color);
+    const ownEnd = node.endColor === undefined ? ownStart : this.#color(node.endColor);
+    // Bursts given their own colours (`fx.burst(name, x, y, { color })`) say so per particle; most emitters have none.
+    const painted = node.hasOwnColors;
     const scratch = this.#particle;
     const place = this.#placed;
     const world = node.space === "world";
@@ -3166,6 +3244,15 @@ export class FrameBuilder {
       const t = scratch.t;
       const size = node.shrink ? node.size * (1 - t) : node.size;
       if (!(size > 0.01)) continue;
+      let start = ownStart;
+      let end = ownEnd;
+      if (painted) {
+        const own = node.colorsOf(i);
+        if (own !== null) {
+          start = this.#color(own.color);
+          end = own.endColor === undefined ? start : this.#color(own.endColor);
+        }
+      }
       let color = start;
       if (end !== start) color = mixColors(start, end, t);
       if (node.fade) color = ((color & 0xffffff00) | Math.round((color & 255) * (1 - t))) >>> 0;
