@@ -155,7 +155,8 @@ export class GameObject<P extends object = {}> {
   drawKind = -1;
 
   constructor(props?: P, defaults?: Partial<P>) {
-    this.props = { ...defaults, ...definedOnly(props) } as P;
+    // `definedOnly` makes a new object: with no defaults to put under it, it is the props.
+    this.props = (defaults === undefined ? definedOnly(props) : { ...defaults, ...definedOnly(props) }) as P;
   }
 
   /**
@@ -179,7 +180,8 @@ export class GameObject<P extends object = {}> {
   #dirty = false;
   /** The last pass of a World's `flush` that looked at this object (see `renderInPass`). */
   #renderPass = 0;
-  #pending: StructureOp[] = [];
+  /** Structural changes queued for the next commit; null while there are none (most objects never queue one, so none is made). */
+  #pending: StructureOp[] | null = null;
   /** Source position among the parent's children (see `addChild`); `Infinity` for unslotted children. */
   #slot = Infinity;
   /** Position within the slot: the item's index in a keyed list (see `queueReorder`), or a path of positions for passed children; 0 otherwise. */
@@ -191,7 +193,7 @@ export class GameObject<P extends object = {}> {
   #inert = false;
   #modal = false;
   /** What `useMount` handlers returned this stay in a World (`keepCleanup`), run after `onUnmount` when it leaves. */
-  #cleanups: (() => void)[] = [];
+  #cleanups: (() => void)[] | null = null;
 
   /**
    * Where children passed by a parent (`<Panel><Button /></Panel>`) mount: a
@@ -264,7 +266,7 @@ export class GameObject<P extends object = {}> {
   }
 
   get hasPendingStructure(): boolean {
-    return this.#pending.length > 0;
+    return this.#pending !== null && this.#pending.length > 0;
   }
 
   /**
@@ -316,9 +318,36 @@ export class GameObject<P extends object = {}> {
     child.detachFromWorld();
   }
 
+  /** `removeChild` for each of `ops[from..to)` (all removals), in that order, with one pass over the children. */
+  #removeChildren(ops: readonly StructureOp[], from: number, to: number): void {
+    const leaving = new Set<GameObject>();
+    for (let k = from; k < to; k++) {
+      const child = (ops[k] as { readonly child: GameObject }).child;
+      if (child.parent !== this || leaving.has(child)) throw new Error("GameObject is not a child of this object");
+      leaving.add(child);
+    }
+    this.markChanged();
+    const children = this.children;
+    let kept = 0;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i] as GameObject;
+      if (!leaving.has(child)) children[kept++] = child;
+    }
+    children.length = kept;
+    this.world?.orderChanged();
+    for (let k = from; k < to; k++) {
+      const child = (ops[k] as { readonly child: GameObject }).child;
+      child.parent = null;
+      child.drawCache = null;
+      child.#slot = Infinity;
+      child.#order = 0;
+      child.detachFromWorld();
+    }
+  }
+
   /** Queue a child to be attached (at `slot` and `order`, see `addChild`) when structure is next committed. */
   queueAddChild(child: GameObject, slot: number = Infinity, order: ChildOrder = 0): void {
-    this.#pending.push({ kind: "add", child, slot, order });
+    (this.#pending ??= []).push({ kind: "add", child, slot, order });
     this.world?.scheduleCommit(this);
   }
 
@@ -330,21 +359,32 @@ export class GameObject<P extends object = {}> {
    * prefix and then the index.
    */
   queueReorder(slot: number, children: readonly GameObject[], prefix: readonly number[] = []): void {
-    this.#pending.push({ kind: "reorder", slot, children, prefix });
+    (this.#pending ??= []).push({ kind: "reorder", slot, children, prefix });
     this.world?.scheduleCommit(this);
   }
 
   /** Queue a child to be detached when structure is next committed. */
   queueRemoveChild(child: GameObject): void {
-    this.#pending.push({ kind: "remove", child });
+    (this.#pending ??= []).push({ kind: "remove", child });
     this.world?.scheduleCommit(this);
   }
 
   /** Apply queued structural changes in the order they were queued, then those of children just attached. */
   commitStructure(): void {
     const ops = this.#pending;
-    this.#pending = [];
-    for (const op of ops) {
+    if (ops === null) return;
+    this.#pending = null;
+    for (let k = 0; k < ops.length; k++) {
+      const op = ops[k] as StructureOp;
+      if (op.kind === "remove" && k + 1 < ops.length && (ops[k + 1] as StructureOp).kind === "remove") {
+        // A run of removals (a list dropping many items, shots leaving the screen): the children array is compacted once, instead of
+        // searched and spliced for each.
+        let end = k;
+        while (end < ops.length && (ops[end] as StructureOp).kind === "remove") end++;
+        this.#removeChildren(ops, k, end);
+        k = end - 1;
+        continue;
+      }
       if (op.kind === "add") {
         this.addChild(op.child, op.slot, op.order);
         // A child that queued its own changes while it had no parent (nested conditionals)
@@ -527,7 +567,7 @@ export class GameObject<P extends object = {}> {
    * ignored. Generated code calls it from `onMount`.
    */
   protected keepCleanup(cleanup: unknown): void {
-    if (typeof cleanup === "function") this.#cleanups.push(cleanup as () => void);
+    if (typeof cleanup === "function") (this.#cleanups ??= []).push(cleanup as () => void);
   }
 
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
@@ -613,7 +653,8 @@ export class GameObject<P extends object = {}> {
   }
 
   /** This object's timers (`after`, `every`): seconds left, the period for a repeating one (0: once), and what to call. */
-  #timers: { left: number; period: number; fn: () => void }[] = [];
+  /** `NO_TIMERS` (shared, never written) until the first timer is set, so an object with none makes no array. */
+  #timers: { left: number; period: number; fn: () => void }[] = NO_TIMERS;
 
   /**
    * Call `fn` once, `seconds` of game time from now: `after(0.15, () => setFlash(false))` in a handler. Timers count the fixed
@@ -631,7 +672,7 @@ export class GameObject<P extends object = {}> {
 
   /** Cancel every timer of this object. */
   cancelTimers(): void {
-    this.#timers = [];
+    this.#timers = NO_TIMERS;
   }
 
   /** How many timers of this object are waiting. */
@@ -640,6 +681,7 @@ export class GameObject<P extends object = {}> {
   }
 
   #addTimer(seconds: number, period: number, fn: () => void): void {
+    if (this.#timers === NO_TIMERS) this.#timers = [];
     this.#timers.push({ left: seconds > 0 ? seconds : 0, period, fn });
     this.world?.addTimed(this);
   }
@@ -679,7 +721,7 @@ export class GameObject<P extends object = {}> {
       this.markDirty();
     }
     if (this.#dirty) world.scheduleRender(this);
-    if (this.#pending.length > 0) world.scheduleCommit(this);
+    if (this.#pending !== null && this.#pending.length > 0) world.scheduleCommit(this);
     for (const child of this.children) child.attachToWorld(world);
     if (!this.#mounted) {
       this.#mounted = true;
@@ -697,12 +739,12 @@ export class GameObject<P extends object = {}> {
       this.#unmounted = true;
       this.onUnmount();
       const cleanups = this.#cleanups;
-      this.#cleanups = [];
-      for (const cleanup of cleanups) cleanup();
+      this.#cleanups = null;
+      if (cleanups !== null) for (const cleanup of cleanups) cleanup();
     }
     for (const handle of this.ownedHandles()) (handle as OwnedHandle | null)?.detachOwner?.();
     // Its timers go with it: a timer never calls back into a component that has left.
-    this.#timers = [];
+    this.#timers = NO_TIMERS;
     this.world?.unregisterObject(this);
     this.world = null;
     for (const child of this.children) child.detachFromWorld();
@@ -717,6 +759,9 @@ interface OwnedHandle {
   attachOwner?(owner: GameObject, world: World): void;
   detachOwner?(): void;
 }
+
+/** What `#timers` holds while there are none. Never written: the first timer replaces it with an array of its own. */
+const NO_TIMERS: { left: number; period: number; fn: () => void }[] = [];
 
 function definedOnly<T extends object>(value: T | undefined): Partial<T> {
   const out: Partial<T> = {};
