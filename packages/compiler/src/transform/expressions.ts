@@ -82,7 +82,7 @@ const INSTEAD: Readonly<Record<string, string>> = {
   clearInterval: "There is no `clearInterval`: `cancelTimers()` stops the component's `after` and `every` timers.",
   requestAnimationFrame: "There is no `requestAnimationFrame`: `useUpdate((dt, input) => …)` runs every step, with the step's time.",
   "Math.random":
-    "`Math.random` would make every replay and test play differently. Roll from a seed you keep in state, with a function in a `.ts` file (Hearth's `rules/rng.ts`), so the same input plays the same game.",
+    "`Math.random` would make every replay and test play differently. Roll from a seed you keep in state (`const r = rollBetween(s.seed, 0, 10); s.seed = r.seed;`, from `@tsengine/runtime/jsx`), so the same input plays the same game.",
   "Date.now": "`Date.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
   "performance.now":
     "`performance.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
@@ -663,7 +663,7 @@ export class ExpressionLowering extends LoweringBase {
           this.diagnostics.push(
             warning(
               DiagnosticCode.UnsupportedExpression,
-              "`Math.random()` is different on every run, so replays, tests and the parity between hosts will not repeat it. Seed your own generator in a `.ts` file for game logic.",
+              "`Math.random()` is different on every run, so replays, tests and the parity between hosts will not repeat it. Roll from a seed you keep in state: `const r = roll(s.seed); s.seed = r.seed;` (`roll`, `rollBetween`, `rollInt`, `rollPick` and `rollChance` from `@tsengine/runtime/jsx`).",
               this.span(node)
             )
           );

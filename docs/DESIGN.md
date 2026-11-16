@@ -448,7 +448,10 @@ error. Now, in a handler:
   or a class imported from a `.ts` file. Not in a component body (it would run on every render) and not `Date` (the clock).
 - **The standard library** as written: `Object`, `JSON`, `Number`, `Array`, `String`, `Math` and `console` functions, and
   `parseInt`, `parseFloat`, `isNaN`, `isFinite`. The constructors and namespaces can be named as values (`e instanceof Error`).
-  `Math.random()` compiles with a warning: replays, tests and the parity between hosts depend on a run repeating.
+  `Math.random()` compiles with a warning: replays, tests and the parity between hosts depend on a run repeating. The warning
+  names the runtime's seeded rolls (`roll`, `rollBetween`, `rollInt`, `rollPick`, `rollChance`, mulberry32, 2026-11-16): each
+  returns `{ value, seed }`, and the seed is one number kept in state, so a save, hot reload, rewind and a session snapshot keep
+  it with everything else.
 - **`typeof`, `instanceof` and `in`**, anywhere.
 - An arrow handed to one of these calls is a function that may return a value (`returns: "any"`): `list.sort((a, b) => a.hp - b.hp)`,
   `Array.from({ length: 2 }, () => [0, 0])`. With an expression body it is written as an arrow; with a block, as a callback.

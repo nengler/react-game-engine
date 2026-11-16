@@ -229,3 +229,4 @@ export {
   type DescribeOptions,
   type SceneNode,
 } from "./describe.ts";
+export { roll, rollBetween, rollChance, rollInt, rollPick, type Rolled } from "./random.ts";

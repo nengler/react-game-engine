@@ -46,6 +46,7 @@ import type { TransformShorthand } from "./jsx-runtime.ts";
 
 export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
+export { roll, rollBetween, rollChance, rollInt, rollPick, type Rolled } from "./random.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
 import type { BodyHit, BodyOptions } from "./body.ts";

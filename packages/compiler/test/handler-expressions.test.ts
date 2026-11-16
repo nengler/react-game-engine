@@ -123,5 +123,24 @@ function C() {
     );
     assert.ok(result.ok);
     assert.ok(result.diagnostics.some((d) => d.severity === "warning" && /Math\.random\(\)/.test(d.message)));
+    assert.ok(
+      result.diagnostics.some((d) => /rollBetween|roll\(s\.seed\)/.test(d.message)),
+      "and names the seeded rolls instead"
+    );
+  });
+
+  it("rolls from a seed kept in state, and the same seed rolls the same numbers", async () => {
+    const rolls = `
+    let seed = 7;
+    const out: string[] = [];
+    const a = roll(seed); seed = a.seed; out.push(String(a.value < 1 && a.value >= 0));
+    const b = rollInt(seed, 1, 6); seed = b.seed; out.push(String(b.value));
+    const c = rollBetween(seed, -2, 2); seed = c.seed; out.push(String(c.value >= -2 && c.value < 2));
+    const d = rollPick(seed, ["x", "y", "z"]); seed = d.seed; out.push(String(d.value));
+    const e = rollChance(seed, 1); out.push(String(e.value));
+    s.out = out.join(" ");`;
+    const first = await run(rolls);
+    assert.match(first, /^true [1-6] true [xyz] true$/);
+    assert.equal(await run(rolls), first);
   });
 });
