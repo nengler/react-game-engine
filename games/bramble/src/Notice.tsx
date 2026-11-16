@@ -17,7 +17,7 @@ export function Notice({ text }: NoticeProps) {
   const opacity = useTween(s.shown ? 1 : 0, { duration: 0.2 });
 
   return (
-    <Entity transform={{ y, opacity }}>
+    <Entity y={y} opacity={opacity}>
       <Shape kind="rect" width={320} height={14} color="#10131ccc" />
       <Text x={0} y={2} width={320} align="center" color="#fff1d6">
         {text}

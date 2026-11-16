@@ -17,7 +17,7 @@ export function SlideIn({ children }: SlideInProps) {
   const opacity = useTween(s.shown ? 1 : 0, { duration: 0.15 });
 
   return (
-    <Flex direction="column" width="grow" transform={{ x, opacity }}>
+    <Flex direction="column" width="grow" x={x} opacity={opacity}>
       {children}
     </Flex>
   );
