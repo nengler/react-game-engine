@@ -34,8 +34,9 @@ These cannot be checked in a cloud container, and each has found bugs the tests 
 
 - **macOS** (decided 2026-11-15: the owner will make games on a Mac). Nothing has been built or run on macOS: libtse's CMake build,
   `tse dev`, `tse package` (both engines), the link lists in `host/build.rs` and the storage paths are written for it but
-  unverified, and CI is Linux only. Build and play the demo there, file what breaks, then add a macOS CI job if it builds. Linux
-  stays the only supported platform until then.
+  unverified beyond what the release workflow's platform matrix runs (the builds, the C smoke test, the Node host on the software
+  renderer and the demo's parity under tse-host, on macOS arm64 and x64 and on Windows x64; a `dry_run` dispatch runs it without
+  releasing). PR CI is Linux only. Play the demo in a real window there, file what breaks.
 - **Play in a real window**: the demo and Hearth under Node and packaged (V8 and `--engine quickjs`); Bramble packaged; rewind in
   `tse dev`. Kite and Bramble have been played under Node on a Linux desktop, with sound.
 - **A save across a real quit** under both hosts (each host was only tested against libtse separately).

@@ -1,15 +1,19 @@
 name: Release
 
 # Pushing a tag like v0.1.0, or running this workflow from the Actions tab with a version (it then tags the commit it runs on,
-# normally main's head), builds the engine's packs (tools/pack.ts --build --strict, stamped with the tag's version),
-# attaches them to a GitHub release of that tag, and publishes them to npm as @tsengine/* (needs the NPM_TOKEN secret).
+# normally main's head), builds libtse and tse-host on each platform (the `native` matrix), packs the engine (tools/pack.ts,
+# stamped with the tag's version, @tsengine/native holding every platform's binaries), attaches the packs to a GitHub release
+# of that tag, and publishes them to npm as @tsengine/* (needs the NPM_TOKEN secret). A run from the Actions tab with
+# `dry_run` builds, smoke-tests and packs everything, keeps the packs as the run's artifact, and releases and publishes nothing.
 # A game installs them from npm (`npx @tsengine/cli create my-game`), or by the release's URL:
 #
 #   "@tsengine/runtime": "https://github.com/nengler/tse/releases/download/v0.2.0/tsengine-runtime-0.2.0.tgz"
 #
-# @tsengine/native carries libtse and tse-host built on this runner (linux-x64, desktop and headless), so the packs run on
-# Linux x64 only, as the engine does today, with glibc 2.39 or newer (Ubuntu 24.04 and later). CI (ci.yml, including the `outside` job) is what checks the code; this only builds
-# and publishes what the tag points at, so tag a commit CI has passed.
+# @tsengine/native carries libtse and tse-host, desktop and headless, for Linux x64 (glibc 2.39 or newer: Ubuntu 24.04 and
+# later), macOS arm64 and x64 (11 or newer) and Windows x64. CI (ci.yml, including the `outside` job) is what checks the code,
+# on Linux; this builds what the tag points at on every platform and runs a smoke test on each, so tag a commit CI has passed.
+# Cost: the matrix is about 25 runner-minutes a release on top of the Linux packs job. Free while the repository is public; on
+# a private one macOS minutes bill at 10x and Windows at 2x.
 on:
   push:
     tags: ["v*"]
@@ -19,6 +23,11 @@ on:
         description: "Version to release, like 0.1.0 (tagged v0.1.0 on the branch chosen above)"
         required: true
         type: string
+      dry_run:
+        description: "Build, smoke-test and pack every platform, but make no release and publish nothing"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,14 +39,73 @@ env:
   CARGO_TERM_COLOR: never
 
 concurrency:
-  group: release-${{ inputs.version || github.ref }}
+  group: release-${{ inputs.version || github.ref }}${{ inputs.dry_run && '-dry-run' || '' }}
   cancel-in-progress: false
 
 jobs:
+  # libtse and tse-host, desktop and headless, built on each platform and laid out as @tsengine/native holds them
+  # (lib/<platform>-<arch>/<flavor>/…, bin/…), then smoke-tested there: the C smoke test and the Node host against the headless
+  # libtse, and the demo's parity run against the headless tse-host. No build cache: a release builds from scratch.
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Pinned, not ubuntu-latest: libtse and tse-host link against the runner's glibc, and a binary built on a newer one
+          # does not load on an older system. v0.1.0 was built on ubuntu-latest and needed glibc 2.43, which Ubuntu 24.04 (2.39)
+          # lacks. Raise this only when the oldest system the packs should run on moves.
+          - { os: ubuntu-24.04, platform: linux-x64 }
+          - { os: macos-14, platform: darwin-arm64 }
+          - { os: macos-15-intel, platform: darwin-x64 }
+          - { os: windows-2025, platform: win32-x64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      # The oldest macOS the binaries load on (the runner's own is the default otherwise). Ignored elsewhere.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.18"
+          cache: npm
+      - run: npm ci
+      - run: npm run generate
+      # The desktop libtse links against the window libraries on Linux; macOS and Windows have theirs already.
+      - name: Install the window libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
+      # --strict: a missing tool or a failed build (desktop included) is an error, and all four binaries must be there.
+      - name: Build libtse and tse-host
+        run: node tools/pack.ts --build --strict --native-out "dist/native"
+      - name: C smoke test (software renderer)
+        run: |
+          cmake --build native/build-headless --config Release -j
+          ctest --test-dir native/build-headless -C Release --output-on-failure
+      - name: Node host against the headless libtse
+        run: node --test --test-concurrency=1 packages/player-node/test/native.test.ts
+        env:
+          TSE_NATIVE_LIB: ${{ github.workspace }}/dist/native/lib/${{ matrix.platform }}/headless/${{ matrix.platform == 'win32-x64' && 'tse.dll' || matrix.platform == 'linux-x64' && 'libtse.so' || 'libtse.dylib' }}
+          TSE_REQUIRE_NATIVE: "1"
+      - name: Parity of the headless tse-host with Node
+        run: node --test --test-concurrency=1 packages/demo/test/parity.test.ts
+        env:
+          TSE_HOST_BIN: ${{ github.workspace }}/dist/native/bin/${{ matrix.platform }}/headless/tse-host${{ matrix.platform == 'win32-x64' && '.exe' || '' }}
+          TSE_REQUIRE_HOST: "1"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.platform }}
+          path: dist/native
+          if-no-files-found: error
+
   packs:
-    # Pinned, not ubuntu-latest: libtse and tse-host link against the runner's glibc, and a binary built on a newer one does
-    # not load on an older system. v0.1.0 was built on ubuntu-latest and needed glibc 2.43, which Ubuntu 24.04 (2.39) lacks.
-    # Raise this only when the oldest system the packs should run on moves.
+    needs: native
+    # Packs JavaScript and the binaries the matrix built; nothing here is compiled.
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -47,8 +115,9 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
           HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
         run: |
-          if [ "$HAS_NPM_TOKEN" != true ]; then echo "::error::the NPM_TOKEN secret is not set (README.md, Releases, says how to make it)"; exit 1; fi
+          if [ "$DRY_RUN" != true ] && [ "$HAS_NPM_TOKEN" != true ]; then echo "::error::the NPM_TOKEN secret is not set (README.md, Releases, says how to make it)"; exit 1; fi
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then version="$INPUT_VERSION"; else version="${GITHUB_REF_NAME#v}"; fi
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::'$version' is not a version like 0.1.0"
@@ -64,17 +133,28 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run generate
-      # The desktop libtse links against the window libraries; without them only the headless one would ship.
-      - name: Install the window libraries
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: native-*
+          path: dist/native-parts
+      # Each platform's binaries go into the one @tsengine/native; a platform missing any of its four is an error.
+      - name: Pack (stamped with the tag's version)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
-      - name: Build libtse and tse-host, and pack (stamped with the tag's version)
-        run: node tools/pack.ts --build --strict --version "$VERSION"
+          from=()
+          for dir in dist/native-parts/*/; do from+=(--native-from "$dir"); done
+          node tools/pack.ts --version "$VERSION" "${from[@]}" --platforms linux-x64,darwin-arm64,darwin-x64,win32-x64
+      - name: Keep the packs (a dry run's result)
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v7
+        with:
+          name: packs
+          path: dist/packs/*.tgz
+          if-no-files-found: error
       # Run again for a version whose release exists (it was made, then publishing failed): the release is left as it is, and
       # its packs replace the ones just built, so npm gets the very files a game may already have installed by URL (a rebuild
       # is not byte-identical, and a lockfile's integrity hash would no longer match).
       - name: Attach the packs to the release
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
         # A pushed tag already exists (--verify-tag); a run from the Actions tab creates it on the commit it built.
@@ -88,12 +168,13 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then where=(--target "$GITHUB_SHA"); else where=(--verify-tag); fi
           gh release create "$TAG" dist/packs/*.tgz "${where[@]}" --generate-notes \
             --title "$TAG" \
-            --notes "Install a pack by URL: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/<file>. Linux x64."
+            --notes "Install a pack by URL: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/<file>. Linux x64, macOS arm64 and x64, Windows x64."
       # Publish each pack to npm, @tsengine/* depending on the others at this version (stamped above), dependencies first so a
       # pack never names one that is not there yet. NPM_TOKEN is a repository secret: an npm granular access token that may
       # publish to the @tsengine organization. A version already on npm is skipped, so the workflow can be run again after a
       # failure part-way. A version with a pre-release part (0.2.0-beta.1) goes to the `next` tag instead of `latest`.
       - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
