@@ -2171,6 +2171,9 @@ from an input script and reading the game state or the draw records, which alone
 - `step(n)` ticks with no input; `input(script)` parses the script with `@tsengine/player`'s `parseInputScript` (the games' replay
   format), using `options.controls.toJSON()` as its bindings, and ticks once per frame with `createInputState(frame, controls)`,
   so action names mean what they mean in the game.
+- `stepUntil(done, { maxSteps?, throws? })` ticks with no input until `done()` holds, asked before the first tick and after
+  each, and returns the ticks run. At `maxSteps` (default 3600) it throws, or with `throws: false` returns: tests want the
+  failure, a balance run wants the timeout as a result.
 - `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
   from `{ tag, data, width, height }` (made once per spec, under the holder); `press` calls `World.reportPress` at a pressable's
   middle; `setProps` calls the generated `updateProps`.
