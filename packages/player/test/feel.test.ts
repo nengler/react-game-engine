@@ -433,6 +433,31 @@ describe("bitmap fonts", () => {
     assert.equal(glyphs[0]?.x, 10, "30 wide, the 10 of text in the middle");
   });
 
+  it("draw tse:small, the font built into libtse, from its 64 × 36 sheet: 4 pixels a character, 6 a line", () => {
+    const { backend } = run(() => new Text({ text: "AB\nC", font: "tse:small", color: "white" }), 1);
+    assert.ok(backend.textureLoads.includes("tse:small"), "loaded by its name, not from the assets folder");
+    assert.ok(!backend.textureLoads.some((p) => p.endsWith("/tse:small")));
+    const glyphs = ofOp(backend.lastFrame.records, "spriteRegion");
+    assert.equal(glyphs.length, 3);
+    assert.deepEqual(
+      [glyphs[0]?.srcX, glyphs[0]?.srcY, glyphs[0]?.srcW, glyphs[0]?.srcH],
+      [((65 - 32) % 16) * 4, Math.floor((65 - 32) / 16) * 6, 4, 6],
+      "the cell of A"
+    );
+    assert.equal(glyphs[0]?.scaleX, 1, "no size given: drawn at the cell's own height");
+    assert.deepEqual([glyphs[0]?.x, glyphs[1]?.x], [0, 4]);
+    assert.deepEqual([glyphs[2]?.x, (glyphs[2]?.y ?? 0) - (glyphs[0]?.y ?? 0)], [0, 6], "the next line is 6 pixels down");
+  });
+
+  it("refuse a tse: name that is not built in, naming the ones there are, and load nothing for it", () => {
+    const { backend, warnings } = run(() => new Text({ text: "A", font: "tse:huge" }), 1);
+    assert.ok(
+      warnings.some((w) => w.includes("There is no built-in 'tse:huge' (there is: tse:small)")),
+      warnings.join("\n")
+    );
+    assert.ok(!backend.textureLoads.some((p) => p.includes("tse:huge")));
+  });
+
   it("show anything outside the font as a question mark", () => {
     const { backend } = run(() => new Text({ text: "é", font: "font.png", size: 8 }), 1);
     const g = ofOp(backend.lastFrame.records, "spriteRegion")[0];

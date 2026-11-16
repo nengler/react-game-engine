@@ -185,7 +185,10 @@ void    tse_close(void);
  * Returns 0, or nonzero when there is no window or it is hidden (tests, CI). The next tse_frame reports the new size. */
 int32_t tse_set_fullscreen(int32_t on);
 
-int32_t tse_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
+/* A texture from an image file, or a font built into libtse by its "tse:" name (since ABI v14): "tse:small" is a bitmap font
+ * sheet of 3x5 glyphs in 4x6 cells, characters 32 to 127 in 16 columns and 6 rows (64x36), white on transparent.
+ * Returns a handle >= 0, or -1 if it could not be loaded (a missing file, or a "tse:" name that is not built in). */
+int32_t tse_load_texture(const char *path);
 /* A shader for TSE_OP_LAYER_END, from a file holding one function, in GLSL (since ABI v11):
  *
  *     vec4 effect(vec2 uv) { vec4 c = texture(image, uv); return vec4(c.rgb * (1.0 - 0.5 * length(pixel / resolution - 0.5)), c.a); }

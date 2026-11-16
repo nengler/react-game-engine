@@ -1,3 +1,4 @@
+import { BUILTIN_FONTS, isBuiltinName } from "@tsengine/runtime";
 import type { Expression } from "typescript/ast";
 /**
  * Build-time check of asset paths: every image and sound a component names with a literal (`<Sprite image="a.png">`,
@@ -52,6 +53,19 @@ function missingAssetReporter(
 ): (what: string, name: string, span: SourceSpan | null) => void {
   let files: readonly string[] | null = null;
   return (what, name, span) => {
+    if (isBuiltinName(name)) {
+      if ((BUILTIN_FONTS as readonly string[]).includes(name) && what === "font") return;
+      diagnostics.push(
+        error(
+          DiagnosticCode.MissingAsset,
+          what === "font"
+            ? `There is no built-in font '${name}' (there is: ${BUILTIN_FONTS.join(", ")}).`
+            : `'${name}' names a font built into the engine; a ${what} is a file in ${options.folder}/.`,
+          span
+        )
+      );
+      return;
+    }
     if (options.exists(name)) return;
     files ??= options.list();
     const near = nearest(name, files);

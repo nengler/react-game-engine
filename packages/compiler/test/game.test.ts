@@ -206,4 +206,14 @@ describe("<Game font>", () => {
     );
     assert.match(found[0]!.message, /font 'font.png'.*did you mean 'fonts.png'/);
   });
+
+  it("takes tse:small, the built-in font, with no file; an unknown tse: font, or tse:small as an image, is an error", () => {
+    const check = (source: string) =>
+      checkAssets([compile(source).ir], { folder: "assets", exists: () => false, list: () => [] }).map((d) => d.message);
+    assert.deepEqual(check(`export function Main() { return <Game font="tse:small"><Text font="tse:small">hi</Text></Game>; }`), []);
+    assert.deepEqual(check(`export function Main() { return <Game><Text font="tse:tiny">hi</Text></Game>; }`), [
+      "There is no built-in font 'tse:tiny' (there is: tse:small).",
+    ]);
+    assert.match(check(`export function Main() { return <Game><Sprite image="tse:small" /></Game>; }`)[0] ?? "", /names a font built into/);
+  });
 });

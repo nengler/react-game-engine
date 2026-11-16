@@ -49,6 +49,11 @@ export const TSE_BLEND_SCREEN = 3;
 /** How deep layers nest. */
 export const TSE_LAYER_MAX = 4;
 
+/** The sheet libtse makes for each built-in font name (since ABI v14): a bitmap font sheet, 16 × 6 cells. */
+export const TSE_BUILTIN_FONT_SHEETS: Readonly<Record<string, { readonly width: number; readonly height: number }>> = {
+  "tse:small": { width: 64, height: 36 },
+};
+
 // Flags of a sprite region record.
 export const TSE_SPRITE_FLIP_X = 1;
 export const TSE_SPRITE_FLIP_Y = 2;

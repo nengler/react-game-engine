@@ -33,7 +33,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-set(TSE_SOURCES src/tse.c src/assets.c src/keys.c src/overlaps.c src/storage.c)
+set(TSE_SOURCES src/tse.c src/assets.c src/fonts.c src/keys.c src/overlaps.c src/storage.c)
 
 add_library(tse SHARED ${TSE_SOURCES})
 target_include_directories(tse PUBLIC include PRIVATE src)

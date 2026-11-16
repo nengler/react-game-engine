@@ -99,6 +99,16 @@ bool assets_texture(int32_t handle, Texture2D *out) {
   return true;
 }
 
+/* A texture's pixels: a built-in font sheet for a "tse:" name, else the file. image.data is NULL when there is none. */
+static Image load_image(const char *path) {
+  Image image = {0};
+  if (strncmp(path, "tse:", 4) == 0) {
+    builtin_font_image(path, &image);
+    return image;
+  }
+  return FileExists(path) ? LoadImage(path) : image;
+}
+
 bool assets_silhouette(int32_t handle, Texture2D *out) {
   if (handle < 0 || handle >= textures.count) return false;
   Texture2D *silhouette = &textures.silhouettes[handle];
@@ -106,7 +116,7 @@ bool assets_silhouette(int32_t handle, Texture2D *out) {
     /* Made the first time it is drawn, from the file again (reading a texture back is not something every renderer can do):
      * white where the image is, with the image's alpha. A file that cannot be read again gives none, and nothing is drawn. */
     if (textures.paths[handle] == NULL) return false;
-    Image image = LoadImage(textures.paths[handle]);
+    Image image = load_image(textures.paths[handle]);
     if (image.data == NULL) return false;
     ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     unsigned char *pixels = image.data;
@@ -287,8 +297,11 @@ void tse_music_stop(int32_t handle) {
 }
 
 int32_t tse_load_texture(const char *path) {
-  if (path == NULL || !FileExists(path)) return -1;
-  Texture2D texture = LoadTexture(path);
+  if (path == NULL) return -1;
+  Image image = load_image(path);
+  if (image.data == NULL) return -1;
+  Texture2D texture = LoadTextureFromImage(image);
+  UnloadImage(image);
   if (texture.id == 0) return -1;
   SetTextureFilter(texture, smooth_filter ? TEXTURE_FILTER_BILINEAR : TEXTURE_FILTER_POINT);
   if (textures.count == textures.capacity) {
