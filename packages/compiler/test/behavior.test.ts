@@ -260,6 +260,8 @@ function Idle() {
       pressed: () => false,
       released: () => false,
       lastPressed: () => undefined,
+      pressedWithin: () => false,
+      consumePress: () => {},
       pointerX: 0,
       pointerY: 0,
     });
@@ -268,6 +270,8 @@ function Idle() {
       pressed: () => false,
       released: () => false,
       lastPressed: () => undefined,
+      pressedWithin: () => false,
+      consumePress: () => {},
       pointerX: 0,
       pointerY: 0,
     });
@@ -375,6 +379,8 @@ function Tag() {
         down: () => false,
         released: () => false,
         lastPressed: () => undefined,
+        pressedWithin: () => false,
+        consumePress: () => {},
         pointerX: 0,
         pointerY: 0,
       });

@@ -44,7 +44,7 @@ export type { TransformProps, TransformShorthand, OpacityShorthand, Child } from
 export type { Sequence, SequencePosition, Step } from "./sequence.ts";
 import type { OpacityShorthand, TransformShorthand } from "./jsx-runtime.ts";
 
-export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
+export { clamp, grace, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";

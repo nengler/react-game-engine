@@ -207,3 +207,15 @@ export function stepTween<T extends Animatable>(tween: TweenState<T>, target: T,
   ) as T;
   return { from: start.from, target, elapsed, value };
 }
+
+/**
+ * A grace period: `seconds` while `active` is true, then counting down by `dt` to 0 once it is not. Keep the result in a field and pass
+ * it back each step; it is above 0 for `seconds` after `active` was last true. Coyote time, so a jump just after running off a ledge
+ * still counts: `s.coyote = grace(onGround, s.coyote, dt, 0.1); if (s.coyote > 0 && input.pressedWithin("jump", 0.1)) { … s.coyote = 0; }`.
+ * A plain function of its arguments, so a replay repeats it exactly.
+ */
+export function grace(active: boolean, left: number, dt: number, seconds: number): number {
+  if (active) return seconds;
+  const next = left - (dt > 0 ? dt : 0);
+  return next > 0 ? next : 0;
+}
