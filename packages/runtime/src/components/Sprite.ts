@@ -13,6 +13,13 @@ export interface SpriteOptions {
   tint?: string;
   /** 0 (invisible) to 1 (the default); multiplies the tint's alpha. */
   opacity?: number;
+  /**
+   * 0 (the default) to 1: how far the image's colours are mixed toward `flashColor`, where it is drawn (its transparent pixels
+   * stay so). A tint only darkens, so this is how a sprite flashes white when hit: `flash={hit ? 0.8 : 0}`.
+   */
+  flash?: number;
+  /** The colour `flash` mixes toward, a CSS colour. Default white. */
+  flashColor?: string;
 }
 
 export interface SpriteProps extends SpriteOptions {
@@ -32,11 +39,15 @@ export interface SpriteLook {
   readonly originY: number;
   readonly tint: string | undefined;
   readonly opacity: number;
+  readonly flash: number;
+  readonly flashColor: string;
 }
 
 /** Whether a sprite's look is anything but the plain, whole-image, top-left one. */
 export function isStyled(look: SpriteLook): boolean {
-  return look.flipX || look.flipY || look.originX !== 0 || look.originY !== 0 || look.tint !== undefined || look.opacity !== 1;
+  return (
+    look.flipX || look.flipY || look.originX !== 0 || look.originY !== 0 || look.tint !== undefined || look.opacity !== 1 || look.flash > 0
+  );
 }
 
 export class Sprite<P extends object = {}> extends GameObject<P> implements SpriteLook {
@@ -52,6 +63,8 @@ export class Sprite<P extends object = {}> extends GameObject<P> implements Spri
   originY: number;
   tint: string | undefined;
   opacity: number;
+  flash: number;
+  flashColor: string;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: SpriteProps, props?: P, defaults?: Partial<P>) {
@@ -66,5 +79,7 @@ export class Sprite<P extends object = {}> extends GameObject<P> implements Spri
     this.originY = hostProps.originY ?? 0;
     this.tint = hostProps.tint;
     this.opacity = hostProps.opacity ?? 1;
+    this.flash = hostProps.flash ?? 0;
+    this.flashColor = hostProps.flashColor ?? "white";
   }
 }

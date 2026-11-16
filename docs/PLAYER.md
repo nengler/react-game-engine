@@ -264,6 +264,11 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
   draws the latest step, and a frame that ran no step settles pending renders.
 - **Sprite sheets.** `<Sprite frame…>` and `<AnimatedSprite animations…>` write `SPRITE_REGION`; a sprite with no options still writes
   `SPRITE` through the fast path. A flip mirrors about the origin, so a character turned left stays on its feet.
+- **Flash** (ABI v13). A sprite's `flash` writes its region a second time with `TSE_SPRITE_SILHOUETTE`: libtse draws the region's
+  shape (white, the image's alpha) in the tint, which is `flashColor` at `flash` times the opacity, so opaque pixels end up mixed that
+  far toward the colour and transparent ones stay. No shader, so the software renderer draws it too. The silhouette texture is made
+  the first time a texture is flashed, from its file read again (reading a texture back is not something every renderer does), and
+  freed with the textures. On a pixel with partial alpha the mix is approximate (it lays the colour over, rather than mixing inside).
 - **`<Tilemap>`** writes one region record per filled cell, no game object per tile, and the same `TilemapData` is the solid grid
   movement code reads (`getTilemap(name)`), so what is drawn and what blocks cannot disagree. In the world it writes only the cells
   the view shows (plus one round them), from the previous frame's camera; a frame is built twice when that camera turns out to be

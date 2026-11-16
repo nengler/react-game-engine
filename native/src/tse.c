@@ -509,8 +509,10 @@ static void execute_records(const double *records, int32_t length, const char *t
       }
       case TSE_OP_SPRITE_REGION: {
         Texture2D texture;
-        if (assets_texture(to_index(r[6]), &texture)) {
-          int32_t flags = to_index(r[13]);
+        int32_t flags = to_index(r[13]);
+        if (flags < 0) flags = 0;
+        bool found = (flags & TSE_SPRITE_SILHOUETTE) ? assets_silhouette(to_index(r[6]), &texture) : assets_texture(to_index(r[6]), &texture);
+        if (found) {
           float w = (float)r[9], h = (float)r[10];
           if (!(w > 0.0f && h > 0.0f)) break;
           /* A negative source size mirrors the region; the destination always starts at minus the origin. */

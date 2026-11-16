@@ -2094,6 +2094,10 @@ cleared to the darkness, with the lights in it drawn with `childBlend="add"`, an
   children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`TSE_OP_LIGHT`), so a
   light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
   glow over what is under it, with normal blending (black at its edge, so it is meant for a lighting layer).
+- **Flash** (2026-11-16, ABI v13): `<Sprite flash={0.8} flashColor="white">` (and on `<AnimatedSprite>`) mixes the image toward a
+  colour, which a multiplying tint cannot: a hit flash. Two numbers, not a colour whose alpha is the amount, so a fade is a number and
+  not a hex string built each render. Drawn as the sprite's silhouette laid over it (`TSE_SPRITE_SILHOUETTE`), not a shader, so it
+  shows in headless tests and screenshots ([PLAYER.md](PLAYER.md), "Flash").
 
 ## Collider shapes (2026-11-15)
 
@@ -2185,6 +2189,9 @@ from an input script and reading the game state or the draw records, which alone
 - `step(n)` ticks with no input; `input(script)` parses the script with `@tsengine/player`'s `parseInputScript` (the games' replay
   format), using `options.controls.toJSON()` as its bindings, and ticks once per frame with `createInputState(frame, controls)`,
   so action names mean what they mean in the game.
+- `stepUntil(done, { maxSteps?, throws? })` ticks with no input until `done()` holds, asked before the first tick and after
+  each, and returns the ticks run. At `maxSteps` (default 3600) it throws, or with `throws: false` returns: tests want the
+  failure, a balance run wants the timeout as a result.
 - `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
   from `{ tag, data, width, height }` (made once per spec, under the holder); `press` calls `World.reportPress` at a pressable's
   middle; `setProps` calls the generated `updateProps`.

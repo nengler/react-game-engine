@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@tsengine/runtime";
 
-export const TSE_ABI_VERSION = 12;
+export const TSE_ABI_VERSION = 13;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const TSE_OP_VIEW = 1;
@@ -52,6 +52,7 @@ export const TSE_LAYER_MAX = 4;
 // Flags of a sprite region record.
 export const TSE_SPRITE_FLIP_X = 1;
 export const TSE_SPRITE_FLIP_Y = 2;
+export const TSE_SPRITE_SILHOUETTE = 4;
 
 /** Voices a sound can play on at once: the native side's `TSE_SOUND_VOICES`. */
 export const TSE_SOUND_VOICES = 4;
@@ -119,6 +120,7 @@ export const PROTOCOL = {
   TSE_LAYER_MAX,
   TSE_SPRITE_FLIP_X,
   TSE_SPRITE_FLIP_Y,
+  TSE_SPRITE_SILHOUETTE,
   TSE_SOUND_VOICES,
   TSE_TYPED_BACKSPACE,
   TSE_TYPED_MAX,

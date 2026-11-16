@@ -65,6 +65,29 @@ describe("sprite sheets and options", () => {
     assert.equal(r.tint, "#ff000080", "red, at half opacity");
   });
 
+  it("flashes: the same region again as its shape in the flash colour, at the flash amount times the opacity", () => {
+    const { regions } = frames(() => {
+      const root = new Entity();
+      root.addChild(new Sprite({ image: "hero.png", frameWidth: 12, frameHeight: 12, frame: 1, flipX: true, flash: 0.5 }));
+      root.addChild(new Sprite({ image: "hero.png", flash: 1, flashColor: "red", opacity: 0.5 }));
+      root.addChild(
+        new AnimatedSprite({ sheet: "hero.png", frameWidth: 12, frameHeight: 12, animations: "a:2", animation: "a", flash: 1 })
+      );
+      root.addChild(new Sprite({ image: "hero.png", tint: "#808080", flash: 0 }));
+      return root;
+    });
+    const seen = (regions[0] ?? []).map((r) => [r.srcX, r.srcY, r.srcW, r.flipX, r.tint, r.silhouette ?? false]);
+    assert.deepEqual(seen, [
+      [12, 0, 12, true, "#ffffffff", false],
+      [12, 0, 12, true, "#ffffff80", true],
+      [0, 0, 48, false, "#ffffff80", false],
+      [0, 0, 48, false, "#ff000080", true],
+      [24, 0, 12, false, "#ffffffff", false],
+      [24, 0, 12, false, "#ffffffff", true],
+      [0, 0, 48, false, "#808080ff", false],
+    ]);
+  });
+
   it("plays named animations from a sheet: each at its own rate, looping or once", () => {
     let hero: AnimatedSprite | null = null;
     const { regions } = frames(

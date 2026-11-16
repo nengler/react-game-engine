@@ -48,6 +48,13 @@ export interface RenderOptions {
 }
 
 /** A collider to touch the component with, made for the test: what the other side's `other` will read. */
+export interface StepUntilOptions {
+  /** The most steps to run. Default 3600. */
+  readonly maxSteps?: number;
+  /** false: return `maxSteps` when not done by then, instead of throwing. Default true. */
+  readonly throws?: boolean;
+}
+
 export interface ContactSpec {
   readonly tag?: string;
   readonly data?: unknown;
@@ -88,6 +95,25 @@ export class Rendered<Root extends GameObject = GameObject> {
   step(count = 1): this {
     for (let i = 0; i < count; i++) this.#tick(this.#dt, NO_INPUT);
     return this;
+  }
+
+  /**
+   * Run steps with nothing pressed until `done()` is true (it is asked before the first step and after each), at most
+   * `maxSteps` (default 3600: a minute at 60 steps a second). Returns how many steps it ran. Not done by then: it throws, or
+   * with `throws: false` returns `maxSteps`, for a run where running out of time is an answer (a wave that never ends).
+   *
+   *     const steps = t.stepUntil(() => !play.s.active, { maxSteps: 60 * 180 });
+   */
+  stepUntil(done: () => boolean, options: StepUntilOptions = {}): number {
+    const maxSteps = options.maxSteps ?? 3600;
+    for (let steps = 0; ; steps++) {
+      if (done()) return steps;
+      if (steps >= maxSteps) {
+        if (options.throws === false) return steps;
+        throw new Error(`stepUntil: not done after ${maxSteps} steps`);
+      }
+      this.#tick(this.#dt, NO_INPUT);
+    }
   }
 
   /**
