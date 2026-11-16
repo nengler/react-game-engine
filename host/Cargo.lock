@@ -84,14 +84,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tse-host"
-version = "0.0.0"
-dependencies = [
- "cmake",
- "rquickjs",
-]
-
-[[package]]
 name = "rquickjs"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -155,6 +147,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tse-host"
+version = "0.0.0"
+dependencies = [
+ "cmake",
+ "rquickjs",
 ]
 
 [[package]]

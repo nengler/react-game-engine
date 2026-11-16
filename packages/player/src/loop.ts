@@ -220,6 +220,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     resizable: game?.resizable ?? config.resizable,
     vsync: game?.vsync ?? config.vsync,
     hidden: config.hidden,
+    highDpi: config.highDpi,
     smooth: game?.smooth ?? config.smooth,
     sharp: (game?.upscale ?? config.upscale) === "sharp" ? true : undefined,
   });
