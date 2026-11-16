@@ -2007,8 +2007,9 @@ did this by hand over a step's events; with twenty towers each playing its own s
 for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
 ```
 
-- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count? })`, and `bursts` (counts by name,
-  for tests). A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
+- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count?, color?, endColor? })`, and `bursts`
+  (counts by name, for tests). A burst's colours replace the preset's for that burst alone: each particle keeps a small index
+  into its emitter's list of burst colours (emptied whenever no particle is alive), so one preset serves every colour. A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
   one emitter per preset and attaches itself to the store while mounted (the last mounted wins); a burst's point is in the
   layer's space. It follows the world: frozen with it, gone with it. With no layer mounted a burst is counted, not drawn.
   Put the layer **next to** a `<Camera>`, not inside it, since a camera follows its children.

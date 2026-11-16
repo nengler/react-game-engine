@@ -11,10 +11,15 @@ import { addSoundPreload, Sound, stepCount } from "./Sound.ts";
 /** How one kind of burst looks: the `<Particles>` props, less the ones that belong to an emitter that stays. */
 export type ParticlePreset = Omit<ParticlesProps, "rate" | "emitting" | "space">;
 
-/** Changes to one burst. `angle` turns it (a wall jump's dust goes sideways), `count` overrides the preset's `burst`. */
+/**
+ * Changes to one burst. `angle` turns it (a wall jump's dust goes sideways), `count` overrides the preset's `burst`, and `color`
+ * and `endColor` the preset's colours (an enemy's death puff in that enemy's colour); one not given stays the preset's.
+ */
 export interface BurstOptions {
   readonly angle?: number;
   readonly count?: number;
+  readonly color?: string;
+  readonly endColor?: string;
 }
 
 /** What draws a particle store's bursts: the `<ParticleLayer>` mounted for it. */
