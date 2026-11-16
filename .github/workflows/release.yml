@@ -41,11 +41,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      # The version from the tag (v0.1.0 -> 0.1.0) or from the run's input, checked before anything is built.
+      # The version from the tag (v0.1.0 -> 0.1.0) or from the run's input, checked before anything is built; and the npm token,
+      # so a run that cannot publish stops before it makes a release (v0.2.0 was released, then failed here for want of it).
       - name: Work out the version
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
         run: |
+          if [ "$HAS_NPM_TOKEN" != true ]; then echo "::error::the NPM_TOKEN secret is not set (README.md, Releases, says how to make it)"; exit 1; fi
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then version="$INPUT_VERSION"; else version="${GITHUB_REF_NAME#v}"; fi
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::'$version' is not a version like 0.1.0"
@@ -68,11 +71,20 @@ jobs:
           sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
       - name: Build libtse and tse-host, and pack (stamped with the tag's version)
         run: node tools/pack.ts --build --strict --version "$VERSION"
+      # Run again for a version whose release exists (it was made, then publishing failed): the release is left as it is, and
+      # its packs replace the ones just built, so npm gets the very files a game may already have installed by URL (a rebuild
+      # is not byte-identical, and a lockfile's integrity hash would no longer match).
       - name: Attach the packs to the release
         env:
           GH_TOKEN: ${{ github.token }}
         # A pushed tag already exists (--verify-tag); a run from the Actions tab creates it on the commit it built.
         run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "The release $TAG exists already: publishing its packs, not the ones just built."
+            rm -f dist/packs/*.tgz
+            gh release download "$TAG" --pattern '*.tgz' --dir dist/packs
+            exit 0
+          fi
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then where=(--target "$GITHUB_SHA"); else where=(--verify-tag); fi
           gh release create "$TAG" dist/packs/*.tgz "${where[@]}" --generate-notes \
             --title "$TAG" \
@@ -85,7 +97,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::the NPM_TOKEN secret is not set"; exit 1; fi
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::the NPM_TOKEN secret is not set (README.md, Releases, says how to make it)"; exit 1; fi
           if [[ "$VERSION" == *-* ]]; then tag=next; else tag=latest; fi
           for name in runtime compiler player native player-node testing language-server cli; do
             if npm view "@tsengine/$name@$VERSION" version >/dev/null 2>&1; then
