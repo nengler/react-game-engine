@@ -8,13 +8,15 @@ export const INTERPOLATE_SNAP = 64;
 
 /**
  * `GameObject.interpolation`: the step before last (`PREV`, 10 numbers) and the last step (`CUR`): the transform's x, y, rotation,
- * scaleX and scaleY, then the placement's; and the step it was written at.
+ * scaleX and scaleY, then the placement's; the step it was written at; and whether its subtree had settled.
  */
 const N = 10;
 const PREV = 0;
 const CUR = N;
 const STAMP = 2 * N;
-const SIZE = 2 * N + 1;
+/** 1 when, at its last capture, nothing in the object's subtree (itself included) had moved in its last step: there is nothing in it to blend. */
+const SETTLED = 2 * N + 1;
+const SIZE = 2 * N + 2;
 
 /** An object's transform and placement into `s` at `at`. */
 function read(object: GameObject, s: Float64Array, at: number): void {
@@ -88,32 +90,57 @@ export class Interpolator {
   readonly #cameraViews: [Camera, CameraViewState][] = [];
   readonly #blendedCameras: Camera[] = [];
 
+  /**
+   * The world's serial at the last capture, or -1. A subtree no object of which has been changed since (`subtreeChangedAt`, which a
+   * render, a move or a structural change stamps) and that had settled then is still settled, and is not walked again.
+   */
+  #serial = -1;
+
   /** Keep the transforms of everything under `root` as the last step left them. */
   capture(root: GameObject): void {
     const stamp = ++this.#stamp;
-    this.#capture(root, stamp);
-    for (const [camera, entry] of this.#cameras) if (entry.stamp !== stamp) this.#cameras.delete(camera);
+    const serial = root.world?.serial ?? -1;
+    // The frame builder advances the serial once a frame; when it does not (no world, or `retain: false`), nothing can be skipped.
+    const since = serial > this.#serial ? this.#serial : -1;
+    this.#serial = serial;
+    this.#capture(root, stamp, since);
+    for (const camera of this.#cameras.keys()) if (camera.world === null) this.#cameras.delete(camera);
   }
 
-  #capture(object: GameObject, stamp: number): void {
+  /** Returns whether the subtree has settled. */
+  #capture(object: GameObject, stamp: number, since: number): boolean {
     let s = object.interpolation;
     if (s === null) {
       s = object.interpolation = new Float64Array(SIZE);
       s[STAMP] = Number.NaN; // seen at no step
+    } else if (since >= 0 && s[SETTLED] === 1 && object.subtreeChangedAt < since) {
+      // Unchanged since it settled: every value in it is still its last step's and the step before's.
+      return true;
     }
-    if (s[STAMP] === stamp - 1) {
+    // Seen at the step before, or skipped since as settled and unchanged: what it holds is what the step before left.
+    if (s[STAMP] === stamp - 1 || s[SETTLED] === 1) {
       for (let i = 0; i < N; i++) s[PREV + i] = s[CUR + i] as number;
     } else read(object, s, PREV); // new, or not seen at the step before: nothing to blend from
     read(object, s, CUR);
     s[STAMP] = stamp;
+    let settled = true;
+    for (let i = 0; i < N; i++) {
+      if (s[PREV + i] !== s[CUR + i]) {
+        settled = false;
+        break;
+      }
+    }
     if (object instanceof Camera) {
+      settled = false; // a camera's view state is kept every step
       const view = object.saveView();
       const entry = this.#cameras.get(object);
       if (entry !== undefined && entry.stamp === stamp - 1) this.#cameras.set(object, { prev: entry.cur, cur: view, stamp });
       else this.#cameras.set(object, { prev: view, cur: view, stamp });
     }
     const children = object.children;
-    for (let i = 0; i < children.length; i++) this.#capture(children[i] as GameObject, stamp);
+    for (let i = 0; i < children.length; i++) if (!this.#capture(children[i] as GameObject, stamp, since)) settled = false;
+    s[SETTLED] = settled ? 1 : 0;
+    return settled;
   }
 
   /**
@@ -150,6 +177,7 @@ export class Interpolator {
   /** `back` is 1 − t: how far back from the last step to draw. */
   #blend(object: GameObject, back: number, stamp: number): void {
     const s = object.interpolation;
+    if (s !== null && s[SETTLED] === 1) return; // nothing under it moved in the last step
     // Only what is still as the last step left it (a frame with no step may have settled a render since), and only a change small
     // enough to be motion rather than a jump.
     if (s !== null && s[STAMP] === stamp && unchanged(object, s)) {
