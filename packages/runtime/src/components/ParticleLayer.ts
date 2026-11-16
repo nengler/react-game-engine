@@ -35,7 +35,8 @@ export class ParticleLayer<P extends object = {}> extends GameObject<P> implemen
   emitBurst(name: string, x: number, y: number, options: BurstOptions | undefined): void {
     const emitter = this.#emitters.get(name);
     if (emitter === undefined) return;
-    emitter.emitAt(options?.count ?? emitter.burst, x, y, options?.angle ?? emitter.angle);
+    const colors = options?.color !== undefined || options?.endColor !== undefined ? options : undefined;
+    emitter.emitAt(options?.count ?? emitter.burst, x, y, options?.angle ?? emitter.angle, colors);
   }
 
   override onMount(): void {
