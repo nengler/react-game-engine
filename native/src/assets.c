@@ -10,6 +10,9 @@
 
 typedef struct {
   Texture2D *items;
+  /* Per texture: the file it was loaded from (for its silhouette), and its silhouette once one is asked for (id 0 until then). */
+  char **paths;
+  Texture2D *silhouettes;
   int32_t count;
   int32_t capacity;
 } TextureTable;
@@ -58,7 +61,13 @@ bool assets_audio_ready(void) {
 }
 
 void assets_shutdown(void) {
-  for (int32_t i = 0; i < textures.count; i++) UnloadTexture(textures.items[i]);
+  for (int32_t i = 0; i < textures.count; i++) {
+    UnloadTexture(textures.items[i]);
+    if (textures.silhouettes[i].id != 0) UnloadTexture(textures.silhouettes[i]);
+    free(textures.paths[i]);
+  }
+  free(textures.paths);
+  free(textures.silhouettes);
   for (int32_t i = 0; i < shaders.count; i++) UnloadShader(shaders.items[i].shader);
   free(shaders.items);
   shaders = (ShaderTable){0};
@@ -87,6 +96,31 @@ void assets_shutdown(void) {
 bool assets_texture(int32_t handle, Texture2D *out) {
   if (handle < 0 || handle >= textures.count) return false;
   *out = textures.items[handle];
+  return true;
+}
+
+bool assets_silhouette(int32_t handle, Texture2D *out) {
+  if (handle < 0 || handle >= textures.count) return false;
+  Texture2D *silhouette = &textures.silhouettes[handle];
+  if (silhouette->id == 0) {
+    /* Made the first time it is drawn, from the file again (reading a texture back is not something every renderer can do):
+     * white where the image is, with the image's alpha. A file that cannot be read again gives none, and nothing is drawn. */
+    if (textures.paths[handle] == NULL) return false;
+    Image image = LoadImage(textures.paths[handle]);
+    if (image.data == NULL) return false;
+    ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    unsigned char *pixels = image.data;
+    for (int32_t i = 0, n = image.width * image.height; i < n; i++) {
+      pixels[i * 4] = 255;
+      pixels[i * 4 + 1] = 255;
+      pixels[i * 4 + 2] = 255;
+    }
+    *silhouette = LoadTextureFromImage(image);
+    UnloadImage(image);
+    if (silhouette->id == 0) return false;
+    SetTextureFilter(*silhouette, smooth_filter ? TEXTURE_FILTER_BILINEAR : TEXTURE_FILTER_POINT);
+  }
+  *out = *silhouette;
   return true;
 }
 
@@ -260,14 +294,22 @@ int32_t tse_load_texture(const char *path) {
   if (textures.count == textures.capacity) {
     int32_t capacity = textures.capacity ? textures.capacity * 2 : 16;
     Texture2D *grown = realloc(textures.items, (size_t)capacity * sizeof(Texture2D));
-    if (grown == NULL) {
+    if (grown != NULL) textures.items = grown;
+    char **grown_paths = realloc(textures.paths, (size_t)capacity * sizeof(char *));
+    if (grown_paths != NULL) textures.paths = grown_paths;
+    Texture2D *grown_silhouettes = realloc(textures.silhouettes, (size_t)capacity * sizeof(Texture2D));
+    if (grown_silhouettes != NULL) textures.silhouettes = grown_silhouettes;
+    if (grown == NULL || grown_paths == NULL || grown_silhouettes == NULL) {
       UnloadTexture(texture);
       return -1;
     }
-    textures.items = grown;
     textures.capacity = capacity;
   }
   textures.items[textures.count] = texture;
+  size_t length = strlen(path) + 1;
+  textures.paths[textures.count] = malloc(length);
+  if (textures.paths[textures.count] != NULL) memcpy(textures.paths[textures.count], path, length);
+  textures.silhouettes[textures.count] = (Texture2D){0};
   return textures.count++;
 }
 

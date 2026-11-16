@@ -210,7 +210,9 @@ mark { background: var(--accent-soft); color: inherit; }
         ["flipX / flipY", "boolean", "false", "Mirror about the origin."],
         ["originX / originY", "number", "0", "The image pixel that sits at the object's position; flips and rotation turn about it."],
         ["tint", "CSS colour", "white", "Multiplies the image's colours. Its alpha is opacity too."],
-        ["opacity", "number", "1", "0 to 1."]
+        ["opacity", "number", "1", "0 to 1."],
+        ["flash", "number", "0", "0 to 1: how far the image's colours are mixed toward <code>flashColor</code>; transparent pixels stay so. A hit flash: <code>flash={hit ? 0.8 : 0}</code> (a tint only darkens)."],
+        ["flashColor", "CSS colour", "white", "The colour <code>flash</code> mixes toward."]
       ] },
     { name: "AnimatedSprite", kind: "leaf", sum: "Plays a list of images, or named animations from a sheet. Takes the sprite options of <code>Sprite</code>.",
       props: [
@@ -222,7 +224,7 @@ mark { background: var(--accent-soft); color: inherit; }
         ["animations", "table | string", "–", "<code>{ idle: { frames: \"0-1\", fps: 4 }, die: { frames: \"8-12\", once: true } }</code>, or <code>\"idle:0-1@4, die:8-12@10~\"</code> (<code>~</code> plays once)."],
         ["animation", "string", "–", "Which one plays. A new name restarts it; the same name does nothing."],
         ["loop", "boolean", "true", "<code>false</code> plays each once."],
-        ["flipX, flipY, originX, originY, tint, opacity", "", "", "As on <code>Sprite</code>."]
+        ["flipX, flipY, originX, originY, tint, opacity, flash, flashColor", "", "", "As on <code>Sprite</code>."]
       ] },
     { name: "Tilemap", kind: "leaf", sum: "A grid of tiles from a sheet, with no object per tile. See <a href=\"systems.html#tilemaps\">Tilemaps</a>.",
       props: [

@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define TSE_ABI_VERSION 12
+#define TSE_ABI_VERSION 13
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -35,6 +35,10 @@
  *                                                origin; flags: TSE_SPRITE_FLIP_X, TSE_SPRITE_FLIP_Y, mirroring the
  *                                                region about the origin; tint is packed 0xRRGGBBAA, which multiplies
  *                                                the texel colours (alpha included, so it is also opacity).
+ *                                                With TSE_SPRITE_SILHOUETTE (since ABI v13) the texels' colours are
+ *                                                taken as white, keeping their alpha: the region's shape filled with
+ *                                                the tint. Drawn over the same region with the tint's alpha at f, it
+ *                                                mixes the opaque pixels a fraction f toward the tint (a hit flash).
  *   TSE_OP_BOX      op, x, y, rot, sx, sy, width, height, fill, borderColor, borderWidth, radius
  *                                                A width x height box at the local origin: filled with `fill`, then an
  *                                                outline of `borderWidth` drawn inside its edge in `borderColor`, with
@@ -114,6 +118,7 @@
 /* TSE_OP_SPRITE_REGION flags. */
 #define TSE_SPRITE_FLIP_X 1
 #define TSE_SPRITE_FLIP_Y 2
+#define TSE_SPRITE_SILHOUETTE 4
 
 /* ---------- Input, written by tse_frame ---------- */
 #define TSE_IN_DT       0  /* seconds since the previous frame */

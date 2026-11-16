@@ -43,6 +43,7 @@ import {
   TSE_OP_SPRITE_REGION_LEN,
   TSE_SPRITE_FLIP_X,
   TSE_SPRITE_FLIP_Y,
+  TSE_SPRITE_SILHOUETTE,
   TSE_OP_TEXT,
   TSE_OP_TEXT_LEN,
   TSE_OP_VIEW,
@@ -125,6 +126,8 @@ export type DecodedRecord =
       readonly flipX: boolean;
       readonly flipY: boolean;
       readonly tint: string;
+      /** Present (true) only when the record draws the region's shape in the tint (TSE_SPRITE_SILHOUETTE): a sprite's `flash`. */
+      readonly silhouette?: true;
     } & Placed)
   | ({ readonly op: "rect"; readonly width: number; readonly height: number; readonly color: string } & Placed)
   | ({ readonly op: "ellipse"; readonly width: number; readonly height: number; readonly color: string } & Placed)
@@ -476,6 +479,7 @@ export class RecordingBackend implements Backend {
             flipX: (flags & TSE_SPRITE_FLIP_X) !== 0,
             flipY: (flags & TSE_SPRITE_FLIP_Y) !== 0,
             tint: colorToHex(records[at + 14]!),
+            ...((flags & TSE_SPRITE_SILHOUETTE) !== 0 ? { silhouette: true as const } : {}),
           });
           at += TSE_OP_SPRITE_REGION_LEN;
           break;
