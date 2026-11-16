@@ -39,8 +39,8 @@ export interface GameProps extends EntityProps {
   /** The key that toggles the frame-rate counter, by the name `useInput` uses. Default `"F3"`; `false` turns the key off. */
   fpsKey?: string | false;
   /**
-   * The bitmap font every `<Text>` without its own `font` uses (an image in the assets folder, as `<Text font>` takes). Default
-   * none: such text uses the built-in font.
+   * The bitmap font every `<Text>` without its own `font` uses (an image in the assets folder, as `<Text font>` takes, or a
+   * built-in such as `"tse:small"`). Default none: such text uses the default font.
    */
   font?: string;
   /**

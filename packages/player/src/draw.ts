@@ -41,6 +41,8 @@ import {
   WIDGET_TEXT,
   type Slider,
   type Toggle,
+  BUILTIN_FONTS,
+  isBuiltinName,
 } from "@tsengine/runtime";
 
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
@@ -2885,6 +2887,18 @@ export class FrameBuilder {
     // By image name, not by path: the path would be put together again for every sprite of every frame.
     let handle = this.#textures.get(image);
     if (handle === undefined) {
+      // A `tse:` name is built into libtse, not a file in the assets folder.
+      if (isBuiltinName(image)) {
+        if ((BUILTIN_FONTS as readonly string[]).includes(image)) handle = this.#loadTexture(image);
+        else {
+          handle = -1;
+          this.#warner.once(`texture:${image}`, `There is no built-in '${image}' (there is: ${BUILTIN_FONTS.join(", ")}).`);
+        }
+        this.#textures.set(image, handle);
+        if (handle < 0 && (BUILTIN_FONTS as readonly string[]).includes(image))
+          this.#warner.once(`texture:${image}`, `This libtse has no '${image}' (it needs ABI v14 or newer).`);
+        return handle;
+      }
       const path = `${this.#assets}/${image}`;
       handle = this.#loadTexture(path);
       this.#textures.set(image, handle);

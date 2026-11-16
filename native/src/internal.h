@@ -26,6 +26,11 @@ void assets_update_music(void);
 void keys_set_deadzone(double deadzone);
 bool assets_audio_ready(void);
 
+/* ---------- fonts.c ---------- */
+/* The sheet of a built-in font (a "tse:" name, as tse_load_texture takes): an RGBA image, white glyphs on transparent. False for
+ * a name that is not one. */
+bool builtin_font_image(const char *name, Image *out);
+
 /* ---------- keys.c ---------- */
 int32_t keys_count(void);
 /* The TSE_KEY_* flags for key `index` this frame; Shift, Control and Alt read either side. */

@@ -4,6 +4,18 @@ import { GameObject } from "../GameObject.ts";
 export const TEXT_ALIGNS = ["left", "center", "right"] as const;
 export type TextAlign = (typeof TEXT_ALIGNS)[number];
 
+/**
+ * Fonts built into the engine, named like an asset but with the `tse:` prefix: `<Text font="tse:small">` or `<Game font="tse:small">`.
+ * `tse:small` is 3×5 glyphs in 4×6 cells (a 64×36 sheet), so text is 6 pixels a line: for 320×180 and smaller screens.
+ */
+export const BUILTIN_FONTS = ["tse:small"] as const;
+export type BuiltinFont = (typeof BUILTIN_FONTS)[number];
+
+/** Whether a font or image name is an engine built-in's (`tse:…`), whether or not one by that name exists. */
+export function isBuiltinName(name: string): boolean {
+  return name.startsWith("tse:");
+}
+
 export interface TextProps {
   text: string;
   /** Pixels. Default: the game's `<Game textSize>`, else 16. */
@@ -34,7 +46,8 @@ export interface TextProps {
    * A bitmap font: the name of an image holding the glyphs of the ASCII characters 32 to 127 in a grid of 16 columns and 6 rows,
    * left to right, then down. Each glyph cell is the image's width ÷ 16 by its height ÷ 6, and the text is drawn from them with
    * no smoothing, so it stays crisp. `size` is then the height in pixels of a glyph cell: a whole multiple of the cell's height
-   * keeps pixels square. Without `font` the text uses the built-in font.
+   * keeps pixels square. `"tse:small"` is a font built into the engine (no file): 3×5 glyphs in 4×6 cells, for small screens.
+   * Without `font` the text uses the default font.
    */
   font?: string;
   /**

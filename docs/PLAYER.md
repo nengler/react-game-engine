@@ -281,6 +281,12 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
   stamps itself changed only on ticks where it has particles, so an idle emitter costs a copied record.
 - **Bitmap fonts** (`<Text font>`): a sheet of characters 32 to 127 in 16 × 6 cells, a region record per character, tinted by the
   text's colour; `size` is the cell's height.
+- **Built-in fonts** (ABI v14). A `tse:` name is a font sheet built into libtse, not a file: `tse_load_texture("tse:small")` makes
+  the 64 × 36 sheet of `tse:small` (3 × 5 glyphs in 4 × 6 cells, g j p q y reaching the sixth row) from a table in
+  `native/src/fonts.c`, white on transparent, so the Node and Rust hosts both have it and `tse package` ships nothing for it. The
+  player passes a `tse:` name as it is, not under the assets folder, and refuses one that is not in `BUILTIN_FONTS` (runtime) with
+  a warning naming them; the compiler's asset check does the same. `TSE_BUILTIN_FONT_SHEETS` (protocol.ts) gives the sheet sizes
+  libtse makes, which `RecordingBackend` reports.
 - **`freeze(steps)`** skips `onUpdate` for that many ticks; input and renders still run, and key edges are kept for the step after.
 - **`<Router>`**. Only the shown `<Route>` is in the world; a route's components are made when it comes and dropped when it has gone
   (as React Router does), unless `keepAlive`. During a transition the screen being left is inert (`World.setInert`): it draws but
