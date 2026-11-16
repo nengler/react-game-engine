@@ -254,6 +254,13 @@ mark { background: var(--accent-soft); color: inherit; }
         ["height", "number", "–", "Pixels.", 1],
         ["color", "CSS colour", '"white"', ""]
       ] },
+    { name: "Line", kind: "leaf", sum: "A straight line from where it is placed (<code>x</code>, <code>y</code>) to (<code>x2</code>, <code>y2</code>), both in the parent's space: a shot's trace, a tether. Square ends. Its own rotation and scale do not move the end; a parent's turn and scale the whole line, thickness too. <code>transform={{ opacity }}</code> fades it.",
+      props: [
+        ["x2", "number", "–", "Where it ends, in the parent's space.", 1],
+        ["y2", "number", "–", "", 1],
+        ["width", "number", "1", "How thick, in pixels, centred on the line."],
+        ["color", "CSS colour", '"white"', ""]
+      ] },
     { name: "Collider", kind: "leaf", sum: "An invisible box for collisions. See <a href=\"systems.html#collisions\">Collisions</a>.",
       props: [
         ["width", "number", "–", "Pixels.", 1],
