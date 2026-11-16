@@ -267,8 +267,21 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
 - **Fixed timestep** (`<Game fixedStep={60}>`). An accumulator runs whole steps of `1 / rate`, at most `MAX_STEPS_PER_FRAME` (8) a
   frame; the leftover after that is dropped, so a stall is not followed by a burst. It compares with a 1e-9 epsilon, so sixty sums
   of 1/60 s give sixty steps. **No input is lost**: key edges accumulate across polls and go to the next step only, and a tap that
-  began and ended between two steps reaches the next one as down, pressed and released at once. Nothing is interpolated: a frame
-  draws the latest step, and a frame that ran no step settles pending renders.
+  began and ended between two steps reaches the next one as down, pressed and released at once. A frame that ran no step settles
+  pending renders.
+- **Interpolation** (`<Game interpolate>`, 2026-11-16; on by default in a visible window with a fixed step). After each step
+  `Interpolator.capture` keeps every object's `transform` and `placement` (in `GameObject.interpolation`, ten numbers for the step
+  before and ten for the last) and each camera's view state (`Camera.saveView`: the slide, the followed point and what it remembers
+  of the last view). Before a frame is drawn, `blend` puts each object that moved `FixedDriver.alpha` of the way from the step
+  before to the last step, and the frame is built from that. `restore` then writes back exactly what the step left. A blended
+  object is marked moved both times, so the frame builder neither reuses records from before the blend nor keeps the blended ones.
+  Every camera's view state is put back too, because drawing a view writes it. The game never sees a blended value, so a run steps
+  the same with it on or off (a test checks both the steps and the camera). It draws up to one step behind: at alpha 0 the step
+  before. An object is drawn unblended when it has no step before (new), when a frame with no step changed it since, or when one
+  field jumped further than `INTERPOLATE_SNAP` (64 px) or half a turn in one step. A camera is drawn unblended when its bounds
+  changed. Particles, sprite frames and the shake are not blended: they are discrete or short. The cost is a second walk of the
+  tree each frame, and a pass over every object each step. A hidden window turns it off, so tests and screenshots draw the latest
+  step exactly as before.
 - **Sprite sheets.** `<Sprite frame…>` and `<AnimatedSprite animations…>` write `SPRITE_REGION`; a sprite with no options still writes
   `SPRITE` through the fast path. A flip mirrors about the origin, so a character turned left stays on its feet.
 - **Flash** (ABI v13). A sprite's `flash` writes its region a second time with `TSE_SPRITE_SILHOUETTE`: libtse draws the region's
@@ -343,6 +356,10 @@ why V8 is the default.
   "Reusing draw records". Every reuse path is checked by `retain: "check"`, which builds each frame from nothing beside it and
   compares.
 - **Mounting** appends without scanning siblings when the child sorts last; it was quadratic before.
+- **A transform's numbers start as doubles** (2026-11-16). V8 picks a field's representation from its first value: a `Transform`
+  whose `x` started at 0 (a small integer) and later held a fraction changed shape, and the walk that composes thousands of them kept
+  deoptimising. 2,000 objects moving by fractions took 2.7 ms a frame to build under a fixed step instead of 0.6, and the
+  interpolated scene 5.5 ms instead of 1.8. The fields are first set to 0.5, then to their defaults in the constructor.
 - **Small things that matter under an interpreter**: no default parameters on recursive calls, indexed loops instead of `for…of`
   (QuickJS allocates an iterator), a class's draw kind cached on the object.
 

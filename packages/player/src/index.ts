@@ -12,6 +12,7 @@ export {
   type Size,
 } from "./draw.ts";
 export { FixedDriver, type StepRunner } from "./fixed.ts";
+export { INTERPOLATE_SNAP, Interpolator } from "./interpolate.ts";
 export { HOST_BACKEND_KEY, HOST_RUN_KEY, hostBackend } from "./host.ts";
 export { PlayerInput } from "./input.ts";
 export {

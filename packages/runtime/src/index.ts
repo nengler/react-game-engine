@@ -56,7 +56,7 @@ export { TextInput, TEXT_INPUT_DEFAULTS, type TextInputProps } from "./component
 export { setTextDefaults, Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Line, type LineProps } from "./components/Line.ts";
-export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
+export { Camera, type CameraProps, type CameraViewState, type Point, type ViewTransform } from "./components/Camera.ts";
 export {
   AnimatedSprite,
   parseAnimations,
