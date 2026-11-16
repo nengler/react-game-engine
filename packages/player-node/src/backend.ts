@@ -5,6 +5,7 @@ import {
   TSE_TYPED_MAX,
   TSE_OPEN_HIDDEN,
   TSE_OPEN_RESIZABLE,
+  TSE_OPEN_HIGHDPI,
   TSE_OPEN_SHARP,
   TSE_OPEN_SMOOTH,
   TSE_OPEN_VSYNC,
@@ -58,6 +59,7 @@ export class NodeBackend implements Backend {
     if (config.hidden ?? false) options |= TSE_OPEN_HIDDEN;
     if (config.smooth ?? false) options |= TSE_OPEN_SMOOTH;
     if (config.sharp ?? false) options |= TSE_OPEN_SHARP;
+    if (config.highDpi ?? !(config.hidden ?? false)) options |= TSE_OPEN_HIGHDPI;
     const code = this.#native.open(config.width, config.height, config.title, options);
     if (code !== 0) throw new Error(`Could not open the window (libtse error ${code}).`);
     this.#width = config.width;

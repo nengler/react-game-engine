@@ -2,6 +2,7 @@ import type { Backend, StorageBackend, WindowConfig } from "./backend.ts";
 import { colorToHex } from "./color.ts";
 import { estimateTextWidth } from "./draw.ts";
 import {
+  TSE_BUILTIN_FONT_SHEETS,
   KEYS,
   KEY_INDEX,
   TSE_IN_DT,
@@ -176,7 +177,7 @@ export interface RecordingOptions {
   readonly missingShaders?: Iterable<string>;
   /** Entries the backend's saved data starts with (name to text): a replay can start from a save. */
   readonly storage?: Readonly<Record<string, string>>;
-  /** The size `textureSize` reports for a texture path. Default 16 × 16. */
+  /** The size `textureSize` reports for a texture path. Default 16 × 16, or a built-in font's sheet (`tse:small`: 64 × 36). */
   readonly textureSizes?: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
   /** Keep only this many of the latest drawn frames (default all): for a long scripted run that only looks at the game's state. */
   readonly keepFrames?: number;
@@ -303,7 +304,7 @@ export class RecordingBackend implements Backend {
     const path = this.#textures[handle];
     if (path === undefined) throw new Error(`textureSize: no texture has handle ${handle}.`);
     this.textureSizeQueries.push(path);
-    return { ...(this.#textureSizes[path] ?? { width: 16, height: 16 }) };
+    return { ...(this.#textureSizes[path] ?? TSE_BUILTIN_FONT_SHEETS[path] ?? { width: 16, height: 16 }) };
   }
 
   playSound(handle: number, volume = 1): void {

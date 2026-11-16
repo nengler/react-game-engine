@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define TSE_ABI_VERSION 13
+#define TSE_ABI_VERSION 14
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -25,8 +25,9 @@
  *   TSE_OP_RECT     op, x, y, rot, sx, sy, width, height, color
  *   TSE_OP_ELLIPSE  op, x, y, rot, sx, sy, width, height, color   (fills the width x height box)
  *   TSE_OP_TEXT     op, x, y, rot, sx, sy, textIndex, size, color
- *   TSE_OP_SCISSOR  op, x, y, width, height      clip what follows to this rectangle, in target pixels (the window,
- *                                                or the canvas when there is one), top-left origin, ignoring the view.
+ *   TSE_OP_SCISSOR  op, x, y, width, height      clip what follows to this rectangle, in target pixels (the window's
+ *                                                logical pixels, or the canvas when there is one), top-left origin,
+ *                                                ignoring the view.
  *                                                A later SCISSOR replaces it; they do not nest.
  *   TSE_OP_SCISSOR_END  op                       stop clipping
  *   TSE_OP_SPRITE_REGION  op, x, y, rot, sx, sy, texture, srcX, srcY, srcW, srcH, originX, originY, flags, tint
@@ -169,6 +170,11 @@
 #define TSE_OPEN_HIDDEN    4  /* no visible window and no audio device: tests and CI. Frames are captured for tse_read_pixels */
 #define TSE_OPEN_SMOOTH    8  /* bilinear texture filtering; the default is nearest (pixel art) */
 #define TSE_OPEN_SHARP    16  /* a canvas shown at a scale that is not a whole number is scaled up by the next whole number with nearest filtering, then down to size with bilinear: edges stay crisp and no pixel is uneven */
+#define TSE_OPEN_HIGHDPI  32  /* (since ABI v14) draw at the display's own pixel density (a Retina screen, a scaled Windows desktop). Every
+                               * size and position in the protocol stays in logical pixels (the window's size as tse_frame reports it,
+                               * the mouse, views, scissors, the canvas's dest rectangle); libtse scales what it draws to the
+                               * framebuffer, so shapes, text and a smooth canvas are sharp. Without it the system stretches a
+                               * logical-size image, which blurs on such a display */
 
 /* ---------- Functions ---------- */
 int32_t tse_abi_version(void);
@@ -179,7 +185,10 @@ void    tse_close(void);
  * Returns 0, or nonzero when there is no window or it is hidden (tests, CI). The next tse_frame reports the new size. */
 int32_t tse_set_fullscreen(int32_t on);
 
-int32_t tse_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
+/* A texture from an image file, or a font built into libtse by its "tse:" name (since ABI v14): "tse:small" is a bitmap font
+ * sheet of 3x5 glyphs in 4x6 cells, characters 32 to 127 in 16 columns and 6 rows (64x36), white on transparent.
+ * Returns a handle >= 0, or -1 if it could not be loaded (a missing file, or a "tse:" name that is not built in). */
+int32_t tse_load_texture(const char *path);
 /* A shader for TSE_OP_LAYER_END, from a file holding one function, in GLSL (since ABI v11):
  *
  *     vec4 effect(vec2 uv) { vec4 c = texture(image, uv); return vec4(c.rgb * (1.0 - 0.5 * length(pixel / resolution - 0.5)), c.a); }

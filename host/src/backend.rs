@@ -60,9 +60,11 @@ fn open<'js>(ctx: Ctx<'js>, config: Object<'js>) -> JsResult<()> {
     let mut options = 0;
     if flag("resizable", true)? { options |= ffi::TSE_OPEN_RESIZABLE; }
     if flag("vsync", true)? { options |= ffi::TSE_OPEN_VSYNC; }
-    if flag("hidden", false)? { options |= ffi::TSE_OPEN_HIDDEN; }
+    let hidden = flag("hidden", false)?;
+    if hidden { options |= ffi::TSE_OPEN_HIDDEN; }
     if flag("smooth", false)? { options |= ffi::TSE_OPEN_SMOOTH; }
     if flag("sharp", false)? { options |= ffi::TSE_OPEN_SHARP; }
+    if flag("highDpi", !hidden)? { options |= ffi::TSE_OPEN_HIGHDPI; }
     let title = c_string(&title);
     let code = unsafe { ffi::tse_open(width, height, title.as_ptr(), options) };
     if code != 0 {

@@ -98,7 +98,7 @@ These sit beside the compiler's ([DESIGN.md](DESIGN.md#ground-rules-and-settled-
 | Origin | **Top-left** for every drawn element and `Collider`; rotation and scale are about it | Consistency across built-ins |
 | Active camera | **The first `Camera` in draw order** (more than one: warn once). None: identity view, world origin at the top-left | With a camera the followed point is centred; without one, top-left is what a 2D API is expected to do |
 | `input.pointerX/Y` | **World space**, through the active camera; `screenX/Y` in screen pixels | Components only know world space |
-| Coordinates | Logical pixels; no high-DPI scaling | Simplest. A `<Screen>` canvas gives a fixed resolution instead |
+| Coordinates | Logical pixels everywhere in the protocol; a visible window draws at the display's density (`TSE_OPEN_HIGHDPI`, 2026-11-16) | A game never sees the display's scale, and shapes, text and a smooth canvas are sharp on a Retina screen. A `<Screen>` canvas gives a fixed resolution |
 | Key names | `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`, `"Alt"`, the arrows, `"F1"`–`"F12"`, mouse buttons as keys (`"MouseLeft"`, …) and the first gamepad (`"PadA"`…`"PadStart"`, `"PadLeft"`…`"PadDown"`) | Mouse and pad buttons as keys mean `input.pressed("MouseLeft")` needs no new API. The table is `TSE_KEYS` in `tse.h`, append only |
 | Asset paths | Relative to the `assets` option (default `"assets"`), joined with `/` in TypeScript | `@tsengine/player` must run in QuickJS, with no `node:path` |
 | A missing asset or a bad colour | Never throw: warn once per value, draw a 16 × 16 magenta rect for a missing texture, magenta for a colour that does not parse | A typo should not stop a game during development, and magenta is easy to spot |
@@ -121,7 +121,7 @@ These sit beside the compiler's ([DESIGN.md](DESIGN.md#ground-rules-and-settled-
 - **The key table** `TSE_KEYS(X)`: keyboard keys, mouse buttons, gamepad buttons and gamepad directions (the d-pad or the left stick
   past the dead zone). Its order is the order of the keys buffer.
 - **Window options** for `tse_open`: resizable, vsync, hidden (no window and no audio device: tests and CI), smooth (bilinear
-  filtering; the default is nearest, for pixel art) and sharp (see "Scaling a canvas").
+  filtering; the default is nearest, for pixel art), sharp (see "Scaling a canvas") and high DPI (see "High-DPI displays").
 - **Functions**: open and close the window and switch full screen; load textures, shaders, sounds and music; play a sound at a
   volume; play, fade and stop music; measure text and textures (for layout); `tse_frame`; the characters typed last frame
   (`tse_typed`); the broad phase (`tse_overlaps`); saved data (`tse_storage_*`); and `tse_read_pixels` for tests.
@@ -172,6 +172,13 @@ tests stay byte-identical): `SPRITE_REGION` sits beside `SPRITE`, a `<Flex>` wit
 - **Scaling a canvas.** With `TSE_OPEN_SHARP` (`<Game upscale="sharp">`), a canvas shown at a scale that is not a whole number is first
   copied at the next whole scale with nearest filtering, then down to size with bilinear: edges stay crisp and every game pixel is
   the same size. Every draw of a render texture flips it, so both copies do.
+- **High-DPI displays** (ABI v14). `TSE_OPEN_HIGHDPI` asks raylib for a framebuffer at the display's density; the player sets it for
+  every visible window (`WindowConfig.highDpi`, default true unless hidden, so screenshots and tests are the same size everywhere).
+  raylib keeps the screen size and the mouse in logical pixels and draws to the window through a scale; libtse does the same for what
+  raylib does not: a layer over the window is the framebuffer's size and drawn into through the same scale, a scissor inside one is
+  scaled to its pixels by hand, a layer's shader is given its `resolution` in logical pixels, and sharp scaling counts the canvas's
+  scale in framebuffer pixels. The C smoke test checks all of it at scale 2 on a virtual display that claims 192 dpi (CI's "C smoke
+  test on a 2x display"); it has not yet been seen on a real Retina screen.
 - **`tse_overlaps`** is the script's broad phase in C: an insertion sort over the order the caller keeps from last frame, then
   horizontal bands swept one by one. It trusts nothing (the order is checked to be a permutation, counts are clipped, boxes that are
   not finite still return valid indices) and its tests run under the address and undefined-behaviour sanitizers.
@@ -281,6 +288,12 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
   stamps itself changed only on ticks where it has particles, so an idle emitter costs a copied record.
 - **Bitmap fonts** (`<Text font>`): a sheet of characters 32 to 127 in 16 × 6 cells, a region record per character, tinted by the
   text's colour; `size` is the cell's height.
+- **Built-in fonts** (ABI v14). A `tse:` name is a font sheet built into libtse, not a file: `tse_load_texture("tse:small")` makes
+  the 64 × 36 sheet of `tse:small` (3 × 5 glyphs in 4 × 6 cells, g j p q y reaching the sixth row) from a table in
+  `native/src/fonts.c`, white on transparent, so the Node and Rust hosts both have it and `tse package` ships nothing for it. The
+  player passes a `tse:` name as it is, not under the assets folder, and refuses one that is not in `BUILTIN_FONTS` (runtime) with
+  a warning naming them; the compiler's asset check does the same. `TSE_BUILTIN_FONT_SHEETS` (protocol.ts) gives the sheet sizes
+  libtse makes, which `RecordingBackend` reports.
 - **`freeze(steps)`** skips `onUpdate` for that many ticks; input and renders still run, and key edges are kept for the step after.
 - **`<Router>`**. Only the shown `<Route>` is in the world; a route's components are made when it comes and dropped when it has gone
   (as React Router does), unless `keepAlive`. During a transition the screen being left is inert (`World.setInert`): it draws but

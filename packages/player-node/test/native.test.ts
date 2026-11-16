@@ -120,6 +120,35 @@ describe("libtse through koffi", { skip }, () => {
     }
   });
 
+  it("draws tse:small, the font built into libtse: a 64 × 36 sheet, 3 × 5 glyphs, crisp at its own size", () => {
+    const backend = createNodeBackend(library);
+    try {
+      backend.open({ width: 64, height: 48, title: "fonts", hidden: true, vsync: false });
+      assert.deepEqual(backend.textureSize(backend.loadTexture("tse:small")), { width: 64, height: 36 });
+      assert.equal(backend.loadTexture("tse:huge"), -1, "a tse: name that is not built in loads nothing");
+    } finally {
+      backend.close();
+    }
+    const frame = render(
+      () => {
+        const root = new Entity();
+        const eight = new Text({ text: "8", font: "tse:small", color: "white" });
+        eight.transform.x = 10;
+        eight.transform.y = 10;
+        root.addChild(eight);
+        return root;
+      },
+      { background: "#000000" }
+    );
+    // 8 is XXX / X.X / XXX / X.X / XXX in the cell's top-left 3 × 5; the cell's fourth column and sixth row are empty.
+    assert.equal(pixel(frame, 10, 10), "ffffffff", "top-left of the 8");
+    assert.equal(pixel(frame, 12, 12), "ffffffff", "the middle bar");
+    assert.equal(pixel(frame, 11, 11), "000000ff", "the upper hole");
+    assert.equal(pixel(frame, 11, 13), "000000ff", "the lower hole");
+    assert.equal(pixel(frame, 13, 10), "000000ff", "the gap between characters");
+    assert.equal(pixel(frame, 10, 15), "000000ff", "the gap between lines");
+  });
+
   it("draws a rect where the player put it, over the background", () => {
     const frame = render(
       () => {

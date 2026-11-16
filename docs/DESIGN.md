@@ -1200,6 +1200,12 @@ font: the player calls `setTextDefaults` from the root when it starts and on eac
 `Text.size` and `Text.color` are getters that fall back to them, then to 16 and white. `sized` counts the game's size as given,
 so a bitmap font is drawn at it. Literals, like the other settings.
 
+**A built-in small font** (2026-11-16, ABI v14). `font="tse:small"` (on `<Text>` or `<Game>`) is a bitmap font built into the
+engine: 3 × 5 glyphs in 4 × 6 cells, so a line is 6 pixels, where the default font is about 8. Every small-resolution game needs
+one, and a file each game ships would be the same file each time. It is named like an asset with a `tse:` prefix that no file name
+has, which leaves room for more built-ins; the glyphs live in libtse, so there is nothing to package ([PLAYER.md](PLAYER.md),
+"Built-in fonts").
+
 ## Shape
 
 `<Shape>` (M11) is a filled rectangle or circle, for debugging colliders and

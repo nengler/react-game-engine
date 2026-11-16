@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@tsengine/runtime";
 
-export const TSE_ABI_VERSION = 13;
+export const TSE_ABI_VERSION = 14;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const TSE_OP_VIEW = 1;
@@ -49,6 +49,11 @@ export const TSE_BLEND_SCREEN = 3;
 /** How deep layers nest. */
 export const TSE_LAYER_MAX = 4;
 
+/** The sheet libtse makes for each built-in font name (since ABI v14): a bitmap font sheet, 16 × 6 cells. */
+export const TSE_BUILTIN_FONT_SHEETS: Readonly<Record<string, { readonly width: number; readonly height: number }>> = {
+  "tse:small": { width: 64, height: 36 },
+};
+
 // Flags of a sprite region record.
 export const TSE_SPRITE_FLIP_X = 1;
 export const TSE_SPRITE_FLIP_Y = 2;
@@ -83,6 +88,8 @@ export const TSE_OPEN_VSYNC = 2;
 export const TSE_OPEN_HIDDEN = 4;
 export const TSE_OPEN_SMOOTH = 8;
 export const TSE_OPEN_SHARP = 16;
+/** Draw at the display's pixel density, every size staying in logical pixels (ABI v14). */
+export const TSE_OPEN_HIGHDPI = 32;
 
 /** Every numeric `#define TSE_*` in the header, by its name there. The parity test walks this. */
 export const PROTOCOL = {
@@ -140,6 +147,7 @@ export const PROTOCOL = {
   TSE_OPEN_HIDDEN,
   TSE_OPEN_SMOOTH,
   TSE_OPEN_SHARP,
+  TSE_OPEN_HIGHDPI,
 } as const;
 
 /**

@@ -13,6 +13,12 @@ export interface WindowConfig {
   readonly smooth?: boolean;
   /** Sharp scaling of a pixel-perfect screen shown at a scale that is not a whole number (see `TSE_OPEN_SHARP`). Default false. */
   readonly sharp?: boolean;
+  /**
+   * Draw at the display's own pixel density (a Retina screen, a scaled Windows desktop), so shapes and text are sharp; every size
+   * stays in logical pixels (see `TSE_OPEN_HIGHDPI`). Default true for a visible window, false for a hidden one, so screenshots and
+   * tests are the same size on every machine.
+   */
+  readonly highDpi?: boolean;
 }
 
 /**
