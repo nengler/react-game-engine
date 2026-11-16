@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Usage: tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]
+ * Usage: tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>] [--json]
  * Type-checks every .tsx file in srcDir (imports from the authoring module,
  * prop types, hook arguments), compiles each to a .ts file in outDir, writes
  * the IR next to it as .ir.json, then type-checks the output. `--no-check`
@@ -20,6 +20,9 @@
  *
  * `--source-maps` writes `<Name>.ts.map` next to each generated file, mapping each line to the component, hook or element of
  * the `.tsx` it came from, so stack traces and debuggers show the source as written.
+ *
+ * `--json` prints one JSON object instead of lines, for a tool or a language model: `{ ok, errors, warnings, diagnostics: [{ file,
+ * line, column, code, severity, message }], log }`, where `log` holds the progress and notes the lines would have said.
  *
  * `--scenes <dir>` validates every scene (.json) in the directory against
  * those prefabs, and imports every Tiled map (.tmj) to
@@ -55,7 +58,8 @@ function main(argv: readonly string[]): number {
   let sourceMaps = false;
   let scenesDir: string | undefined;
   let assetsDir: string | undefined;
-  const usage = "usage: tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]";
+  const usage =
+    "usage: tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>] [--json]";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === "--runtime" || arg === "--scenes" || arg === "--assets") {
@@ -71,6 +75,7 @@ function main(argv: readonly string[]): number {
       else scenesDir = value;
     } else if (arg === "--no-check") check = false;
     else if (arg === "--source-maps") sourceMaps = true;
+    else if (arg === "--json") continue; // read by `run`
     else if (arg.startsWith("--")) {
       console.error(`unknown option ${arg}\n${usage}`);
       return 2;
@@ -237,7 +242,53 @@ function main(argv: readonly string[]): number {
     compiler.close();
   }
   for (const d of diagnostics) console.error(formatDiagnostic(d));
+  reported.push(...diagnostics);
   return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+}
+
+/** The diagnostics `main` reported, for `--json`. */
+const reported: CompilerDiagnostic[] = [];
+
+/** A diagnostic as plain data: where (file, 1-based line and column, or null), its code, severity and message. */
+export function diagnosticData(d: CompilerDiagnostic): Record<string, unknown> {
+  return {
+    file: d.span?.fileName ?? null,
+    line: d.span?.line ?? null,
+    column: d.span?.column ?? null,
+    code: d.code,
+    severity: d.severity,
+    message: d.message,
+  };
+}
+
+/** Run `main`; with `--json`, its lines are collected and one JSON object is printed instead. */
+function run(argv: readonly string[]): number {
+  if (!argv.includes("--json")) return main(argv);
+  const log: string[] = [];
+  const { log: out, error: err } = console;
+  console.log = (...args: unknown[]) => void log.push(args.join(" "));
+  console.error = (...args: unknown[]) => void log.push(args.join(" "));
+  let code: number;
+  try {
+    code = main(argv);
+  } finally {
+    console.log = out;
+    console.error = err;
+  }
+  // Diagnostics are reported as data, not again as lines.
+  const lines = new Set(reported.map(formatDiagnostic));
+  const errors = reported.filter((d) => d.severity === "error").length;
+  out(
+    JSON.stringify({
+      ok: code === 0,
+      ...(code === 2 ? { usage: log.join("\n") } : {}),
+      errors,
+      warnings: reported.length - errors,
+      diagnostics: reported.map(diagnosticData),
+      log: code === 2 ? [] : log.filter((line) => !lines.has(line)),
+    })
+  );
+  return code;
 }
 
 /** Every `.ts` and `.tsx` file under `dir`, folders included, in name order. */
@@ -283,4 +334,4 @@ function checkScenes(compiler: Compiler, dir: string, outDir: string, prefabs: R
   return diagnostics;
 }
 
-process.exitCode = main(process.argv.slice(2));
+process.exitCode = run(process.argv.slice(2));

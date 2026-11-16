@@ -28,9 +28,9 @@ import { UsageError } from "./config.ts";
 
 const USAGE = `usage: tse <command> [folder] [options]
 
-  build        compile src to generated
+  build        compile src to generated                   [--json]
   dev          compile, open the window, hot reload       [--no-watch]
-  check        compile, type-check, test, parity
+  check        compile, type-check, test, parity          [--json]
   package      a folder to hand to someone                [--engine node|quickjs] [--headless] [--entry file] [--name name]
   screenshot   PNGs of a scripted run                     tse screenshot <folder> --script "right*30" --at 0,29 [--gpu] [--compare dir]
   preview      one component at a time, from its stories  [--story HealthBar] [--screenshot | --compare]

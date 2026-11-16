@@ -9,11 +9,15 @@
  *               has stored any and the headless libtse is found
  * 5. parity     `parity.ts` twice under Node (identical, so a run is deterministic); and, when tse-host is found, bundled and
  *               run under it too, which must print the same
+ *
+ * `--json` prints one JSON object instead, for a tool or a language model: `{ ok, game, steps: [{ name, ok, detail, seconds, … }],
+ * skipped }`. The compile step carries the compiler's `diagnostics` (file, line, column, code, message), the tests step its
+ * `failures` (name, file, line, error) and `counts`; a step that failed without either carries the tail of its `output`.
  */
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { compileArgs, SCREENSHOTS_FOLDER, storyFiles } from "@tsengine/player-node";
@@ -27,6 +31,23 @@ interface Outcome {
   readonly ok: boolean;
   readonly detail: string;
   readonly output: string;
+  /** For `--json`: what the step found, as data (the compiler's diagnostics, the tests' failures). */
+  readonly data?: Record<string, unknown>;
+}
+
+/** The `node --test` reporter that writes JSON lines (`../test-reporter.ts`), beside this file's folder. */
+function jsonReporter(): string {
+  const dir = dirname(dirname(fileURLToPath(import.meta.url)));
+  return [join(dir, "test-reporter.ts"), join(dir, "test-reporter.js")].find((path) => existsSync(path)) ?? join(dir, "test-reporter.js");
+}
+
+interface TestLine {
+  readonly status?: string;
+  readonly name?: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly error?: string;
+  readonly summary?: Record<string, number>;
 }
 
 /** TypeScript's own `tsc`, from this package's dependency. */
@@ -96,11 +117,24 @@ async function parity(game: Game): Promise<Outcome> {
 }
 
 export async function checkCommand(args: readonly string[]): Promise<number> {
-  const game = loadGame(args[0]);
+  const json = args.includes("--json");
+  const game = loadGame(args.find((arg) => !arg.startsWith("--")));
   const steps: { name: string; run: () => Outcome | Promise<Outcome> }[] = [
     {
       name: "compile",
       run: () => {
+        if (json) {
+          const r = node([...compileArgs(game.dir), "--json"], game.dir);
+          let report: { errors?: number; warnings?: number; diagnostics?: unknown[]; log?: string[] };
+          try {
+            report = JSON.parse(r.stdout) as typeof report;
+          } catch {
+            return { ok: false, detail: "the compiler failed", output: r.output };
+          }
+          const errors = report.errors ?? 0;
+          const detail = r.ok ? (report.log?.at(-1) ?? "") : errors === 1 ? "1 error" : `${errors} errors`;
+          return { ok: r.ok, detail, output: "", data: { diagnostics: report.diagnostics ?? [], warnings: report.warnings ?? 0 } };
+        }
         const r = node(compileArgs(game.dir), game.dir);
         if (r.ok) return { ok: true, detail: r.output.trim().split("\n").at(-1) ?? "", output: r.output };
         // The errors are printed below, once each: the summary line only counts them.
@@ -123,9 +157,36 @@ export async function checkCommand(args: readonly string[]): Promise<number> {
         // Under an outer `node --test`, NODE_TEST_CONTEXT would make the inner run report to it instead of printing.
         const { NODE_TEST_CONTEXT: _outer, ...env } = process.env;
         // `--enable-source-maps`: a failure inside a component names its own line in `src/`, not the generated file's.
-        const r = node(["--enable-source-maps", "--test", "--test-reporter=spec", "test/**/*.test.ts"], game.dir, env);
-        const count = (label: string): string => new RegExp(`^ℹ ${label} (\\d+)`, "m").exec(r.output)?.[1] ?? "?";
-        return { ok: r.ok, detail: `${count("pass")} passed, ${count("fail")} failed, ${count("skipped")} skipped`, output: r.output };
+        const work = json ? mkdtempSync(join(tmpdir(), "tse-check-tests-")) : null;
+        const results = work === null ? null : join(work, "results.jsonl");
+        const reporters =
+          results === null
+            ? ["--test-reporter=spec"]
+            : [
+                "--test-reporter=spec",
+                "--test-reporter-destination=stdout",
+                `--test-reporter=${jsonReporter()}`,
+                `--test-reporter-destination=${results}`,
+              ];
+        try {
+          const r = node(["--enable-source-maps", "--test", ...reporters, "test/**/*.test.ts"], game.dir, env);
+          const count = (label: string): string => new RegExp(`^ℹ ${label} (\\d+)`, "m").exec(r.output)?.[1] ?? "?";
+          const detail = `${count("pass")} passed, ${count("fail")} failed, ${count("skipped")} skipped`;
+          if (results === null || !existsSync(results)) return { ok: r.ok, detail, output: r.output };
+          const lines = readFileSync(results, "utf8")
+            .split("\n")
+            .filter((line) => line.trim() !== "")
+            .map((line) => JSON.parse(line) as TestLine);
+          const failures = lines
+            .filter((line) => line.status === "fail")
+            .map(({ name, file, line, error }) => ({ name, file: file === undefined ? undefined : relative(game.dir, file), line, error }));
+          const counts = lines.find((line) => line.summary !== undefined)?.summary ?? {};
+          // A file that failed before its tests ran (a syntax error) has no test to blame: keep the output then.
+          const explained = r.ok || failures.length > 0;
+          return { ok: r.ok, detail, output: explained ? "" : r.output, data: { counts, failures } };
+        } finally {
+          if (work !== null) rmSync(work, { recursive: true, force: true });
+        }
       },
     },
     { name: "previews", run: () => previews(game) },
@@ -133,17 +194,31 @@ export async function checkCommand(args: readonly string[]): Promise<number> {
   ];
 
   let failed = 0;
+  const report: Record<string, unknown>[] = [];
   for (const step of steps) {
     const started = Date.now();
     const outcome = await step.run();
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(`${outcome.ok ? "ok  " : "FAIL"} ${step.name.padEnd(10)} ${outcome.detail} (${seconds}s)`);
+    const tail = outcome.output.trim().split("\n").slice(-60).join("\n");
+    if (json)
+      report.push({
+        name: step.name,
+        ok: outcome.ok,
+        detail: outcome.detail,
+        seconds: Number(seconds),
+        ...outcome.data,
+        ...(!outcome.ok && tail !== "" ? { output: tail } : {}),
+      });
+    else console.log(`${outcome.ok ? "ok  " : "FAIL"} ${step.name.padEnd(10)} ${outcome.detail} (${seconds}s)`);
     if (!outcome.ok) {
       failed++;
-      console.log(outcome.output.trim().split("\n").slice(-60).join("\n"));
+      if (!json) console.log(tail);
       break; // later steps depend on this one
     }
   }
-  console.log(failed === 0 ? `check ${game.name}: passed` : `check ${game.name}: FAILED`);
+  if (json) {
+    const skipped = steps.slice(report.length).map((step) => step.name);
+    console.log(JSON.stringify({ ok: failed === 0, game: game.name, steps: report, skipped }));
+  } else console.log(failed === 0 ? `check ${game.name}: passed` : `check ${game.name}: FAILED`);
   return failed === 0 ? 0 : 1;
 }
