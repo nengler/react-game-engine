@@ -61,7 +61,6 @@ Each row waits because nothing above depends on it or no game has asked for it y
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating |
 | QuickJS: a 10 ms target for 2,000 objects with colliders, bench budgets in CI | V8 is the main engine since 2026-11-10; QuickJS is the JIT-free fallback | Shipping to a platform that bans a JIT |
 | Hearth wave 10 under QuickJS (99th percentile about 29 ms) | Fine under V8 | A hitch seen in the last waves: move the enemy's position out of its props, or draw all health bars from one component |
-| Interpolation under the fixed timestep | A frame draws the latest step | Visible judder at a refresh rate that is not a multiple of the step |
 | Hot reload of changed asset files | Needs a restart today, and each build stays in memory | A session long enough for it to hurt |
 | Room-change spike in Kite (about 25 ms for one step) | Hidden by the slide the world waits through | A person seeing a hitch: build the next room's tilemap a step early |
 | Tiled importer gaps: integer checks, template properties, zstd layers, infinite maps, collections of images | Each says so when met | A map that uses them |

@@ -57,6 +57,14 @@ export interface GameProps extends EntityProps {
    */
   fixedStep?: number;
   /**
+   * With `fixedStep`, draw each frame between the last two steps, by how far the frame is into the next step, so motion is smooth on
+   * a display whose refresh rate is not the step rate (120 or 144 Hz, or a variable rate). Positions, rotations, scales and the
+   * camera's follow and slide are blended; the game itself only ever sees whole steps. It draws up to one step behind. Something
+   * that moved further than `INTERPOLATE_SNAP` pixels in one step (a respawn, a door) is not blended, so it never slides across the
+   * screen. Default true in a visible window, false in a hidden one (tests and screenshots draw the latest step exactly).
+   */
+  interpolate?: boolean;
+  /**
    * The game's actions (`controls={controls}`, a `createControls({ jump: ["Z", "PadA"], … })` kept in a module): every
    * `input.pressed("jump")` then means any of the action's keys.
    */
@@ -108,6 +116,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   smooth: boolean | undefined;
   fullscreenKey: string | false | undefined;
   fixedStep: number | undefined;
+  interpolate: boolean | undefined;
   gamepadDeadzone: number | undefined;
   upscale: "nearest" | "sharp" | undefined;
   showFps: boolean | undefined;
@@ -134,6 +143,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.smooth = hostProps.smooth;
     this.fullscreenKey = hostProps.fullscreenKey;
     this.fixedStep = hostProps.fixedStep;
+    this.interpolate = hostProps.interpolate;
     this.gamepadDeadzone = hostProps.gamepadDeadzone;
     this.upscale = hostProps.upscale;
     this.showFps = hostProps.showFps;

@@ -245,6 +245,7 @@ export const runtimeManifest: RuntimeManifest = {
       "smooth",
       "fullscreenKey",
       "fixedStep",
+      "interpolate",
       "gamepadDeadzone",
       "upscale",
       "showFps",
@@ -337,6 +338,9 @@ export const runtimeManifest: RuntimeManifest = {
       "viewTransform",
       "worldToView",
       "viewToWorld",
+      "saveView",
+      "restoreView",
+      "blendView",
     ],
     AnimatedSprite: [
       "fps",
@@ -631,6 +635,7 @@ export const runtimeManifest: RuntimeManifest = {
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
     // `updateProps` is generated into every component that has props, so a field may not take the name.
+    "interpolation",
     "name",
     "props",
     "applyProps",

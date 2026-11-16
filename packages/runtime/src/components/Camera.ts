@@ -55,6 +55,15 @@ export interface Point {
   readonly y: number;
 }
 
+/** A camera's view state between steps (see `Camera.saveView`). */
+export interface CameraViewState {
+  readonly slideX: number;
+  readonly slideY: number;
+  readonly followed: Point | null;
+  readonly lastBounds: readonly number[] | undefined;
+  readonly lastCentre: Point | null;
+}
+
 /**
  * The viewport. A camera's own transform is the view: a renderer draws the
  * world through its inverse, so moving the camera pans the view, turning it
@@ -102,6 +111,42 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     this.slide = hostProps.slide ?? 0;
     this.deadzone = hostProps.deadzone;
     this.smoothing = hostProps.smoothing ?? 0;
+  }
+
+  /**
+   * What `viewTransform` reads and writes besides props: the slide, the followed point and what it remembers of the last view. The
+   * player's interpolation (`<Game interpolate>`) keeps it after each step and puts it back after drawing a frame between two steps,
+   * so drawing never changes what the next step sees.
+   */
+  saveView(): CameraViewState {
+    return {
+      slideX: this.slideX,
+      slideY: this.slideY,
+      followed: this.#followed,
+      lastBounds: this.#lastBounds,
+      lastCentre: this.#lastCentre,
+    };
+  }
+
+  restoreView(state: CameraViewState): void {
+    this.slideX = state.slideX;
+    this.slideY = state.slideY;
+    this.#followed = state.followed;
+    this.#lastBounds = state.lastBounds;
+    this.#lastCentre = state.lastCentre;
+  }
+
+  /**
+   * Put the slide and the followed point a fraction `t` of the way from `from` to `to` (two `saveView`s of consecutive steps), for a
+   * frame drawn between them. The rest stays as `to` has it.
+   */
+  blendView(from: CameraViewState, to: CameraViewState, t: number): void {
+    this.restoreView(to);
+    this.slideX = from.slideX + (to.slideX - from.slideX) * t;
+    this.slideY = from.slideY + (to.slideY - from.slideY) * t;
+    const a = from.followed;
+    const b = to.followed;
+    if (a !== null && b !== null) this.#followed = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
   }
 
   /** The shake's offset now, in whole pixels: strong at first, dying to 0, from a fixed sequence. */

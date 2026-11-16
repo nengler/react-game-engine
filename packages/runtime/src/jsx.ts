@@ -271,7 +271,7 @@ export function Entity(_props: EntityProps & { children?: Child } & TransformSho
 }
 
 /**
- * The root of a game and its configuration: the game's `id` (the folder its save and settings are kept in), the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`, `fixedStep`, `gamepadDeadzone`, `upscale`, `showFps`, `fpsKey`),
+ * The root of a game and its configuration: the game's `id` (the folder its save and settings are kept in), the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`, `fixedStep`, `interpolate`, `gamepadDeadzone`, `upscale`, `showFps`, `fpsKey`),
  * the `background`, the `assets` folder and the `controls`. A container, like `<Entity>`, and
  * optional: a component whose root is `<Game …>` overrides the defaults, each prop only where it is written. Its
  * `width` and `height` are the window's; put a `<Screen width height>` inside it for the resolution the game is drawn

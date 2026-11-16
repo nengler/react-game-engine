@@ -157,6 +157,8 @@ interface Scene {
   readonly map?: boolean;
   /** Sweep in script even under a host with a broad phase of its own. */
   readonly scriptSweep?: boolean;
+  /** Under `<Game fixedStep={60} interpolate>`: each frame runs one step and is drawn blended from the step before. */
+  readonly interpolated?: boolean;
 }
 
 /** 80 animated enemies, 20 towers and 50 shots, built from engine pieces so the bench does not depend on the game package. */
@@ -258,6 +260,7 @@ function measure(scene: Scene): number {
     height: 600,
     title: "bench",
     root: () => buildScene(scene),
+    ...(scene.interpolated === true ? { fixedStep: 60, interpolate: true } : {}),
   });
   for (let i = 0; i < 10; i++) player.step(); // warm up
   // The fastest of a few batches: a shared CI runner adds pauses (a collection, another job) that are not the engine's, and a
@@ -303,6 +306,9 @@ const scenes: [string, Scene][] = [
   ["5000 moving rects", { n: 5000 }],
   ["2000 rects moved by state", { n: 2000, state: true }],
   ["2000 rects by state with colliders", { n: 2000, state: true, colliders: true }],
+  // A fixed step with interpolation: every object kept after each step, and every frame built a second time from blended transforms.
+  // 5.5 ms while a transform's fields started as small integers, which the blended fractions kept deoptimising (see Transform.ts).
+  ["2000 rects by state, interpolated", { n: 2000, state: true, interpolated: true }],
   ["2000 still rects", { n: 2000, moving: 0 }],
   ["2000 rects, 20 moving, colliders", { n: 2000, moving: 20, colliders: true }],
   ["2000 still rects with colliders", { n: 2000, moving: 0, colliders: true }],

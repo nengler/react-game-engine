@@ -133,6 +133,11 @@ export class GameObject<P extends object = {}> {
   selfChangedAt = 0;
   subtreeChangedAt = 0;
   /**
+   * The player's interpolation (`<Game interpolate>`): this object's transform after the step before last and after the last step
+   * (x, y, rotation, scaleX, scaleY each), and the step it was last seen at. Null until a step sees it with interpolation on.
+   */
+  interpolation: Float64Array | null = null;
+  /**
    * When what this object draws last changed apart from where it is: its own change other than a move (see `markMoved`), or any
    * change at all to something under it. An object whose stamps are newer than this one only moved, and the player can then
    * reuse what it drew for it with the new position.

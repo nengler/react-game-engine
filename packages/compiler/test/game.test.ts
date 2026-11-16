@@ -163,7 +163,7 @@ describe("<Game> as a component's root", () => {
     assert.equal(unknown[0]!.code, DiagnosticCode.UnsupportedAttribute);
     assert.match(
       unknown[0]!.message,
-      /<Game> has no prop 'fps'\. Its settings: id, title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, gamepadDeadzone, upscale, showFps, fpsKey, font, controls, timeScale, paused, textSize, textColor, overlayKey\./
+      /<Game> has no prop 'fps'\. Its settings: id, title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, interpolate, gamepadDeadzone, upscale, showFps, fpsKey, font, controls, timeScale, paused, textSize, textColor, overlayKey\./
     );
     assert.deepEqual(
       errors(`function A() { return <Game transform={{ x: 1 }} />; }`).map((d) => d.code),

@@ -31,6 +31,7 @@ import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame 
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
+import { Interpolator } from "./interpolate.ts";
 import { borderRoom } from "./layout.ts";
 import { drawOverlay } from "./overlay.ts";
 import {
@@ -66,6 +67,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly fullscreenKey?: string | false;
   /** Steps per second for `useUpdate`, as the `<Game>` prop `fixedStep`; unset runs one update per frame. */
   readonly fixedStep?: number;
+  /** Draw between fixed steps, as the `<Game>` prop `interpolate`. Default true in a visible window, false in a hidden one. */
+  readonly interpolate?: boolean;
   /** The game's actions, as the `<Game>` prop `controls`. */
   readonly controls?: Controls;
   /** The game's id, as the `<Game>` prop `id`: the folder its save and settings are kept in. */
@@ -258,6 +261,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   // With a fixed timestep a handler sees a copy of the key flags per step, made by the driver (`fixed.ts`): a press between
   // steps is never lost and never seen twice, and one made in a freeze reaches `onUpdate` in the first step after it.
   const driver = stepHz === undefined ? null : new FixedDriver(stepHz, KEYS.length);
+  const interpolator =
+    driver !== null && (game?.interpolate ?? config.interpolate ?? !(config.hidden ?? false)) ? new Interpolator() : null;
   input.values[TSE_IN_WIDTH] = width;
   input.values[TSE_IN_HEIGHT] = height;
   const builder = new FrameBuilder({
@@ -647,6 +652,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
         tick(stepDt, () => (input.handlerKeys = updateKeys));
         input.typed = "";
         collide();
+        interpolator?.capture(world.root);
         return frozen;
       });
       // With no step this frame nothing ticked: still settle what the hooks of the last one set, and what that moved.
@@ -658,7 +664,15 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     // The last walk is this frame's unless a collision callback has changed something since.
     const profiler = activeProfiler();
     const buildStarted = profiler?.now() ?? 0;
-    const built = lastBuilt !== null && !stale ? lastBuilt : builder.build(world.root, input.width, input.height, animationTime);
+    let built: BuiltFrame;
+    if (interpolator !== null && driver !== null && interpolator.blend(world.root, driver.alpha)) {
+      // A frame between the last two steps: built from blended transforms, which are then put back before anything else runs.
+      try {
+        built = builder.build(world.root, input.width, input.height, animationTime);
+      } finally {
+        interpolator.restore();
+      }
+    } else built = lastBuilt !== null && !stale ? lastBuilt : builder.build(world.root, input.width, input.height, animationTime);
     if (profiler !== null) profiler.phase("build", profiler.now() - buildStarted);
     lastBuilt = null;
     pointers = built.pointers;

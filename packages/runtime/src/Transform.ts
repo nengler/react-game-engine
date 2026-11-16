@@ -15,14 +15,23 @@
  * parent's. Objects with equal `z` keep tree order. It is not part of
  * `WorldTransform`: only the player's draw pass reads it.
  */
+/**
+ * What the numeric fields of a `Transform` are first set to, before the constructor sets the real defaults: a number that is not a
+ * small integer. V8 picks a field's representation from the first value stored in it. A field that starts as a small integer (0, 1)
+ * and later holds a fraction (a position moved by `speed * dt`, a blended position) changes the shape of every transform, and a frame
+ * walk that composes thousands of them kept deoptimising: 2,000 objects moving by fractions under a fixed step took 2.7 ms a frame
+ * to build instead of 0.6. Starting as a double keeps one shape from the first object on.
+ */
+const DOUBLE = 0.5;
+
 export class Transform {
-  x = 0;
-  y = 0;
+  x = DOUBLE;
+  y = DOUBLE;
   /** Draw order; see the class comment. */
   z = 0;
-  rotation = 0;
-  scaleX = 1;
-  scaleY = 1;
+  rotation = DOUBLE;
+  scaleX = DOUBLE;
+  scaleY = DOUBLE;
   /** World space: ignores the parent (and, for `transform`, the placement), so this is where the object is. */
   global = false;
   /**
@@ -31,6 +40,14 @@ export class Transform {
    * `WorldTransform`: only the player's draw pass reads it. Default 1.
    */
   opacity = 1;
+
+  constructor() {
+    this.x = 0;
+    this.y = 0;
+    this.rotation = 0;
+    this.scaleX = 1;
+    this.scaleY = 1;
+  }
 }
 
 /** A resolved, world-space transform. */
