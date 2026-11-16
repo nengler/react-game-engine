@@ -3,7 +3,7 @@ name: Release
 # Pushing a tag like v0.1.0, or running this workflow from the Actions tab with a version (it then tags the commit it runs on,
 # normally main's head), builds libtse and tse-host on each platform (the `native` matrix), packs the engine (tools/pack.ts,
 # stamped with the tag's version, @tsengine/native holding every platform's binaries), attaches the packs to a GitHub release
-# of that tag, and publishes them to npm as @tsengine/* (needs the NPM_TOKEN secret). A run from the Actions tab with
+# of that tag, and publishes them to npm as @tsengine/* by trusted publishing (no token: README.md, Releases). A run from the Actions tab with
 # `dry_run` builds, smoke-tests and packs everything, keeps the packs as the run's artifact, and releases and publishes nothing.
 # A game installs them from npm (`npx @tsengine/cli create my-game`), or by the release's URL:
 #
@@ -109,15 +109,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      # The version from the tag (v0.1.0 -> 0.1.0) or from the run's input, checked before anything is built; and the npm token,
-      # so a run that cannot publish stops before it makes a release (v0.2.0 was released, then failed here for want of it).
+      # The version from the tag (v0.1.0 -> 0.1.0) or from the run's input, checked before anything is built.
       - name: Work out the version
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
-          DRY_RUN: ${{ inputs.dry_run || false }}
         run: |
-          if [ "$DRY_RUN" != true ] && [ "$HAS_NPM_TOKEN" != true ]; then echo "::error::the NPM_TOKEN secret is not set (README.md, Releases, says how to make it)"; exit 1; fi
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then version="$INPUT_VERSION"; else version="${GITHUB_REF_NAME#v}"; fi
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::'$version' is not a version like 0.1.0"
@@ -130,7 +126,6 @@ jobs:
         with:
           node-version: "22.18"
           cache: npm
-          registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run generate
       - uses: actions/download-artifact@v8
@@ -170,15 +165,17 @@ jobs:
             --title "$TAG" \
             --notes "Install a pack by URL: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/<file>. Linux x64, macOS arm64 and x64, Windows x64."
       # Publish each pack to npm, @tsengine/* depending on the others at this version (stamped above), dependencies first so a
-      # pack never names one that is not there yet. NPM_TOKEN is a repository secret: an npm granular access token that may
-      # publish to the @tsengine organization. A version already on npm is skipped, so the workflow can be run again after a
-      # failure part-way. A version with a pre-release part (0.2.0-beta.1) goes to the `next` tag instead of `latest`.
+      # pack never names one that is not there yet. There is no token: each @tsengine package on npmjs.com names this repository
+      # and release.yml as its trusted publisher, and npm takes this run's OIDC identity (id-token: write) instead, with
+      # provenance. That needs npm 11.5.1 or newer, so npm is updated first (Node 22.18 ships npm 10). A version already on npm
+      # is skipped, so the workflow can be run again after a failure part-way. A version with a pre-release part (0.2.0-beta.1)
+      # goes to the `next` tag instead of `latest`.
+      - name: npm with trusted publishing
+        if: ${{ !inputs.dry_run }}
+        run: npm install -g npm@11 && npm --version
       - name: Publish to npm
         if: ${{ !inputs.dry_run }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::the NPM_TOKEN secret is not set (README.md, Releases, says how to make it)"; exit 1; fi
           if [[ "$VERSION" == *-* ]]; then tag=next; else tag=latest; fi
           for name in runtime compiler player native player-node testing language-server cli; do
             if npm view "@tsengine/$name@$VERSION" version >/dev/null 2>&1; then
