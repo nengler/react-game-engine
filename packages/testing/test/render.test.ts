@@ -147,3 +147,38 @@ export function Mine({ onBoom }: MineProps) {
     assert.equal(fields(t).near, 0);
   });
 });
+
+describe("stepUntil", () => {
+  const COUNTER = `
+export function Counter() {
+  const s = useMutable({ n: 0 });
+  useUpdate(() => { s.n += 1; });
+  return <Entity />;
+}`;
+
+  it("steps until the condition holds and says how many steps it took, none when it already holds", async () => {
+    const { Counter } = await build<{ Counter: new () => GameObject }>(COUNTER);
+    const t = render(Counter, {});
+    assert.equal(
+      t.stepUntil(() => true),
+      0
+    );
+    assert.equal(
+      t.stepUntil(() => (fields(t).n as number) >= 25),
+      25
+    );
+    assert.equal(fields(t).n, 25, "asked after each step, so it stops on the step that made it true");
+  });
+
+  it("throws when the condition never holds within maxSteps, or with throws: false returns maxSteps", async () => {
+    const { Counter } = await build<{ Counter: new () => GameObject }>(COUNTER);
+    const t = render(Counter, {});
+    assert.throws(() => t.stepUntil(() => false, { maxSteps: 10 }), /not done after 10 steps/);
+    assert.equal(fields(t).n, 10);
+    assert.equal(
+      t.stepUntil(() => false, { maxSteps: 5, throws: false }),
+      5
+    );
+    assert.equal(fields(t).n, 15);
+  });
+});
