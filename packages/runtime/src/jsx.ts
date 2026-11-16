@@ -39,10 +39,10 @@ import type { InputState } from "./input.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 import type { SpringOptions, TweenOptions } from "./math.ts";
 
-export type { TransformProps, TransformShorthand, Child } from "./jsx-runtime.ts";
+export type { TransformProps, TransformShorthand, OpacityShorthand, Child } from "./jsx-runtime.ts";
 /** A cutscene's sequence, for a field's type (`intro: null as Sequence | null`); its steps come from `@tsengine/runtime` in a `.ts` file. */
 export type { Sequence, SequencePosition, Step } from "./sequence.ts";
-import type { TransformShorthand } from "./jsx-runtime.ts";
+import type { OpacityShorthand, TransformShorthand } from "./jsx-runtime.ts";
 
 export { clamp, grace, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
@@ -93,7 +93,7 @@ export function useSpring(_target: number, _options?: SpringOptions): number {
  * from a `.ts` file); a new target starts again from where it is. A number: a point is two tweens.
  *
  *     const opacity = useTween(visible ? 1 : 0, { duration: 0.25, ease: "outCubic" });
- *     <Entity transform={{ opacity }}>…</Entity>
+ *     <Entity opacity={opacity}>…</Entity>
  *
  * It steps in this component's update and renders only while it moves. It starts at its first target.
  */
@@ -266,7 +266,7 @@ export function useUnmount(_handler: () => void): void {
 // -- elements -----------------------------------------------------------------
 
 /** A named container; the usual root of a component. */
-export function Entity(_props: EntityProps & { children?: Child } & TransformShorthand): JSX.Element {
+export function Entity(_props: EntityProps & { children?: Child } & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Entity");
 }
 
@@ -287,12 +287,12 @@ export function Sprite(_props: SpriteProps & TransformShorthand): JSX.Element {
 }
 
 /** A hit area for collisions. */
-export function Collider(_props: ColliderProps & TransformShorthand): JSX.Element {
+export function Collider(_props: ColliderProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Collider");
 }
 
 /** A hit area for presses (clicks and taps). */
-export function Pointer(_props: PointerProps & TransformShorthand): JSX.Element {
+export function Pointer(_props: PointerProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Pointer");
 }
 
@@ -313,17 +313,17 @@ export type TextAttributes = Omit<TextProps, "text"> & { children: TextChild | r
  * A line of text (a label, a HUD readout). `shadow` and `outline` (with `shadowX`, `shadowY` and `outlineWidth`) draw the text again under
  * itself in another colour, to keep it readable over a busy picture; they take no room in a layout.
  */
-export function Text(_props: TextAttributes & TransformShorthand): JSX.Element {
+export function Text(_props: TextAttributes & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Text");
 }
 
 /** A filled rectangle or circle, for debugging colliders and prototyping before art exists. */
-export function Shape(_props: ShapeProps & TransformShorthand): JSX.Element {
+export function Shape(_props: ShapeProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Shape");
 }
 
 /** A straight line from (`x`, `y`) to (`x2`, `y2`), both in the parent's space, `width` pixels thick (default 1) with square ends. */
-export function Line(_props: LineProps & TransformShorthand): JSX.Element {
+export function Line(_props: LineProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Line");
 }
 
@@ -332,7 +332,7 @@ export function Line(_props: LineProps & TransformShorthand): JSX.Element {
  * and it follows its children: `<Camera><Player /></Camera>` keeps the view on
  * the player. With no children it stays where it is.
  */
-export function Camera(_props: CameraProps & { children?: Child } & TransformShorthand): JSX.Element {
+export function Camera(_props: CameraProps & { children?: Child } & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Camera");
 }
 
@@ -429,7 +429,7 @@ export function Tilemap(_props: TilemapProps & TransformShorthand): JSX.Element 
  * `burst` at once when it turns on (or when it is made), each living `lifetime` seconds, thrown at `speed` toward `angle` ± `spread`,
  * pulled by `gravity`, fading or shrinking. `space="world"` leaves them where they were made. A leaf, placed by `transform`.
  */
-export function Particles(_props: ParticlesProps & TransformShorthand): JSX.Element {
+export function Particles(_props: ParticlesProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Particles");
 }
 
@@ -438,7 +438,7 @@ export function Particles(_props: ParticlesProps & TransformShorthand): JSX.Elem
  * `.ts` module, `<ParticleLayer particles={fx} />` once (inside the `<Camera>`, for bursts at world positions), then
  * `fx.burst("dust", x, y)` from an action, a plain function or a handler. A leaf.
  */
-export function ParticleLayer(_props: ParticleLayerProps & TransformShorthand): JSX.Element {
+export function ParticleLayer(_props: ParticleLayerProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("ParticleLayer");
 }
 
@@ -505,7 +505,7 @@ export function freeze(_steps: number): void {
  * A layer that stays on the screen while the camera moves, drawn after the world: a score, a health bar, a button.
  * Its coordinates are screen pixels (game pixels under a `<Screen>`). `transform` moves the whole layer.
  */
-export function Hud(_props: HudProps & { children?: Child } & TransformShorthand): JSX.Element {
+export function Hud(_props: HudProps & { children?: Child } & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Hud");
 }
 
@@ -518,7 +518,7 @@ export function Layer(_props: LayerProps & { children?: Child } & TransformShort
 }
 
 /** A soft disc of light, brightest at its middle, falling off to nothing at `radius`: put it in a `<Lighting>`. */
-export function Light(_props: LightProps & TransformShorthand): JSX.Element {
+export function Light(_props: LightProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Light");
 }
 

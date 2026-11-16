@@ -155,10 +155,21 @@ export const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
 
 /**
  * Transform fields a built-in that takes `transform` also takes as props of their own: `<Sprite x={spot.x} y={spot.y} />` is
- * `transform={{ x: spot.x, y: spot.y }}`. Not `global` (a flag, not a place) nor `opacity` (`<Sprite>`, `<Flex>` and
- * `<Tilemap>` have an `opacity` prop of their own). Never on a component, where `x` is whatever the component's props say.
+ * `transform={{ x: spot.x, y: spot.y }}`. Not `global` (a flag, not a place). `opacity` is lowered the same way on a built-in
+ * without an `opacity` of its own (`<Sprite>`, `<Flex>`, `<Tilemap>` and `<Layer>` have one), and is only ever a prop: see
+ * `isTransformShorthand`. Never on a component, where `x` is whatever the component's props say.
  */
 export const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", "rotation", "scaleX", "scaleY"]);
+
+/**
+ * Whether `name` on the built-in `tag` is transform shorthand: one of `TRANSFORM_SHORTHAND`, or `opacity` on a built-in whose
+ * members (the runtime manifest's `intrinsicMembers`) have no `opacity` of their own, so `<Entity opacity={0.5}>` and
+ * `<Shape opacity={…}>` write the transform's opacity while `<Sprite opacity>` stays the sprite's own prop.
+ */
+export function isTransformShorthand(name: string, tag: string, members: Readonly<Record<string, readonly string[]>>): boolean {
+  if (TRANSFORM_SHORTHAND.has(name)) return true;
+  return name === "opacity" && !(members[tag] ?? []).includes("opacity");
+}
 
 /** A declared prop's type as a state type (`useState(items)` takes the prop's type). */
 export function propTypeToType(type: PropTypeIR): TypeIR | null {

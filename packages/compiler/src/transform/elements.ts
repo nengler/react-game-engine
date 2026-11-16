@@ -61,7 +61,7 @@ import {
   HTML_ENTITY,
   cleanJsxText,
   SPECIAL_ATTRIBUTES,
-  TRANSFORM_SHORTHAND,
+  isTransformShorthand,
   findAttribute,
   nearest,
 } from "./helpers.ts";
@@ -643,7 +643,8 @@ export class ElementLowering extends HookLowering {
     const shorthand = isComponent
       ? []
       : attributes.properties.filter(
-          (a): a is JsxAttribute => isJsxAttribute(a) && isIdentifier(a.name) && TRANSFORM_SHORTHAND.has(a.name.text)
+          (a): a is JsxAttribute =>
+            isJsxAttribute(a) && isIdentifier(a.name) && isTransformShorthand(a.name.text, tag, this.manifest.intrinsicMembers)
         );
     if (!attribute && shorthand.length === 0) return [];
     if (!isComponent && !this.manifest.transformIntrinsics.includes(tag)) {
@@ -691,8 +692,20 @@ export class ElementLowering extends HookLowering {
         );
         continue;
       }
+      // One way to fade: `opacity` is a prop (`<Entity opacity={…}>`), not a transform field, though it is stored in the transform.
+      if (field === "opacity") {
+        this.report(
+          code,
+          isComponent
+            ? `\`opacity\` is not written in \`transform\`. To fade <${tag}>, wrap it: \`<${this.hostIntrinsic} opacity={…}><${tag} … /></${this.hostIntrinsic}>\`.`
+            : `\`opacity\` is a prop, not part of \`transform\`: write \`opacity={…}\` on the element.`,
+          property
+        );
+        continue;
+      }
       if (!(TRANSFORM_FIELDS as readonly string[]).includes(field)) {
-        this.report(code, `'${field}' is not a transform field (${TRANSFORM_FIELDS.join(", ")}).`, property);
+        const fields = TRANSFORM_FIELDS.filter((f) => f !== "opacity").join(", ");
+        this.report(code, `'${field}' is not a transform field (${fields}).`, property);
         continue;
       }
       if (out.some((p) => p.name === field)) {
@@ -748,7 +761,7 @@ export class ElementLowering extends HookLowering {
       seen.add(name);
       if (SPECIAL_ATTRIBUTES.has(name) || (name === "key" && listItem)) continue;
       // `x`, `y` and the rest of the shorthand are lowered with `transform` (`lowerTransform`).
-      if (!toComponent && TRANSFORM_SHORTHAND.has(name)) continue;
+      if (!toComponent && isTransformShorthand(name, tag, this.manifest.intrinsicMembers)) continue;
       // A built-in whose text is its children (`<Text>Score: {score}</Text>`) takes no `text` attribute: one way to write it.
       if (!toComponent && this.manifest.textContent[tag] === name) {
         this.report(

@@ -1262,7 +1262,7 @@ is why it is its own element and not a `<Shape>` kind (a `<Shape>` needs `width`
 thickness is centred: no native change. The draw pass takes the parent's turn and scale as the line's world transform less its
 own local one (layout offset, placement, transform), so the end is where the parent puts (`x2`, `y2`) whatever the line's own
 rotation and scale, and the thickness scales by the parent's (the square root of the two scales' product, for an uneven one).
-Opacity comes through `transform={{ opacity }}` as for any element. A line of no length, or no thickness, draws nothing.
+Opacity is the `opacity` prop, as on any element. A line of no length, or no thickness, draws nothing.
 
 ## Pointer
 
@@ -1787,7 +1787,7 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
   argument, so the hooks take a number (a point is two). The math functions take points in plain code.
 - **An initial value may read state declared above it** (`useMutable({ spring: startSpring(target) })` with `target` from state),
   as in React's first render: state fields are made in declaration order.
-- **`transform.opacity`** (0 to 1, default 1) is pushed on the draw list's alpha stack (`pushAlpha`, as a `<Flex opacity>` is) where
+- **`transform.opacity`** (0 to 1, default 1; written `opacity={…}` in JSX since 2026-11-16, see "Placing things") is pushed on the draw list's alpha stack (`pushAlpha`, as a `<Flex opacity>` is) where
   the walk enters the object and popped where it leaves, in the world walk and the HUD walk, so it multiplies down the tree and
   every record's colour alpha is scaled by it, in both backends (no ABI change). Records with an alpha in them are never copied to
   another frame: a faded object reports itself `WALK_OPAQUE`, takes no leaf fast path, and is kept out of the "it only moved" copy,
@@ -1942,9 +1942,16 @@ override render(): void {
 
 - **Shorthand.** `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` are props of every built-in in the manifest's
   `transformIntrinsics` (`TRANSFORM_SHORTHAND`, `lowerTransform`): they lower to the same transform writes as `transform={{ … }}`,
-  so nothing changes at run time and no member is reserved. `opacity` and `global` are not shorthand (`<Sprite>`, `<Flex>` and
-  `<Tilemap>` have an `opacity` prop of their own). A field written both ways is TSE1207, as is the shorthand on a built-in that
-  has no transform. The authoring types add `TransformShorthand` to those built-ins only.
+  so nothing changes at run time and no member is reserved. `global` is not shorthand. A field written both ways is TSE1207, as
+  is the shorthand on a built-in that has no transform. The authoring types add `TransformShorthand` to those built-ins only.
+- **Opacity: one way, a prop** (2026-11-16). `opacity={…}` is a prop on every element and `transform={{ opacity }}` is TSE1207
+  (the message names the prop, or for a component the `<Entity opacity>` to wrap it in; `TransformProps` omits it, so the editor
+  says so too). On a built-in whose manifest members have no `opacity` of its own (`isTransformShorthand`: `<Entity>`,
+  `<Shape>`, `<Line>`, `<Text>`, …) the prop is lowered like `x`, to the transform's opacity, which the draw pass already
+  pushes for the object and everything under it; `<Sprite>`, `<AnimatedSprite>`, `<Flex>`, `<Tilemap>` and `<Layer>` keep the
+  `opacity` prop they had, which fades the same way. A field on `Entity` was not used: every component extends `Entity`, so its
+  members are names no component's props or state may take, and `<Layer>` (an `Entity`) has an `opacity` that means something
+  else. Scenes (`.scene.json`) keep `opacity` in their `transform`: that is data, not JSX.
 - **Not on components.** The compiler compiles one file at a time and does not know whether an imported component declares an `x`,
   so on a component `x` is always its own prop, and placement is `transform`. One rule, with no case that depends on another file.
 - **`<Flex>` in world space** needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and

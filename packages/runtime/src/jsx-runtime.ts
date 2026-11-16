@@ -7,7 +7,8 @@
 import type { Transform } from "./Transform.ts";
 
 /** Position, rotation, scale and `global`, derived from the runtime's `Transform`. All optional. */
-export type TransformProps = Partial<Transform>;
+/** `transform={{ … }}`: the place, turn, scale and draw order. Not `opacity`, which is a prop of its own (`opacity={…}`). */
+export type TransformProps = Partial<Omit<Transform, "opacity">>;
 
 /**
  * The transform's place as props of their own, on every built-in that takes `transform`: `<Sprite image="coin.png" x={spot.x}
@@ -21,6 +22,15 @@ export interface TransformShorthand {
   rotation?: number;
   scaleX?: number;
   scaleY?: number;
+}
+
+/**
+ * `opacity={0.5}`: the element and everything inside it are drawn at that opacity, 0 to 1, and a faded parent multiplies it (a
+ * group at 0.5 holding a shape at 0.5 draws the shape at 0.25). On every built-in; `<Sprite>`, `<AnimatedSprite>`, `<Flex>`,
+ * `<Tilemap>` and `<Layer>` declare theirs in their own props.
+ */
+export interface OpacityShorthand {
+  opacity?: number;
 }
 
 /** What a JSX element may be inside another element: elements, and the `false`/`null` that `{cond && <X />}` and `{cond ? <X /> : null}` produce. */
