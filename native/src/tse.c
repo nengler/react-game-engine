@@ -23,11 +23,22 @@ static struct {
   RenderTexture2D upscaled; /* TSE_OPEN_SHARP: the canvas scaled up by a whole number, before the bilinear step down to the window */
   RenderTexture2D layers[TSE_LAYER_MAX]; /* TSE_OP_LAYER_BEGIN's targets, one per depth, kept between frames and remade at a new size */
   bool sharp;
+  bool highdpi;      /* opened with TSE_OPEN_HIGHDPI */
   uint32_t typed[TSE_TYPED_MAX]; /* what tse_frame collected for tse_typed */
   int32_t typed_count;
 } state;
 
 #define MAX_CANVAS 16384
+
+/* Framebuffer pixels per logical pixel of the window: 1, or the display's scale with TSE_OPEN_HIGHDPI (2 on a Retina screen). raylib
+ * then keeps the screen size in logical pixels and draws to the window through a matching scale; libtse does the same for its own
+ * off-screen layers over the window, and for scissors inside them, so everything the protocol says stays in logical pixels. */
+static float window_scale(void) {
+  if (!state.highdpi) return 1.0f;
+  int32_t screen = GetScreenWidth(), render = GetRenderWidth();
+  if (screen <= 0 || render <= 0) return 1.0f;
+  return (float)render / (float)screen;
+}
 
 /* A render target for 2D drawing: a colour texture and no depth. raylib 6.0's LoadRenderTexture fails on some drivers (Mesa 25.x's
  * llvmpipe and softpipe): its colour texture is uploaded with no pixels, which those drivers refuse (GL_INVALID_ENUM), and its depth
@@ -80,6 +91,7 @@ int32_t tse_open(int32_t width, int32_t height, const char *title, uint32_t opti
   if (options & TSE_OPEN_RESIZABLE) flags |= FLAG_WINDOW_RESIZABLE;
   if (options & TSE_OPEN_VSYNC) flags |= FLAG_VSYNC_HINT;
   if (options & TSE_OPEN_HIDDEN) flags |= FLAG_WINDOW_HIDDEN;
+  if (options & TSE_OPEN_HIGHDPI) flags |= FLAG_WINDOW_HIGHDPI;
   SetConfigFlags(flags);
   SetTraceLogLevel(LOG_WARNING);
 
@@ -97,6 +109,7 @@ int32_t tse_open(int32_t width, int32_t height, const char *title, uint32_t opti
   state.open = true;
   state.hidden = (options & TSE_OPEN_HIDDEN) != 0;
   state.sharp = (options & TSE_OPEN_SHARP) != 0;
+  state.highdpi = (options & TSE_OPEN_HIGHDPI) != 0;
   state.bad_frame_reported = false;
   return 0;
 }
@@ -168,6 +181,21 @@ static void push_transform(const double *r) {
   rlScalef((float)r[4], (float)r[5], 1.0f);
 }
 
+/* What a frame draws into: the canvas (when the frame starts with TSE_OP_CANVAS) or the window, and the layers opened on top of it.
+ * The view and the scissor are kept here too, because changing the target (BeginTextureMode, EndTextureMode) resets raylib's
+ * matrices and its scissor: they are put back after every change. */
+static struct {
+  RenderTexture2D *base; /* the canvas, or NULL for the window */
+  int32_t width, height; /* of the base in its own pixels (the window's framebuffer pixels): every layer is this size */
+  float scale;           /* the base's pixels per unit the records use: window_scale() for the window, 1 for the canvas */
+  int32_t depth;         /* layers open */
+  int32_t child_blend[TSE_LAYER_MAX + 1]; /* the blend of drawables at each depth; [0] is the base's, always normal */
+  bool view_pushed;
+  float view[16];
+  bool scissor_on;
+  int scissor[4];
+} target;
+
 /* Clip to a rectangle in target pixels, top-left origin. raylib's BeginScissorMode flips y for OpenGL, whose scissor
  * origin is bottom-left; its software renderer takes the rectangle top-left already, so there it goes through unflipped. */
 static void begin_scissor(int x, int y, int width, int height) {
@@ -176,6 +204,16 @@ static void begin_scissor(int x, int y, int width, int height) {
   rlEnableScissorTest();
   rlScissor(x, y, width, height);
 #else
+  if (target.depth > 0 && target.scale != 1.0f) {
+    /* A layer over a high-DPI window: raylib scales a scissor on the window, not on a texture. Here it is scaled to the layer's pixels
+     * and flipped to OpenGL's bottom-left origin by hand. */
+    float s = target.scale;
+    rlDrawRenderBatchActive();
+    rlEnableScissorTest();
+    rlScissor((int)lroundf((float)x * s), (int)lroundf((float)target.height - (float)(y + height) * s), (int)lroundf((float)width * s),
+              (int)lroundf((float)height * s));
+    return;
+  }
   BeginScissorMode(x, y, width, height);
 #endif
 }
@@ -294,19 +332,6 @@ static int32_t blend_of(double value) {
   return mode >= TSE_BLEND_NORMAL && mode <= TSE_BLEND_SCREEN ? mode : TSE_BLEND_NORMAL;
 }
 
-/* What a frame draws into: the canvas (when the frame starts with TSE_OP_CANVAS) or the window, and the layers opened on top of it.
- * The view and the scissor are kept here too, because changing the target (BeginTextureMode, EndTextureMode) resets raylib's
- * matrices and its scissor: they are put back after every change. */
-static struct {
-  RenderTexture2D *base; /* the canvas, or NULL for the window */
-  int32_t width, height; /* of the base: every layer is this size */
-  int32_t depth;         /* layers open */
-  int32_t child_blend[TSE_LAYER_MAX + 1]; /* the blend of drawables at each depth; [0] is the base's, always normal */
-  bool view_pushed;
-  float view[16];
-  bool scissor_on;
-  int scissor[4];
-} target;
 
 static void push_view(void) {
   rlPushMatrix();
@@ -315,8 +340,12 @@ static void push_view(void) {
 
 /* Draw into the target at the current depth: the innermost layer, or the base. */
 static void begin_current_target(void) {
-  if (target.depth > 0) BeginTextureMode(state.layers[target.depth - 1]);
-  else if (target.base != NULL) BeginTextureMode(*target.base);
+  if (target.depth > 0) {
+    BeginTextureMode(state.layers[target.depth - 1]);
+    /* raylib scales what is drawn to the window itself (its screenScale), but a texture starts unscaled: a layer is the size of the
+     * framebuffer, so draw into it through the same scale. */
+    if (target.scale != 1.0f) rlScalef(target.scale, target.scale, 1.0f);
+  } else if (target.base != NULL) BeginTextureMode(*target.base);
 }
 
 /* Leave the target at the current depth, keeping nothing of its view or scissor on raylib's side. */
@@ -375,15 +404,17 @@ static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float
   bool shaded = assets_shader(shader_handle, &shader);
   if (shaded) {
     BeginShaderMode(shader.shader);
-    float resolution[2] = { (float)target.width, (float)target.height };
+    float resolution[2] = { (float)target.width / target.scale, (float)target.height / target.scale }; /* in logical pixels */
     float p[8];
     for (int i = 0; i < 8; i++) p[i] = params != NULL && isfinite(params[i]) ? (float)params[i] : 0.0f;
     if (shader.resolution >= 0) SetShaderValue(shader.shader, shader.resolution, resolution, SHADER_UNIFORM_VEC2);
     if (shader.time >= 0) SetShaderValue(shader.shader, shader.time, &time, SHADER_UNIFORM_FLOAT);
     if (shader.params >= 0) SetShaderValueV(shader.shader, shader.params, p, SHADER_UNIFORM_FLOAT, 8);
   }
+  /* The destination is in the units drawing uses here, which the window's scale (or a parent layer's) takes to its pixels. */
   DrawTexturePro(layer->texture, (Rectangle){ 0.0f, 0.0f, (float)target.width, -(float)target.height },
-                 (Rectangle){ 0.0f, 0.0f, (float)target.width, (float)target.height }, (Vector2){ 0.0f, 0.0f }, 0.0f, unpack_color(tint));
+                 (Rectangle){ 0.0f, 0.0f, (float)target.width / target.scale, (float)target.height / target.scale }, (Vector2){ 0.0f, 0.0f },
+                 0.0f, unpack_color(tint));
   rlDrawRenderBatchActive();
   if (shaded) EndShaderMode();
   if (target.scissor_on) EndScissorMode();
@@ -638,6 +669,7 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
   target.base = &state.canvas;
   target.width = width;
   target.height = height;
+  target.scale = 1.0f;
   execute_records(r + TSE_OP_CANVAS_LEN, length - TSE_OP_CANVAS_LEN, text, text_offsets, text_count);
   EndTextureMode();
 
@@ -648,7 +680,8 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
   Texture2D shown = state.canvas.texture;
   /* Sharp scaling: at a scale between two whole numbers, first blow the canvas up by the whole number above it with nearest
    * filtering (so every texel is a crisp block), then let bilinear filtering take that down to the exact size. */
-  float scale = (float)(r[5] / (double)width);
+  /* The scale in framebuffer pixels: on a high-DPI window the dest rectangle (logical pixels) covers window_scale() times as many. */
+  float scale = (float)(r[5] / (double)width) * window_scale();
   if (state.sharp && scale > 1.0f && fabsf(scale - roundf(scale)) > 1e-3f) {
     int32_t k = (int32_t)ceilf(scale);
     int32_t uw = width * k, uh = height * k;
@@ -688,6 +721,7 @@ void tse_frame(uint32_t clear_color, const double *records, int32_t records_leng
     target.base = NULL;
     target.width = GetRenderWidth();
     target.height = GetRenderHeight();
+    target.scale = window_scale();
     if (has_records) execute_records(records, records_length, text, text_offsets, text_count);
   }
   if (state.hidden) capture_frame();

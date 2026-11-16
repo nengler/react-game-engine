@@ -63,7 +63,13 @@ describe("createPlayer", () => {
   });
 
   it("opens the window with the config it was given, and nothing else", () => {
-    const { backend, player: p } = player(() => new Entity(), { resizable: false, smooth: true, background: "navy", assets: "art" });
+    const { backend, player: p } = player(() => new Entity(), {
+      resizable: false,
+      smooth: true,
+      highDpi: false,
+      background: "navy",
+      assets: "art",
+    });
     p.close();
     assert.deepEqual(backend.config, {
       width: 800,
@@ -72,6 +78,7 @@ describe("createPlayer", () => {
       resizable: false,
       vsync: undefined,
       hidden: undefined,
+      highDpi: false,
       smooth: true,
       sharp: undefined,
     });
@@ -276,7 +283,17 @@ describe("createPlayer", () => {
       });
       assert.deepEqual(
         game.backend.config,
-        { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true, sharp: undefined },
+        {
+          width: 200,
+          height: 111,
+          title: "from game",
+          resizable: false,
+          vsync: false,
+          hidden: undefined,
+          highDpi: undefined,
+          smooth: true,
+          sharp: undefined,
+        },
         "width, title and smooth from <Game>; the rest from the player"
       );
       game.player.close();

@@ -36,7 +36,7 @@ These cannot be checked in a cloud container, and each has found bugs the tests 
   `tse dev`, `tse package` (both engines), the link lists in `host/build.rs` and the storage paths are written for it but
   unverified beyond what the release workflow's platform matrix runs (the builds, the C smoke test, the Node host on the software
   renderer and the demo's parity under tse-host, on macOS arm64 and x64 and on Windows x64; a `dry_run` dispatch runs it without
-  releasing). PR CI is Linux only. Play the demo in a real window there, file what breaks.
+  releasing). PR CI is Linux only. Play the demo in a real window there (on a Retina screen: shapes and text should be sharp, layers and clipped panels in place), file what breaks.
 - **Play in a real window**: the demo and Hearth under Node and packaged (V8 and `--engine quickjs`); Bramble packaged; rewind in
   `tse dev`. Kite and Bramble have been played under Node on a Linux desktop, with sound.
 - **A save across a real quit** under both hosts (each host was only tested against libtse separately).
@@ -57,7 +57,6 @@ Each row waits because nothing above depends on it or no game has asked for it y
 | --- | --- | --- |
 | Web backend (canvas) | Local first; draw records map straight onto canvas calls, so it stays cheap to add. Storage would add a `localStorage` implementation behind the player's `Storage` | Wanting a browser build to share, or runnable examples in the guide |
 | Windows | Link lists and Node packaging steps are written but unverified | Someone wanting to play there |
-| High DPI | Slots into the ABI without rework; everything is logical pixels | A blurry Retina window (likely on the Mac) |
 | One-file executable, a smaller V8 build, signing | A package as a folder works; `--engine node` ships all of Node, about 125 MB | Handing a build to someone else, or open-sourcing |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating |
 | QuickJS: a 10 ms target for 2,000 objects with colliders, bench budgets in CI | V8 is the main engine since 2026-11-10; QuickJS is the JIT-free fallback | Shipping to a platform that bans a JIT |

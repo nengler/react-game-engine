@@ -275,6 +275,58 @@ static void test_storage(void) {
   CHECK(system(cmd) == 0, "clean up");
 }
 
+/* TSE_OPEN_HIGHDPI: everything stays in logical pixels, and is drawn at the display's scale. On a display of scale 1 (most CI
+ * machines) the window is as without it; with TSE_SMOKE_DPI_SCALE=2 the display must have scale 2 (CI fakes one: Xvfb with
+ * Xft.dpi 192), and each logical pixel is checked as the 2 x 2 block it becomes, through a layer, a scissor inside it, and a canvas. */
+static uint8_t dpi_pixels[W * H * 4 * 4];
+static void test_highdpi(void) {
+  const char *wanted = getenv("TSE_SMOKE_DPI_SCALE");
+  int required = wanted != NULL && wanted[0] != '\0' ? atoi(wanted) : 0;
+  CHECK(tse_open(W, H, "tse high dpi", TSE_OPEN_HIDDEN | TSE_OPEN_HIGHDPI) == 0, "open with high DPI");
+  reset(); view(1, 0, 0, 1, 0, 0); 
+  memset(input, 0, sizeof(input));
+  tse_frame(CLEAR, rec, len, NULL, NULL, 0, input, keys);
+  CHECK(input[TSE_IN_WIDTH] == W && input[TSE_IN_HEIGHT] == H, "the window reports its logical size, %gx%g", input[TSE_IN_WIDTH], input[TSE_IN_HEIGHT]);
+  int32_t size = tse_read_pixels(NULL, 0);
+  int s = size == W * H * 4 * 4 ? 2 : size == W * H * 4 ? 1 : 0;
+  CHECK(s != 0, "a high-DPI frame is %d bytes: neither scale 1 nor 2", size);
+  if (required != 0) CHECK(s == required, "the display's scale is %d, TSE_SMOKE_DPI_SCALE wants %d", s, required);
+  if (s != 2) {
+    if (required == 0) printf("high-DPI checks at scale 2 skipped: this display's scale is 1 (set TSE_SMOKE_DPI_SCALE=2 on a 2x display)\n");
+    tse_close();
+    return;
+  }
+  int pw = W * s;
+#define DPI_AT(x, y) (&dpi_pixels[(((y) * s + s / 2) * pw + (x) * s + s / 2) * 4])
+#define DPI_EXPECT(x, y, rgba, what) do { const uint8_t *p_ = DPI_AT(x, y); \
+    CHECK(p_[0] == ((rgba) >> 24 & 255) && p_[1] == ((rgba) >> 16 & 255) && p_[2] == ((rgba) >> 8 & 255), \
+          "%s: logical pixel (%d,%d) is %02x%02x%02x", what, x, y, p_[0], p_[1], p_[2]); } while (0)
+  /* A rect in the window, and one in a layer clipped by a scissor inside the layer: both at their logical place. */
+  reset(); view(1, 0, 0, 1, 0, 0);
+  layer_begin(0x00000000u, TSE_BLEND_NORMAL); scissor(0, 0, 25, H); rect(10, 10, 0, 1, 1, 20, 10, C_RED); scissor_end(); layer_end(TSE_BLEND_NORMAL, WHITE_RGBA);
+  rect(50, 40, 0, 1, 1, 10, 5, C_GREEN);
+  tse_frame(CLEAR, rec, len, NULL, NULL, 0, input, keys);
+  CHECK(tse_read_pixels(dpi_pixels, sizeof(dpi_pixels)) == size, "read the high-DPI frame");
+  DPI_EXPECT(10, 10, C_RED, "a layer's rect, top-left");
+  DPI_EXPECT(24, 19, C_RED, "a layer's rect, up to the scissor");
+  DPI_EXPECT(25, 12, CLEAR, "the scissor in a layer cuts at its logical edge");
+  DPI_EXPECT(9, 12, CLEAR, "left of the layer's rect");
+  DPI_EXPECT(15, 20, CLEAR, "below the layer's rect");
+  DPI_EXPECT(50, 40, C_GREEN, "a rect in the window");
+  DPI_EXPECT(59, 44, C_GREEN, "a rect in the window, bottom-right");
+  DPI_EXPECT(49, 42, CLEAR, "left of the window's rect");
+  /* A canvas fills its logical dest rectangle. */
+  reset(); canvas(16, 12, 0, 0, 32, 24, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED);
+  tse_frame(CLEAR, rec, len, NULL, NULL, 0, input, keys);
+  tse_read_pixels(dpi_pixels, sizeof(dpi_pixels));
+  DPI_EXPECT(8, 4, C_RED, "a canvas texel at 2 times, in logical pixels");
+  DPI_EXPECT(15, 11, C_RED, "the same texel's far corner");
+  DPI_EXPECT(40, 30, C_GREEN, "the border outside the canvas");
+#undef DPI_EXPECT
+#undef DPI_AT
+  tse_close();
+}
+
 int main(void) {
   test_overlaps(); /* needs no window */
   CHECK(tse_abi_version() == TSE_ABI_VERSION, "abi version");
@@ -709,6 +761,7 @@ int main(void) {
   tse_frame(CLEAR, rec, 0, NULL, NULL, 0, input, keys); /* a frame with no window is harmless */
   remove("tse_smoke_red.png");
 
+  test_highdpi();
   printf("%d checks, %d failures\n", checks, failures);
   test_storage();
   return failures == 0 ? 0 : 1;

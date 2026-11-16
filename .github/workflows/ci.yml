@@ -186,7 +186,7 @@ jobs:
       - name: Install X11, GL and a virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+          sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb x11-xserver-utils
       - name: Note the compiler versions (they key the build cache)
         id: toolchain
         run: echo "id=$(echo "$GITHUB_WORKSPACE $(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
@@ -210,6 +210,12 @@ jobs:
         run: npm run native:build
       - name: C smoke test
         run: xvfb-run -a ctest --test-dir native/build --output-on-failure
+      # TSE_OPEN_HIGHDPI at scale 2, on a virtual display that says it has 192 dpi. -noreset keeps that setting after xrdb disconnects
+      # (Xvfb otherwise resets when its last client leaves), and TSE_SMOKE_DPI_SCALE makes the test fail if the scale is not 2.
+      - name: C smoke test on a 2x display
+        run: |
+          cd native/build
+          xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" sh -c 'echo "Xft.dpi: 192" | xrdb -nocpp -merge && TSE_SMOKE_DPI_SCALE=2 ./tse_smoke'
       # One test file at a time: they all open windows on the same virtual display, and one run saw
       # GLFW fail once to connect to it ("X11: Failed to open display") while two files were opening windows.
       - name: Node host against the real library
