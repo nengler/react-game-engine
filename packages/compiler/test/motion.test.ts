@@ -20,7 +20,7 @@ export function Panel() {
   useInput((input) => {
     if (input.pressed("Space")) s.open = !s.open;
   });
-  return <Entity transform={{ x, y, opacity }} />;
+  return <Entity x={x} y={y} opacity={opacity} />;
 }`;
 
 const SPACE = { pressed: (k: string) => k === "Space", down: () => false, released: () => false } as unknown as InputState;
@@ -132,7 +132,7 @@ export function FadeIn({ children }: FadeProps) {
     s.shown = true;
   });
   const opacity = useTween(s.shown ? 1 : 0);
-  return <Entity transform={{ opacity }}>{children}</Entity>;
+  return <Entity opacity={opacity}>{children}</Entity>;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
   });

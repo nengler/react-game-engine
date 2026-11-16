@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Flex, Hud, Shape, Sprite, Text, getSoundSink, type FlexProps, type GameObject } from "@tsengine/runtime";
+import { Entity, Flex, Hud, Line, Shape, Sprite, Text, getSoundSink, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
@@ -226,7 +226,7 @@ describe("<Flex opacity> with a transition, in the loop", () => {
   });
 });
 
-describe("transform={{ opacity }}", () => {
+describe("opacity={…} on any element (stored as the transform's opacity)", () => {
   const faded = <T extends GameObject>(object: T, opacity: number): T => {
     object.transform.opacity = opacity;
     return object;
@@ -247,6 +247,17 @@ describe("transform={{ opacity }}", () => {
     root.addChild(faded(shape("white"), 0.5));
     root.addChild(flex({ opacity: 0.5 }, faded(shape("#00ff00"), 0.5)));
     assert.deepEqual(colors(draw(root)), ["#ffffff80", "#00ff0040"]);
+  });
+
+  it("fades a <Line>, and a group at 0 draws nothing inside it", () => {
+    const root = new Entity();
+    root.addChild(faded(new Line({ x2: 10, y2: 0, color: "#00ff00" }), 0.5));
+    const hidden = faded(new Entity(), 0);
+    hidden.addChild(shape("white"));
+    hidden.addChild(new Line({ x2: 5, y2: 5 }));
+    root.addChild(hidden);
+    root.addChild(shape("blue"));
+    assert.deepEqual(colors(draw(root)), ["#00ff0080", "#0000ffff"]);
   });
 
   it("fades what is in a <Hud>", () => {

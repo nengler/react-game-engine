@@ -130,7 +130,7 @@ export function Lamp() {
   }, []);
   const glow = useMemo(() => (lit ? 1 : 0.2), [lit]);
   return (
-    <Entity transform={{ opacity: glow }}>
+    <Entity opacity={glow}>
       <Text text="lamp" />
     </Entity>
   );
