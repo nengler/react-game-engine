@@ -1,5 +1,6 @@
 /* Smoke test for libtse: opens a hidden window, draws records, and checks pixels. Runs on the
  * software renderer (TSE_PLATFORM=Memory) in CI, and on the real OpenGL path on a desktop. */
+#define _USE_MATH_DEFINES /* M_PI on MSVC */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
