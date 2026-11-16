@@ -4,7 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+/* The POSIX calls the storage test uses, from the C runtime MSVC has. */
+#include <direct.h>
+#include <io.h>
+#define F_OK 0
+#define access _access
+#define realpath(path, out) _fullpath((out), (path), 4096)
+static int setenv(const char *name, const char *value, int overwrite) { (void)overwrite; return _putenv_s(name, value); }
+static int unsetenv(const char *name) { return _putenv_s(name, ""); }
+static char *mkdtemp(char *pattern) { return _mktemp_s(pattern, strlen(pattern) + 1) == 0 && _mkdir(pattern) == 0 ? pattern : NULL; }
+#else
 #include <unistd.h>
+#endif
 #include "raylib.h"
 #include "tse.h"
 #include "internal.h"
@@ -238,19 +250,27 @@ static void test_storage(void) {
   CHECK(tse_storage_write(longname, (const uint8_t *)"x", 1) != 0, "a name over 64 characters is refused");
   CHECK(tse_storage_remove("save") == 0 && tse_storage_read("save", out, sizeof(out)) == -1, "remove");
   CHECK(tse_storage_remove("save") == 0, "removing what is not there is fine");
-  /* No TSE_DATA_DIR: the folder is under XDG_DATA_HOME, named by the game id. */
+  /* No TSE_DATA_DIR: the folder is under XDG_DATA_HOME (APPDATA on Windows), named by the game id. */
   unsetenv("TSE_DATA_DIR");
   char absolute[4096];
   CHECK(realpath(folder, absolute) != NULL, "the folder's absolute path (XDG_DATA_HOME must be absolute)");
   char xdg[4200];
   snprintf(xdg, sizeof(xdg), "%s/xdg", absolute);
+#ifdef _WIN32
+  setenv("APPDATA", xdg, 1);
+#else
   setenv("XDG_DATA_HOME", xdg, 1);
+#endif
   CHECK(tse_storage_open("mygame") == 0 && tse_storage_write("a", (const uint8_t *)"1", 1) == 0, "XDG_DATA_HOME/<game_id>");
   snprintf(path, sizeof(path), "%s/mygame/a.dat", xdg);
   CHECK(access(path, F_OK) == 0, "the entry is in XDG_DATA_HOME/mygame");
   /* Clean up what the test made. */
   char cmd[900];
+#ifdef _WIN32
+  snprintf(cmd, sizeof(cmd), "rmdir /s /q %s", folder);
+#else
   snprintf(cmd, sizeof(cmd), "rm -rf %s", folder);
+#endif
   CHECK(system(cmd) == 0, "clean up");
 }
 
