@@ -40,6 +40,9 @@ static int make_dir(const char *path) {
   int r = mkdir(path, 0777);
 #endif
   if (r == 0 || errno == EEXIST) return 0;
+  /* Some prefixes cannot be made but are there all the same (a drive, a network share's root): fine if it is a folder. */
+  struct stat st;
+  if (stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR) return 0;
   return -1;
 }
 
@@ -49,7 +52,12 @@ static int make_dirs(const char *path) {
   size_t n = strlen(path);
   if (n == 0 || n >= sizeof(buf)) return -1;
   memcpy(buf, path, n + 1);
-  for (size_t i = 1; i < n; i++) {
+  size_t start = 1;
+#ifdef _WIN32
+  /* "C:\..." or "C:/...": the drive is there; start making folders after it. */
+  if (n >= 3 && buf[1] == ':' && (buf[2] == '\\' || buf[2] == '/')) start = 3;
+#endif
+  for (size_t i = start; i < n; i++) {
     if (buf[i] == '/' || buf[i] == '\\') {
       char saved = buf[i];
       buf[i] = 0;
@@ -66,18 +74,33 @@ static int entry_path(char *out, size_t size, const char *name, const char *ext)
   return (n > 0 && (size_t)n < size) ? 0 : -1;
 }
 
+/* An environment variable as the process has it now. On Windows the C runtime's getenv reads a copy made at startup, so a
+ * variable the host sets later (Node's process.env) would not be seen; the process's own block is read instead. */
+static const char *env(const char *name) {
+#ifdef _WIN32
+  static char values[4][DIR_MAX];
+  static int next = 0;
+  char *out = values[next];
+  next = (next + 1) % 4;
+  DWORD n = GetEnvironmentVariableA(name, out, DIR_MAX);
+  return (n > 0 && n < DIR_MAX) ? out : NULL;
+#else
+  return getenv(name);
+#endif
+}
+
 int32_t tse_storage_open(const char *game_id) {
   opened = 0;
   if (!valid_name(game_id)) return 1;
-  const char *override = getenv("TSE_DATA_DIR");
+  const char *override = env("TSE_DATA_DIR");
   int n;
   if (override != NULL && override[0] != 0) {
     n = snprintf(dir, sizeof(dir), "%s", override);
   } else {
-    const char *xdg = getenv("XDG_DATA_HOME");
-    const char *home = getenv("HOME");
+    const char *xdg = env("XDG_DATA_HOME");
+    const char *home = env("HOME");
 #ifdef _WIN32
-    const char *appdata = getenv("APPDATA");
+    const char *appdata = env("APPDATA");
     if (appdata != NULL && appdata[0] != 0) n = snprintf(dir, sizeof(dir), "%s/%s", appdata, game_id);
     else return 2;
 #else
