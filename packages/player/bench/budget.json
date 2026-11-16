@@ -6,6 +6,7 @@
     "5000 moving rects": 3,
     "2000 rects moved by state": 3,
     "2000 rects by state with colliders": 3,
+    "2000 rects by state, interpolated": 4,
     "2000 still rects": 3,
     "2000 rects, 20 moving, colliders": 3,
     "2000 still rects with colliders": 3,

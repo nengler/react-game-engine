@@ -49,6 +49,15 @@ export class FixedDriver {
     this.#update = new Uint8Array(keys);
   }
 
+  /**
+   * How far the time left over after the last `advance` is into the next step, 0 to just under 1: where a frame drawn now falls between
+   * the last step and the next one.
+   */
+  get alpha(): number {
+    const alpha = this.#accumulator / this.dt;
+    return alpha > 0 ? (alpha < 1 ? alpha : 1) : 0;
+  }
+
   /** The driver's state as plain data (a saved rewind moment), and back. */
   toJSON(): { readonly hz: number; readonly accumulator: number; readonly edges: readonly number[]; readonly carried: readonly number[] } {
     return { hz: 1 / this.dt, accumulator: this.#accumulator, edges: [...this.#edges], carried: [...this.#carried] };

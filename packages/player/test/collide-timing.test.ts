@@ -68,6 +68,8 @@ function play(
   const mover = new Mover(log, speed);
   const player = createPlayer(backend, {
     fixedStep: 60,
+    // The frames here are about which step a contact is drawn in, so each draws its latest step, not one blended with the step before.
+    interpolate: false,
     retain: "check",
     ...config,
     root: () => {
