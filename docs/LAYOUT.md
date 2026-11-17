@@ -98,8 +98,18 @@ One prop per axis, as in CSS and Clay. The compiler checks a literal through the
 - **Overflow is visible** unless `overflow` says otherwise.
 - **Positions are whole pixels.** Each child's offset is rounded from the exact running position (so a row of odd widths does not
   drift); sizes are not rounded. Parents' offsets are whole, so centred text is never blurry.
-- **Layout runs every frame, before drawing.** A handler reading `worldTransform()`, and a press, use where things were drawn
-  last frame, as Clay's hover test does.
+- **Layout runs before drawing, on every frame where it could have changed.** A handler reading `worldTransform()`, and a press,
+  use where things were drawn last frame, as Clay's hover test does.
+- **A layout that cannot have changed is kept** (2026-11-17). A layout is a function of what is under its root (a `Flex` whose
+  parent is not one), the box the root is given (the game's area) and the game's font. Everything under the root that changes
+  says so with a stamp: a render that wrote something, a move, a child added or removed, `markChanged()` (DESIGN.md, "Reusing
+  draw records"). So a root with no stamp since the build that laid it out, given the same box and font, is left as it is: a HUD
+  that stands still costs its walk and no layout (a still panel of 100 rows went from 0.25 to 0.09 ms a frame in the bench). Two
+  kinds of tree cannot promise that, and are laid out every frame as before: one with an `overflow="scroll"` box in it (the
+  wheel, a scroll bar and the focus move its children without a stamp), and one with a hand-written class that overrides
+  `onInput` or `onUpdate` in it or above it (its hook may write to itself and to anything under it, and report nothing: the
+  rule draw records follow). The first frame that could keep a layout looks through the tree for those, once. `retain: false` keeps nothing; `retain: "check"` lays every kept root out after all and
+  throws when that moves or resizes anything (`FrameBuilder.keptLayouts` counts them, for tests).
 
 ## How each child is measured
 

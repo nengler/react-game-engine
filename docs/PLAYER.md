@@ -374,6 +374,14 @@ Script time only, on the recording backend:
   transform, plain leaves are written in their parent's loop, and a still tilemap's records are copied in one `set`. See DESIGN.md,
   "Reusing draw records". Every reuse path is checked by `retain: "check"`, which builds each frame from nothing beside it and
   compares.
+- **Layouts are kept** (2026-11-17) for a `<Flex>` root nothing has changed under, by the stamps draw records are reused by (see
+  LAYOUT.md, "A layout that cannot have changed is kept"). Laying out the HUD every frame was the largest single cost of the
+  engine in two games' profiles: 10 % of a step of a tower defence on a 20 × 9 board, 12 % of Hearth's. `retain: "check"` lays
+  each kept root out after all and compares.
+- **Hover asks siblings together** (2026-11-17). The topmost pressable under the mouse is found every frame, and each one asked
+  walked up the tree to find where it is: 14 % of a step with a press target on each of 180 tiles. A run of pressables with one
+  parent now shares the parent's place (`Pressable.containsIn`). With both, that game's step went from 0.245 to 0.164 ms; the
+  bench has a scene for each ("a HUD of 100 rows, still", "900 press targets in a grid").
 - **Mounting** appends without scanning siblings when the child sorts last; it was quadratic before.
 - **A transform's numbers start as doubles** (2026-11-16). V8 picks a field's representation from its first value: a `Transform`
   whose `x` started at 0 (a small integer) and later held a fraction changed shape, and the walk that composes thousands of them kept

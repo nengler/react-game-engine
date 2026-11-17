@@ -941,6 +941,8 @@ const KINDS = new Map<Function, number>();
 const FLAG_VOLATILE = 32;
 /** Nothing below this object is reused either: what it does to its children is not reported (layout), or it may change itself at any time (a hook of a hand-written class). */
 const FLAG_OPAQUE = 64;
+/** A hand-written class with a per-tick hook, which may change anything about itself without reporting it: a layout with one in it is worked out every frame. */
+const FLAG_HOOKED = 128;
 /** The bits of a kind code that say what kind of object it is (`KIND_*`); the flags are above them. */
 const KIND_MASK = 31;
 
@@ -1013,13 +1015,57 @@ function classCode(object: GameObject): number {
       builtIn = Object.getPrototypeOf(builtIn) as typeof builtIn;
     const base = builtIn ?? GameObjectPrototype;
     const hooked = object.onInput !== base.onInput || object.onUpdate !== base.onUpdate;
-    if (hooked && !ownProperty("intrinsic") && !ownProperty("managed")) code |= FLAG_VOLATILE | FLAG_OPAQUE;
+    if (hooked && !ownProperty("intrinsic") && !ownProperty("managed")) code |= FLAG_VOLATILE | FLAG_OPAQUE | FLAG_HOOKED;
     KINDS.set(object.constructor, code);
   }
   return code;
 }
 
 const GameObjectPrototype = GameObject.prototype;
+
+/**
+ * What the builder notes on the box of a layout root it has laid out (`FlexBox.laidOut`): which pass did, in what, and whether the
+ * result holds until something under the root reports a change. See `FrameBuilder`'s `#flex`.
+ */
+interface LaidOut {
+  /** The builder's token for the frames it can reuse from: a note from another builder, or from before a new root, counts for nothing. */
+  owner: object;
+  /** The world's serial at the build that laid it out: a change stamped with it or later came after. */
+  at: number;
+  /** The box it was laid out in, and the game's font then (what a `<Text>` without its own is measured in). */
+  width: number;
+  height: number;
+  font: string | undefined;
+  /** `LAYOUT_UNSEEN` until a frame first wants to keep the layout and looks (`keepsLayout`), then `LAYOUT_KEPT` or `LAYOUT_REDONE`. */
+  keeps: number;
+}
+const LAYOUT_UNSEEN = 0;
+const LAYOUT_KEPT = 1;
+const LAYOUT_REDONE = 2;
+
+/**
+ * Whether a layout of this subtree holds for as long as nothing in it reports a change (`GameObject.markChanged`, `markMoved`, a
+ * render, a structural change): false with a box that scrolls in it (the wheel, a scroll bar and the focus move its children
+ * without a stamp), or a hand-written class with a per-tick hook (which may write its own size or place from the hook).
+ */
+function keepsLayout(object: GameObject): boolean {
+  const code = kindCode(object);
+  if ((code & FLAG_HOOKED) !== 0) return false;
+  if ((code & KIND_MASK) === KIND_FLEX && (object as Flex).overflow === "scroll") return false;
+  const children = object.children;
+  for (let i = 0; i < children.length; i++) if (!keepsLayout(children[i] as GameObject)) return false;
+  return true;
+}
+
+/**
+ * Whether `object` is under a hand-written class with a per-tick hook. Such a hook may write to anything below it and report
+ * nothing (a scene class that sets its HUD's texts each update), which is why no draw record under one is reused, and why no
+ * layout under one is kept. Asked every frame, as an object can be moved under one without a stamp of its own.
+ */
+function underHooked(object: GameObject): boolean {
+  for (let up = object.parent; up !== null; up = up.parent) if ((kindCode(up) & FLAG_HOOKED) !== 0) return true;
+  return false;
+}
 
 /** `object.worldTransform()` for an object whose parent's child space is `parentSpace`: what the walk works out on its way down. */
 function worldIn(parentSpace: WorldTransform, object: GameObject): WorldTransform {
@@ -1223,6 +1269,9 @@ export class FrameBuilder {
   #prevColliders: ColliderEntry[] = [];
   #reused = 0;
   #moved = 0;
+  /** The world's serial for the build under way (0 when nothing is reused), and how many layout roots it left as they were. */
+  #serial = 0;
+  #keptLayouts = 0;
 
   /** How many doubles of the last frame's world records were copied from the frame before instead of made again (for tests and benchmarks). */
   get reusedRecords(): number {
@@ -1232,6 +1281,11 @@ export class FrameBuilder {
   /** How many doubles of the last frame's world records were the frame before's with a new transform written in: what an object that only moved had drawn (for tests and benchmarks). */
   get movedRecords(): number {
     return this.#moved;
+  }
+
+  /** How many layout roots (a `<Flex>` whose parent is not one) the last build left as the frame before laid them out, nothing under them having changed (for tests and benchmarks). */
+  get keptLayouts(): number {
+    return this.#keptLayouts;
   }
 
   /** The bitmap font of a `<Text>` without its own: the root `<Game>`'s `font`, set again on a reload. */
@@ -1320,6 +1374,8 @@ export class FrameBuilder {
     this.#reused = 0;
     const token = this.#token;
     const serial = world !== null && reuse ? ++world.serial : 0;
+    this.#serial = serial;
+    this.#keptLayouts = 0;
     const lastSerial = serial - 1;
     const prevTree = this.#prevTree;
     const prevTexts = this.#prevTexts;
@@ -2042,6 +2098,32 @@ export class FrameBuilder {
     return built;
   }
 
+  /**
+   * `retain: "check"`, for a layout that was kept: lay it out after all, and throw if that moves or resizes anything under the root.
+   * Stricter than comparing the frames, which only shows a stale layout of something that draws (a `<Pointer>` draws nothing).
+   */
+  #checkLayout(root: Flex, availableWidth: number, availableHeight: number): void {
+    const read = (): number[] => {
+      const out: number[] = [];
+      const visit = (object: GameObject): void => {
+        out.push(object.layoutX, object.layoutY);
+        if (object instanceof Flex) out.push(object.box.size[0] as number, object.box.size[1] as number);
+        for (const child of object.children) visit(child);
+      };
+      visit(root);
+      return out;
+    };
+    const kept = read();
+    const note = root.box.laidOut;
+    this.#layouter.layout(root, availableWidth, availableHeight);
+    root.box.laidOut = note; // laying it out took the note off; if this was the layout over again, it still holds
+    const fresh = read();
+    if (kept.length !== fresh.length || kept.some((value, i) => !Object.is(value, fresh[i])))
+      throw new Error(
+        `A kept layout differs from a fresh one (under a ${root.constructor.name}): something changed an object without reporting it (see GameObject.markChanged).`
+      );
+  }
+
   /** `retain: "check"`: build the frame again without reusing anything, and throw if it is not the frame just built. */
   #check(root: GameObject, width: number, height: number, built: BuiltFrame): void {
     this.#reference ??= new FrameBuilder({ ...this.#options, retain: false, warn: () => {} });
@@ -2148,7 +2230,52 @@ export class FrameBuilder {
     let parent = flex.parent;
     while (parent !== null && parent.layoutContents) parent = parent.parent;
     if (!(parent instanceof Flex)) {
-      this.#layouter.layout(flex, availableWidth, availableHeight);
+      // A layout is a function of what is under the root, the box it is given and the game's font. Everything under the root that
+      // changes says so with a stamp (the same stamps draw records are reused by), so a root with no stamp since the build that laid
+      // it out is still laid out right, and a HUD that stands still costs no layout. Not every tree can promise that: `keepsLayout`
+      // and `underHooked`.
+      const serial = this.#serial;
+      const note = flex.box.laidOut as LaidOut | null;
+      if (
+        serial !== 0 &&
+        note !== null &&
+        note.owner === this.#token &&
+        flex.subtreeChangedAt < note.at &&
+        note.width === availableWidth &&
+        note.height === availableHeight &&
+        note.font === this.font &&
+        (note.keeps === LAYOUT_KEPT ||
+          (note.keeps === LAYOUT_UNSEEN && (note.keeps = keepsLayout(flex) ? LAYOUT_KEPT : LAYOUT_REDONE) === LAYOUT_KEPT)) &&
+        !underHooked(flex)
+      ) {
+        this.#keptLayouts++;
+        if (this.#options.retain === "check") this.#checkLayout(flex, availableWidth, availableHeight);
+      } else {
+        this.#layouter.layout(flex, availableWidth, availableHeight); // which takes the note off every box it places, this one too
+        if (serial === 0) {
+          // A builder that reuses nothing (`retain: false`, or the one `retain: "check"` compares with) writes no note of its own. One
+          // another builder left is put back if this pass laid the root out in the same box and font, as that builder would have.
+          if (note !== null && note.width === availableWidth && note.height === availableHeight && note.font === this.font)
+            flex.box.laidOut = note;
+        } else if (note === null)
+          flex.box.laidOut = {
+            owner: this.#token,
+            at: serial,
+            width: availableWidth,
+            height: availableHeight,
+            font: this.font,
+            keeps: LAYOUT_UNSEEN,
+          } satisfies LaidOut;
+        else {
+          note.owner = this.#token;
+          note.at = serial;
+          note.width = availableWidth;
+          note.height = availableHeight;
+          note.font = this.font;
+          note.keeps = LAYOUT_UNSEEN;
+          flex.box.laidOut = note;
+        }
+      }
       // The world was worked out before layout; a floating root's own offset is only known now.
       if (flex.float) world = placed = flex.worldTransform();
     }

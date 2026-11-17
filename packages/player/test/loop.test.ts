@@ -609,6 +609,55 @@ describe("pointer hover", () => {
   });
 });
 
+describe("pointer hover over grids", () => {
+  it("finds the tile under the mouse in each of several grids, wherever its grid has been moved, turned or scaled", () => {
+    const entered: string[] = [];
+    const root = (): GameObject => {
+      const scene = new Entity();
+      const grid = (name: string, place: (g: Entity) => void): void => {
+        const g = new Entity();
+        place(g);
+        for (let row = 0; row < 3; row++)
+          for (let col = 0; col < 3; col++) {
+            const tile = new Pointer({ width: 10, height: 10, onPointerEnter: () => entered.push(`${name} ${col},${row}`) });
+            tile.transform.x = col * 10;
+            tile.transform.y = row * 10;
+            g.addChild(tile);
+          }
+        scene.addChild(g);
+      };
+      grid("plain", () => {});
+      grid("moved", (g) => (g.transform.x = 100));
+      grid("scaled", (g) => {
+        g.transform.y = 100;
+        g.transform.scaleX = 2;
+        g.transform.scaleY = 2;
+      });
+      // A quarter turn clockwise about (200, 100): the grid's +x runs down the screen and its +y to the left.
+      grid("turned", (g) => {
+        g.transform.x = 200;
+        g.transform.y = 100;
+        g.transform.rotation = Math.PI / 2;
+      });
+      return scene;
+    };
+    const backend = new RecordingBackend();
+    for (const mouse of [
+      { x: 500, y: 500 }, // draws the pointers, the mouse over none
+      { x: 15, y: 25 }, // plain: column 1, row 2
+      { x: 125, y: 5 }, // moved: column 2, row 0
+      { x: 50, y: 130 }, // scaled: 20 pixels a tile, so column 2, row 1
+      { x: 195, y: 125 }, // turned: 25 down is column 2, 5 to the left is row 0
+      { x: 500, y: 500 },
+    ])
+      backend.queueInput({ mouse });
+    const { player: p } = player(root, {}, backend);
+    for (let i = 0; i < 6; i++) p.step();
+    p.close();
+    assert.deepEqual(entered, ["plain 1,2", "moved 2,0", "scaled 2,1", "turned 2,0"]);
+  });
+});
+
 describe("<Game font>", () => {
   it("is the font of a <Text> without its own; a <Text font> still wins; without it, text uses the built-in font", () => {
     const scene = (font: string | undefined) => (): GameObject => {

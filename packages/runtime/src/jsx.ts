@@ -53,8 +53,6 @@ import type { Context } from "./context.ts";
 
 // -- state -----------------------------------------------------------
 
-export type Setter<T> = (value: T | ((previous: T) => T)) => void;
-
 function compileTimeOnly(name: string): never {
   throw new Error(`${name} is a compile-time declaration: components are compiled by @tsengine/compiler, not executed.`);
 }
