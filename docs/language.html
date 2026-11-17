@@ -134,7 +134,7 @@ mark { background: var(--accent-soft); color: inherit; }
   <ol>
     <li>Hooks: <code>useMutable</code>, <code>useSound</code>, <code>useGame(...)</code>, and the handler hooks.</li>
     <li>Derived values: <code>const hurt = health &lt; 25;</code>, and destructured ones, <code>const { x, y } = heroOf(run);</code> or <code>const [a, , c] = trio;</code> (plain names: no defaults, rests or nesting). One that calls a function or a method is worked out once and again only when the state or props it reads change, as with <code>useMemo</code>; one that only combines values is written where it is used.</li>
-    <li id="render-scope">What a render does: it compares each state field, prop and game-state value the component's elements read with what it was at the last render (<code>===</code>), and works out and writes only the values of the elements that read one that changed. An enemy that moves every step rewrites its position, not its sprite's tint or its health bar's props. So there is no <code>useMemo</code>, <code>useCallback</code> or <code>React.memo</code> to write: the compiler sees what each value reads. A value changes when it is a different value: change state and props by making new objects (<code>setItems([...items, item])</code>), never by changing one in place, as in React. What is under a condition or in a list is worked out on every render, and so is a value that calls one of the component's own functions or a callback prop, whose reads the compiler does not follow.</li>
+    <li id="render-scope">What a render does: it compares each state field, prop and game-state value the component's elements read with what it was at the last render (<code>===</code>), and works out and writes only the values of the elements that read one that changed. An enemy that moves every step rewrites its position, not its sprite's tint or its health bar's props. So there is no <code>useMemo</code>, <code>useCallback</code> or <code>React.memo</code> to write: the compiler sees what each value reads. A value changes when it is a different value. A <code>useMutable</code> field changed in place (<code>s.items.push(item)</code>) is written for you as a new value (see <a href="#hook-usemutable"><code>useMutable</code></a>); a prop's object or the game state is changed by making a new one, never in place, as in React. What is under a condition or in a list is worked out on every render, and so is a value that calls one of the component's own functions or a callback prop, whose reads the compiler does not follow.</li>
     <li>One <code>return</code> of JSX, a condition of it (<code>on ? &lt;Spark /&gt; : null</code>, <code>open &amp;&amp; &lt;Menu /&gt;</code>) or <code>null</code>.</li>
   </ol>
   <p>An arrow with an expression body returns that expression: <code>const Dot = () =&gt; &lt;Sprite image="dot.png" /&gt;</code>.</p>
@@ -181,8 +181,8 @@ for (const item of items) {
 }
 return <Panel title={`Bag (${total})`}>{rows.map((row) => <Label key={row.id}>{row.label}</Label>)}</Panel>;
 </script></pre>
-      They run during render, so they cannot set state, play a sound, call an action, read a ref or <code>return</code> early.</li>
-      <li>Functions, declared as React code declares its handlers: <code>const add = (n: number) =&gt; { setPoints((p) =&gt; p + n); };</code>. Such a function is one of the component's handlers: call it in a handler or a callback (<code>useUpdate(() =&gt; add(1))</code>), pass it to an element (<code>onPress={press}</code>), to a child or to a hook. It is not called while rendering, since it may set state.</li>
+      They run during render, so they cannot write state, play a sound, call an action or <code>return</code> early.</li>
+      <li>Functions, declared as React code declares its handlers: <code>const add = (n: number) =&gt; { s.points += n; };</code>. Such a function is one of the component's handlers: call it in a handler or a callback (<code>useUpdate(() =&gt; add(1))</code>), pass it to an element (<code>onPress={press}</code>), to a child or to a hook. It is not called while rendering, since it may write state.</li>
     </ul></div>
     <div class="no"><h5>Not allowed</h5><ul>
       <li>Anywhere: <code>var</code>, <code>await</code>, <code>this</code></li>
@@ -282,7 +282,7 @@ useUpdate((dt) => {
 
   <h3 id="hook-useupdate"><code>useUpdate</code></h3>
   <p><code>dt</code> is the time in <strong>seconds</strong> (frame time clamped to between 0 and 0.1, or the fixed step under <code>fixedStep</code>). Multiply speeds by it. A second argument is the same <code>input</code> that <code>useInput</code> gets: <code>useUpdate((dt, input) =&gt; step(input, dt))</code>.</p>
-  <div class="callout"><p><strong><code>useInput</code> or <code>useUpdate</code>?</strong> Something that happens <em>once, on a press</em> (open the menu, pause, fire) goes in <code>useInput</code>. Something that happens <em>over time</em> (move while a key is held, step the rules) goes in <code>useUpdate((dt, input) =&gt; …)</code>, which reads the keys itself. Both get the same input in the same step, so do not copy keys into a <code>useRef</code> to carry them from one hook to the other.</p></div>
+  <div class="callout"><p><strong><code>useInput</code> or <code>useUpdate</code>?</strong> Something that happens <em>once, on a press</em> (open the menu, pause, fire) goes in <code>useInput</code>. Something that happens <em>over time</em> (move while a key is held, step the rules) goes in <code>useUpdate((dt, input) =&gt; …)</code>, which reads the keys itself. Both get the same input in the same step, so do not copy keys into a field to carry them from one hook to the other.</p></div>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 useUpdate((dt) => {
   s.x = clamp(s.x + speed * dt, 0, 600);
@@ -307,11 +307,11 @@ function Banner({ text, onDone }: BannerProps) {
   <h3 id="mount-cleanup">A cleanup from <code>useMount</code></h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // The call's result is the cleanup: settings.subscribe returns the function that stops it.
-useMount(() => settings.subscribe(() => setVolume(settings.get().music)));
+useMount(() => settings.subscribe(() => { s.volume = settings.get().music; }));
 
 // Or return one: an arrow, or a local holding a function.
 useMount(() => {
-  const stop = controls.subscribe(() => setKeys(controls.toJSON()));
+  const stop = controls.subscribe(() => { s.keys = controls.toJSON(); });
   return () => {
     stop();
   };
@@ -319,7 +319,7 @@ useMount(() => {
 </script></pre>
   <ul>
     <li>A function returned from <code>useMount</code> runs once, when the component leaves the world, after its <code>useUnmount</code> handlers. Anything else returned is ignored. An expression body's call is returned, as in React (<code>() =&gt; listen(…)</code>).</li>
-    <li>In any handler, an arrow may be handed to a plain function, a method of an imported object, a callback prop or a local (<code>settings.subscribe(() =&gt; …)</code>). It is a handler of its own: it may set state and call actions. Not in a state updater, and not outside handlers.</li>
+    <li>In any handler, an arrow may be handed to a plain function, a method of an imported object, a callback prop or a local (<code>settings.subscribe(() =&gt; …)</code>). It is a handler of its own: it may write state and call actions. Outside a handler, an arrow cannot be handed on.</li>
     <li>A hot reload removes the old tree, so its cleanups run and the new tree subscribes again.</li>
   </ul>
 
@@ -343,7 +343,7 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
 </script></pre>
   <p>Call it as a statement in a handler (elsewhere is <code>TSE1305</code>); <code>playHit(0.5)</code> plays at half volume. A sound played again while sounding overlaps itself, up to four at once. Paths are relative to <code>&lt;Game assets&gt;</code>. Sounds preload.</p>
 
-  <h3>What handler code may contain</h3>
+  <h3 id="handler-code">What handler code may contain</h3>
   <p>Handlers (hook bodies and callback props) may contain:</p>
   <div class="pair">
     <div class="yes"><h5>Statements</h5><ul>
@@ -358,7 +358,7 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
       <li>Calling a sound function or a <code>useGame</code> action (<code>const events = step(input, dt)</code> may use its result)</li>
       <li>Calling a plain function, or a method of an imported object (<code>fx.burst(…)</code>)</li>
       <li>Calling a callback prop: <code>onDone?.()</code>, or a local holding a function: <code>stop()</code></li>
-      <li>Handing an arrow to any of those: <code>settings.subscribe(() =&gt; setView(read()))</code> (not in a state updater)</li>
+      <li>Handing an arrow to any of those: <code>settings.subscribe(() =&gt; { s.view = read(); })</code></li>
       <li>In <code>useMount</code> only, returning a cleanup: <code>return () =&gt; stop();</code></li>
     </ul></div>
     <div class="yes"><h5>Calls and members</h5><ul>
@@ -397,8 +397,8 @@ export function Player() {
   <ul>
     <li>Each call gets its own state, so two calls make two separate states.</li>
     <li>An argument that is a literal or an import is written into the hook (so it can be a <code>useSound</code> path, or a store the hook subscribes to); any other argument is bound to a <code>const</code>, so it is worked out once. Defaults work, and so does a destructured parameter, <code>function useMover({ speed, limit }: Options)</code>.</li>
-    <li>A hook may take a function and call it in a handler: <code>useEvery(1, () =&gt; setTicks((t) =&gt; t + 1))</code>. The arrow becomes a function of the component (see below).</li>
-    <li>A caller takes what a hook returns as <code>const v = useX()</code>, <code>const {a, b} = useX()</code> (object literal), <code>const [a, b] = useX()</code> (array literal). A name the hook returns as it is takes the caller's name, so a hook can return a state's setter or a ref (<code>return count;</code>).</li>
+    <li>A hook may take a function and call it in a handler: <code>useEvery(1, () =&gt; { s.ticks += 1; })</code>. The arrow becomes a function of the component (see below).</li>
+    <li>A caller takes what a hook returns as <code>const v = useX()</code>, <code>const {a, b} = useX()</code> (object literal), <code>const [a, b] = useX()</code> (array literal). A name the hook returns as it is takes the caller's name, so a hook can return its <code>useMutable</code> (<code>return s;</code>) and the caller reads and writes its fields.</li>
     <li>A hook is inlined, not called: each call's statements are written into the component. That is why each call has its own state, and why a hook cannot be called in a condition or a loop (the same rule as React, for another reason), nor call itself.</li>
     <li>A hook is declared in the same file or imported from a relative <code>.tsx</code>. Hooks may call hooks, up to six deep.</li>
     <li>A call anywhere but a statement of the component body is <code>TSE1101</code>.</li>
@@ -407,12 +407,15 @@ export function Player() {
   <h3>Hooks the engine ships</h3>
   <p>These are ordinary custom hooks, imported from <code>@tsengine/runtime/jsx</code>.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
-const [squash, setSquash] = useSquash();          // springs back to 1 at 1.75 a second
-setSquash({ x: 0.6, y: 1.4 });                     // in a handler: thin and tall
+const squash = useSquash();                        // springs back to 1 at 1.75 a second
+squash.x = 0.6;                                    // in a handler: thin and tall
+squash.y = 1.4;
 <Sprite image="hero.png" transform={{ scaleX: squash.x, scaleY: squash.y }} />
 
-const [shake, setShake] = useShake();
-setShake({ strength: 3, duration: 0.25 });         // in a handler
+const shake = useShake();
+shake.strength = 3;                                // in a handler: starts a shake
+shake.duration = 0.25;
+shake.elapsed = 0;
 <Camera shake={shake}><Player /></Camera>
 
 const time = useTime();                            // seconds since it mounted
@@ -421,7 +424,7 @@ const values = useStore(settings, settingsView);   // a store outside the game s
 
 const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });   // moves, stopped by what is solid
 </script></pre>
-  <p><code>useStore(store, read)</code> takes anything with <code>subscribe(listener)</code> that returns a stop function (<code>createSettings</code> stores, <code>controls</code>, a store of your own) and a function of no arguments that returns what to show, both imported from <code>.ts</code> files. It renders only when the data <code>read</code> returns differs (<code>keepIfEqual</code>, which an updater can use too).</p>
+  <p><code>useStore(store, read)</code> takes anything with <code>subscribe(listener)</code> that returns a stop function (<code>createSettings</code> stores, <code>controls</code>, a store of your own) and a function of no arguments that returns what to show, both imported from <code>.ts</code> files. It renders only when the data <code>read</code> returns differs (<code>keepIfEqual</code>, which a handler can call too).</p>
 
   <h3>Plain functions and constants</h3>
   <p>Import functions and constants from a relative <code>.ts</code> file and use them in any expression: a prop, a derived value, a handler. You can also pass a function as a value. The compiler does not look inside: TypeScript checks the call, and the function is assumed pure. Loops, arrays and anything else are fine in its body.</p>

@@ -139,9 +139,9 @@ mark { background: var(--accent-soft); color: inherit; }
   hits={["item", "enemy"]}        // which layers it can touch (omit = all)
   onCollisionEnter={(other) => {
     if (other.tag === "coin") collect();
-    else if (other.owner === "Spikes") setHurt(true);
+    else if (other.owner === "Spikes") s.hurt = true;
   }}
-  onCollisionExit={(other) => { if (other.tag === "spikes") setHurt(false); }}
+  onCollisionExit={(other) => { if (other.tag === "spikes") s.hurt = false; }}
 />
 </script></pre>
   <div class="tablewrap"><table>
@@ -167,7 +167,7 @@ declare global {
 }
 export {};
 
-// in a component: if (other.tag === "coin") setCoins((c) => c + other.data.value);
+// in a component: if (other.tag === "coin") s.coins += other.data.value;
 </script></pre>
   <p>Once it is declared, every tag a game compares must be in it.</p>
   <div class="callout"><p><strong>Collider or tile?</strong> Contacts are found after every step, and whatever a callback changes is rendered before the next step and drawn in the same frame. A callback still runs <em>after</em> the step's <code>useUpdate</code>, though, so code that must know mid-step (movement against walls, a precise death) reads tiles instead: Kite reads spikes and exits as tiles inside its movement step, and uses <code>Collider</code> for the optional gem pickup.</p></div>
@@ -242,8 +242,8 @@ useUpdate(() => {
     <Flex width="grow" />                       {/* a spacer */}
   </Flex>
   <Flex width={96} height={32} alignItems="center" justifyContent="center"
-        background="slategray" onPress={() => setPaused((p) => !p)}>
-    <Text>{paused ? "Resume" : "Pause"}</Text>  {/* a button */}
+        background="slategray" onPress={() => { s.paused = !s.paused; }}>
+    <Text>{s.paused ? "Resume" : "Pause"}</Text>  {/* a button */}
   </Flex>
 </Flex>
 </script></pre>
@@ -255,11 +255,11 @@ useUpdate(() => {
   <Text>Start</Text>
 </Flex>
 </script></pre>
-  <p><code>&lt;Slider&gt;</code> and <code>&lt;Toggle&gt;</code> are two controls that are <code>Flex</code> boxes with parts drawn in them, so they are sized, laid out, clipped, faded, disabled and styled like any other. A slider is <code>&lt;Slider value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} /&gt;</code>: a press puts the thumb under the mouse, a drag moves it (even once the mouse has left the box), and when it has the focus the left and right keys move it one step (a twentieth of the range with no <code>step</code>) while up and down move the focus on. The track is its <code>background</code>, so it takes a border, a radius, an image and a colour for each state; <code>fillColor</code> is the part left of the thumb. A toggle is <code>&lt;Toggle checked={sound} onChange={(on) => setSound(on)} /&gt;</code>: a press, the confirm key or its <code>pressKey</code> flips it. Each moves its own value and then calls <code>onChange</code> with the new one, only when it is different, so <code>value</code> and <code>checked</code> give the starting value and any value you set later. Both take the focus by default.</p>
+  <p><code>&lt;Slider&gt;</code> and <code>&lt;Toggle&gt;</code> are two controls that are <code>Flex</code> boxes with parts drawn in them, so they are sized, laid out, clipped, faded, disabled and styled like any other. A slider is <code>&lt;Slider value={s.volume} min={0} max={10} step={1} onChange={(v) => { s.volume = v; }} /&gt;</code>: a press puts the thumb under the mouse, a drag moves it (even once the mouse has left the box), and when it has the focus the left and right keys move it one step (a twentieth of the range with no <code>step</code>) while up and down move the focus on. The track is its <code>background</code>, so it takes a border, a radius, an image and a colour for each state; <code>fillColor</code> is the part left of the thumb. A toggle is <code>&lt;Toggle checked={s.sound} onChange={(on) => { s.sound = on; }} /&gt;</code>: a press, the confirm key or its <code>pressKey</code> flips it. Each moves its own value and then calls <code>onChange</code> with the new one, only when it is different, so <code>value</code> and <code>checked</code> give the starting value and any value you set later. Both take the focus by default.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Flex direction="column" gap={8} padding={10}>
-  <Slider width={160} value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} />
-  <Toggle checked={sound} onChange={(on) => setSound(on)} />
+  <Slider width={160} value={s.volume} min={0} max={10} step={1} onChange={(v) => { s.volume = v; }} />
+  <Toggle checked={s.sound} onChange={(on) => { s.sound = on; }} />
 </Flex>
 </script></pre>
   <p><code>&lt;Button&gt;</code> and <code>&lt;Menu&gt;</code> are the two pieces most screens need. A button is a <code>Flex</code> that takes the focus and has a look for each state, its label as children; any <code>Flex</code> prop replaces the default look. A menu is a column whose focusable children are its items: while one of them has the focus, up and down move it only among them, wrapping round at the ends (<code>loop={false}</code> stops there), confirm presses the focused one, and <code>back</code> (Escape or PadB without a <code>back</code> action) calls <code>onBack</code>. <code>autoFocus</code> says which item starts with the focus. <code>onAdjust</code> on any focusable box hears left and right while it has the focus (-1 or 1), for a row that changes a value in place; the focus stays. When a modal opens over a menu its focus is put aside, and given back when the modal closes. A component of your own called <code>Button</code> or <code>Menu</code> is still yours: a name declared or imported in a file shadows the built-in, unless the file imports the built-in too.</p>
@@ -512,7 +512,7 @@ const byId = loadScene(world, scene, prefabs);   // Map of scene id → object, 
     <li>Objects attached mid-frame get hooks next frame.</li>
     <li>With <code>fixedStep</code>, steps 2 to 4 above run once per whole step, and drawing runs once per frame. See <a href="effects.html#input">Input and timing</a>.</li>
     <li><code>freeze(n)</code> skips <code>useUpdate</code> (not <code>useInput</code> or renders) for <code>n</code> steps.</li>
-    <li>Any number of setters means one render. <code>AnimatedSprite</code> costs no renders.</li>
+    <li>Any number of state writes in a frame means one render. <code>AnimatedSprite</code> costs no renders.</li>
     <li>Unchanged subtrees reuse last frame's draw records.</li>
     <li>Bad assets never crash: a missing image or unreadable colour draws magenta, with one warning.</li>
     <li>Colours are CSS: <code>#rgb</code>, <code>#rgba</code>, <code>#rrggbb</code>, <code>#rrggbbaa</code>, <code>rgb()</code>, <code>rgba()</code>, named colours, <code>transparent</code>.</li>
