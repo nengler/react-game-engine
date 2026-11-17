@@ -127,11 +127,11 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <div class="topbar"><a href="index.html">Overview</a><a href="start.html">Getting started</a><a href="recipes.html"><strong>Recipes</strong></a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
 <main class="start">
 <h1>Recipes</h1>
-<p>Short components for things most games need, each complete and ready to copy into <code>src/</code>. Every one is compiled and type-checked by the engine's tests, so they work with the engine as it is. For a whole starting point, <code>tse create my-game --template menu</code> (a title, settings and a pause menu) or <code>--template platformer</code> (running and jumping on solid blocks).</p>
+<p>Short components for things most games need. Each one is complete and can be copied into <code>src/</code> as it is. The engine's tests compile and type-check every one, so they match the current engine. To start from a whole game instead, run <code>tse create my-game --template menu</code> (a title, settings and a pause menu) or <code>--template platformer</code> (running and jumping on solid blocks).</p>
 <ul><li><a href="#menu">A menu</a></li><li><a href="#settings">A settings screen</a></li><li><a href="#health-bar">A health bar</a></li><li><a href="#spawning">Things that come and go</a></li><li><a href="#card">A panel that takes children</a></li><li><a href="#pickups">Picking things up</a></li><li><a href="#cooldown">A cooldown and a flash</a></li></ul>
 
 <h2 id="menu">A menu</h2>
-<p>A title or pause menu: buttons the arrow keys (or the d-pad) move between, Enter (or A) presses, and Escape closes. <code>&lt;Menu&gt;</code> keeps the focus among its own items and goes round at the ends; <code>autoFocus</code> says where it starts.</p>
+<p>A title or pause menu: buttons the arrow keys (or the d-pad) move between, Enter (or A) presses, and Escape closes. <code>&lt;Menu&gt;</code> keeps the focus among its own items and wraps round at the ends; <code>autoFocus</code> marks the item it starts on.</p>
 <pre class="code" data-lang="tsx" data-recipe="Menu.tsx"><code>import { Button, Menu, Text } from &quot;@tsengine/runtime/jsx&quot;;
 
 interface PauseMenuProps {
@@ -154,7 +154,7 @@ export function PauseMenu({ onResume, onQuit }: PauseMenuProps) {
 <p>Any <code>Flex</code> prop restyles a button: <code>background</code>, <code>focusBackground</code>, <code>pressedBackground</code>, or a nine-slice <code>backgroundImage</code>.</p>
 
 <h2 id="settings">A settings screen</h2>
-<p>Rows that change a value in place: <code>onAdjust</code> hears left and right while a row has the focus, and the focus stays. A <code>&lt;Slider&gt;</code> and a <code>&lt;Toggle&gt;</code> do the same with the mouse.</p>
+<p>Each row changes its value in place: <code>onAdjust</code> hears left and right while the row has the focus, and the focus stays on it. A <code>&lt;Slider&gt;</code> and a <code>&lt;Toggle&gt;</code> do the same with the mouse.</p>
 <pre class="code" data-lang="tsx" data-recipe="Options.tsx"><code>import { Button, Flex, Menu, Slider, Text, Toggle, useMutable } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Options({ onClose }: { onClose: () =&gt; void }) {
@@ -201,7 +201,7 @@ export function HealthBar({ hp, max, width = 40 }: HealthBarProps) {
 <p>Put it in a <code>&lt;Hud&gt;</code> to keep it on the screen while the camera moves, or under an enemy to follow it.</p>
 
 <h2 id="spawning">Things that come and go</h2>
-<p>A list in state, one component per item, each with a <code>key</code>. A new item mounts its component; an item that leaves the list unmounts it. The item says it is done through a callback, as a React child tells its parent.</p>
+<p>Keep the items in a list in state and render one component per item, each with a <code>key</code>. A new item mounts its component; an item that leaves the list unmounts it. The item says it is done through a callback, the way a React child tells its parent.</p>
 <pre class="code" data-lang="tsx" data-recipe="Spawner.tsx"><code>import { Entity, Shape, useMutable, useUpdate } from &quot;@tsengine/runtime/jsx&quot;;
 
 interface Spark {
@@ -236,7 +236,7 @@ export function Spawner() {
     &lt;/Entity&gt;
   );
 }</code></pre>
-<p><code>s.sparks.push(…)</code> is written in place and the compiler turns it into a new list, so everything that reads it sees the change. A helper in a <code>.ts</code> file returns a new list instead.</p>
+<p>You write <code>s.sparks.push(…)</code> in place, and the compiler turns it into a new list, so everything that reads the list sees the change. A helper in a <code>.ts</code> file has to return a new list instead.</p>
 
 <h2 id="card">A panel that takes children</h2>
 <p>A reusable panel with a title and a footer of its own, and whatever the parent passes in between: single elements, conditions and a list, each kept in its place.</p>
@@ -276,7 +276,7 @@ export function Bag({ items }: { items: readonly Item[] }) {
 <p>A component that builds on <code>Card</code> may pass its own <code>{children}</code> on to it, between children of its own.</p>
 
 <h2 id="pickups">Picking things up</h2>
-<p>Colliders report when they start touching; the handler reads the other collider's <code>tag</code> (and <code>owner</code>, and <code>data</code>). There is no physics: what touching does is up to the handler.</p>
+<p>Colliders report when they start touching, and the handler reads the other collider's <code>tag</code> (and its <code>owner</code> and <code>data</code>). There is no physics in this: the handler decides what touching does.</p>
 <pre class="code" data-lang="tsx" data-recipe="Pickup.tsx"><code>import { Collider, Entity, Shape, useMutable } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Coin({ x, y, onTaken }: { x: number; y: number; onTaken: () =&gt; void }) {
@@ -301,7 +301,7 @@ export function Field() {
 <p>To carry a value with the collision (a coin's worth, an enemy's damage), give the collider <code>data</code> and declare what each tag carries once in a <code>.ts</code> file (Systems, collisions).</p>
 
 <h2 id="cooldown">A cooldown and a flash</h2>
-<p>Time is counted in the update, in seconds of game time: it follows the fixed step, replays the same, and stops while the game is paused. <code>after</code> and <code>every</code> do the same for a one-off delay.</p>
+<p>Time is counted in the update, in seconds of game time: it follows the fixed step, replays the same, and stops while the game is paused. <code>after</code> (once) and <code>every</code> (repeating) count the same game time, for a delay you do not need to track yourself.</p>
 <pre class="code" data-lang="tsx" data-recipe="Turret.tsx"><code>import { after, Shape, useInput, useMutable, useUpdate } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Turret() {
@@ -319,10 +319,10 @@ export function Turret() {
   });
   return &lt;Shape kind=&quot;rect&quot; width={12} height={12} color={s.flash ? &quot;white&quot; : &quot;#57c26b&quot;} /&gt;;
 }</code></pre>
-<p>A press is something that happens once, so it goes in <code>useInput</code>; anything over time goes in <code>useUpdate</code>.</p>
+<p>A press happens once, so it goes in <code>useInput</code>; anything that runs over time goes in <code>useUpdate</code>.</p>
 
 <h2>Where next</h2>
-<p><a href="start.html">Getting started</a> takes a game from an empty folder to a package; <a href="language.html">Language</a> is what the compiler accepts, and <a href="reference.html">Reference</a> every built-in and hook.</p>
+<p><a href="start.html">Getting started</a> takes a game from an empty folder to a package; <a href="language.html">Language</a> lists what the compiler accepts, and <a href="reference.html">Reference</a> covers every built-in and hook.</p>
 </main>
 </body>
 </html>

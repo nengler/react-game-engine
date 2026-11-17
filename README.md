@@ -6,12 +6,12 @@ DOM: a compiler turns each component into an ordinary TypeScript class whose
 children are persistent instances, updated in place when state changes.
 
 It has a compiler, a runtime, and a native player that draws, plays sound and reads the keyboard, mouse and gamepads
-through raylib: under Node while you develop (with hot reload and rewind), and packaged as one folder that runs on V8 or on a
-small Rust + QuickJS-ng host. Three games are built on it: [Kite](packages/kite) (a precision platformer),
+through raylib. The player runs under Node while you develop (with hot reload and rewind); a packaged game is one folder that
+runs on V8 or on a small Rust + QuickJS-ng host. Three games are built on it: [Kite](packages/kite) (a precision platformer),
 [Hearth](packages/hearth) (a tower defense) and [Bramble](games/bramble) (a top-down adventure made from the template, outside
 the workspaces). Linux is the supported platform.
 
-**Start with the [authoring guide](docs/index.html)** (open it in a browser): [Getting started](docs/start.html) goes from an
+Start with the [authoring guide](docs/index.html) (open it in a browser): [Getting started](docs/start.html) goes from an
 empty folder to a packaged game (`tse create my-game`, or `--template menu` / `--template platformer`), and
 [Recipes](docs/recipes.html) has a menu, a settings screen, a health bar and other everyday pieces. For how it is built, read
 [docs/DESIGN.md](docs/DESIGN.md) (the compiler, the runtime and every design decision), [docs/PLAYER.md](docs/PLAYER.md)
@@ -128,17 +128,17 @@ npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host 
 ### Releases
 
 Pushing a tag `vX.Y.Z`, or running the Release workflow from the Actions tab with a version (it tags the branch it runs on),
-runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds libtse and tse-host on Linux x64, macOS
-arm64 and x64, and Windows x64 and smoke-tests each (C smoke test, the Node host against the software renderer, the demo's
-parity run under tse-host), packs the engine with every platform's binaries in `@tsengine/native` (stamped with that
+runs [`.github/workflows/release.yml`](.github/workflows/release.yml). It builds libtse and tse-host on Linux x64, macOS
+arm64 and x64, and Windows x64, and smoke-tests each (C smoke test, the Node host against the software renderer, the demo's
+parity run under tse-host). Then it packs the engine with every platform's binaries in `@tsengine/native` (stamped with that
 version), attaches the packs to a GitHub release and publishes them to npm as `@tsengine/*`, with provenance. The platform
 matrix is about 25 runner-minutes a release (free while the repository is public). To try it without releasing, run the
-workflow from the Actions tab with **dry_run** ticked: it builds, tests and packs everything, keeps the packs as the run's
-artifact, and neither releases nor publishes. A game made on the engine is packaged on the platform it is for: run
+workflow from the Actions tab with `dry_run` ticked: it builds, tests and packs everything and keeps the packs as the run's
+artifact, but neither releases nor publishes. A game made on the engine is packaged on the platform it is for: run
 `tse package` on each (for example in a matrix in the game's own CI).
 
-Publishing uses npm's trusted publishing: no npm token is stored anywhere; npm accepts the Release workflow's own identity.
-Setting it up, once:
+Publishing uses npm's trusted publishing: npm accepts the Release workflow's own identity, so no npm token is stored anywhere.
+It is set up once:
 
 1. the `tsengine` organization on npm (npmjs.com, Add Organization; the free plan publishes public packages), which owns the
    `@tsengine` scope;
