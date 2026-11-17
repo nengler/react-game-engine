@@ -12,7 +12,21 @@ declare global {
    * Then `if (other.tag === "coin") collect(other.data.value)` type-checks. With nothing declared, `data` is `unknown`.
    */
   interface ColliderData {}
+  /**
+   * What each collider tag can be sent (`send(tag, where, value)`, received by `<Collider onReceive>`), so both ends are typed by
+   * the tag. Declared once, as `ColliderData` is:
+   *
+   *     declare global {
+   *       interface ColliderMessages { enemy: Blast; ally: Aura }
+   *     }
+   *
+   * With nothing declared for a tag, what it is sent is `unknown`.
+   */
+  interface ColliderMessages {}
 }
+
+/** What a collider with this tag is sent: its `ColliderMessages` entry, or `unknown` when the game declared none. */
+export type MessageOf<Tag extends string> = Tag extends keyof ColliderMessages ? ColliderMessages[Tag] : unknown;
 
 /** A contact whose tag the game did not declare in `ColliderData`: its data is `unknown`. */
 export interface BaseContact {
@@ -45,11 +59,27 @@ export type ContactOf<Tag extends string> = [Extract<Contact, { readonly tag: Ta
   ? Contact
   : Extract<Contact, { readonly tag: Tag }>;
 
-export interface ColliderProps {
+/**
+ * A collider `nearby` found: its contact (`tag`, `owner`, `data`, typed by tag as `ContactOf` is), where the middle of its box is
+ * in world space, and how far its box is from the point asked about (0 when the point is inside it). Hand it to `send` to reach
+ * that one collider; it is good for the step it was found in (keep `data`'s id, not the result, across steps).
+ */
+export type Nearby<Tag extends string = string> = ContactOf<Tag> & { readonly x: number; readonly y: number; readonly distance: number };
+
+/** What `onReceive` is, written as a method so a collider of one tag is still assignable to `Collider` (any tag). */
+type Receiver<Tag extends string> = { receive(value: MessageOf<Tag>): void }["receive"];
+
+/** Where `send` delivers: every collider of its tag whose box comes within a circle, or the one collider a `nearby` result is. */
+export type SendTarget<Tag extends string = string> = { readonly x: number; readonly y: number; readonly radius: number } | Nearby<Tag>;
+
+export interface ColliderProps<Tag extends string = string> {
   width: number;
   height: number;
-  /** A label handler code can read on the other side of a collision: `other.tag === "enemy"`. Default `""`. */
-  tag?: string;
+  /**
+   * A label handler code can read on the other side of a collision (`other.tag === "enemy"`), and what `nearby` and `send` look
+   * for. Default `""`.
+   */
+  tag?: Tag;
   /**
    * Which group this collider is in, for `hits`. Default `""` (the default group). Unrelated to `tag`: a tag is
    * for handlers to read, a layer is for the tracker to skip pairs before testing them.
@@ -89,6 +119,12 @@ export interface ColliderProps {
    * for the collider that itself left (it is gone), only for the one still mounted.
    */
   onCollisionExit?: (other: Contact) => void;
+  /**
+   * Called with what was sent to this collider (`send(tag, where, value)`): a blast that reached an enemy, a buff that reached an
+   * ally. Delivered at the end of the step's update phase, after every `useUpdate` and timer, in the order the values were sent;
+   * typed by the collider's `tag` through `ColliderMessages`.
+   */
+  onReceive?: (value: MessageOf<Tag>) => void;
 }
 
 /**
@@ -98,7 +134,7 @@ export interface ColliderProps {
  * (`CollisionTracker` in `@tsengine/player`), which calls `World.reportCollision` and `World.reportCollisionExit`, and
  * those call `onCollisionEnter` and `onCollisionExit`.
  */
-export class Collider<P extends object = {}> extends GameObject<P> implements BaseContact {
+export class Collider<P extends object = {}, Tag extends string = string> extends GameObject<P> implements BaseContact {
   static override readonly intrinsic = true;
 
   width: number;
@@ -112,9 +148,14 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Ba
   data: unknown;
   onCollisionEnter: ((other: Contact) => void) | undefined;
   onCollisionExit: ((other: Contact) => void) | undefined;
+  /**
+   * See `ColliderProps.onReceive`. Typed by the collider's tag (the class's `Tag`, which a compiled `<Collider tag="foe">` root
+   * names); compared both ways (`Receiver`), so a collider of any tag is still a `Collider`.
+   */
+  onReceive: Receiver<Tag> | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
-  constructor(hostProps: ColliderProps, props?: P, defaults?: Partial<P>) {
+  constructor(hostProps: ColliderProps<Tag>, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.width = hostProps.width;
     this.height = hostProps.height;
@@ -127,6 +168,7 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Ba
     this.data = hostProps.data;
     this.onCollisionEnter = hostProps.onCollisionEnter;
     this.onCollisionExit = hostProps.onCollisionExit;
+    this.onReceive = hostProps.onReceive;
   }
 
   /** See `Contact.owner`. */

@@ -1807,7 +1807,7 @@ only. Building Bramble's cutscene found two things about writing one in a compon
 called (only an object a function made for the component, a "handle", can), so the cutscene field starts from `noCutscene()`; and
 `import type { Sequence } from "@tsengine/runtime"` is refused in a component, so `@tsengine/runtime/jsx` re-exports the type.
 
-## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
+## Timers: `after`, `every`, `cancelTimer`, `cancelTimers` (2026-11-13)
 
 React code writes `setTimeout` in a handler; before timers, each delay here was a countdown kept as state.
 
@@ -1815,7 +1815,13 @@ React code writes `setTimeout` in a handler; before timers, each delay here was 
   `World` keeps the objects that have any and calls `stepTimers(dt)` on each after the step's updates, in the update phase, so timers
   stop during `freeze` and `<Game paused>`, follow the fixed step and replay. A repeating timer runs at most once a step. Leaving the
   world clears an object's timers: a timer never calls back into a component that has gone (React's classic `setTimeout` bug).
-- **Compiler.** `after`, `every` and `cancelTimers` are imported from the authoring module and are statements in handlers only
+- **One timer at a time** (2026-11-17). `after` and `every` return an id, and `cancelTimer(id)` stops that timer alone: restarting
+  a hit flash with `cancelTimers()` also stopped the component's other timers. The id is a number (1, 2, 3… per object, never
+  reused, never 0) rather than a handle object, because a component keeps it in `useMutable` state, which holds plain data and is
+  saved and hot-reloaded. A timer cancelled by an earlier callback in the same step is skipped. Hot reload and tree saves carry the
+  object's next id with its state (`$$nextTimerId`), so the object that takes the state over never hands out an id its state already
+  names.
+- **Compiler.** `after`, `every`, `cancelTimer` and `cancelTimers` are imported from the authoring module and are statements in handlers only
   (`TIMER_FUNCTIONS`); a call is the component's own method, `this.after(…)`, and the function passed is lowered as a handler (a
   callback, as one handed to `settings.subscribe`). Their names are reserved members, so a state called `after` takes `$after`.
 - **Hot reload drops pending timers**, with a note in the log: a timer's function closes over the instance that set it, which the
@@ -2252,6 +2258,40 @@ same for a component, against the world it is mounted in:
 
 Not done: a body is not itself a collider that others hit (a component draws a `<Collider>` at its position), there are no
 one-way platforms or slopes. Kite's `Runner` is written with it beside the rules: see "Kite's movement with `useBody`, compared".
+
+## Finding and hitting colliders: `nearby` and `send` (2026-11-17)
+
+A component has no handle on another (no refs, on purpose), so a tower defense's moves reached enemies through colliders made for
+it: a creature kept a body as big as its reach to see enemies (`overlapping`), handed each landing move up to its parent, which
+drew an effect whose `<Collider>` existed for one step with the blast as its `data`; every enemy it touched checked whether the
+blast was meant for it (a target id, or a distance, the collider being a square) and took the damage, a step after the move
+landed. Two functions of the component replace that, still through colliders:
+
+- **`nearby(tag, x, y, radius)`**: the colliders with the tag whose world boxes come within a real circle, nearest first (by the
+  distance from the point to the box, 0 inside it; ties in the order the colliders joined the world), each its contact (`tag`,
+  `owner`, `data`, typed by `ColliderData` as `ContactOf<Tag>` is) with the middle of its box and that distance. It reads the
+  same per-tag grid and per-phase box cache `useBody`'s queries use, so it costs what `overlapping` costs and sees boxes where
+  they were when the step's updates began. It leaves out the colliders the asking component draws itself (the nearest component
+  at or above a collider, a compiled component's class having no own `intrinsic`), not those of components inside it: a parent
+  may ask about its children's colliders. Both hosts run it in JavaScript, so their results are identical.
+- **`send(tag, where, value)`** queues `value` for the colliders with the tag in a circle (`{ x, y, radius }`, resolved as
+  `nearby` resolves it) or for the one collider a `nearby` result is. A result keeps its collider in a `WeakMap`, so results stay
+  plain objects, and one kept past its world, or whose collider left, reaches nothing. Addressing by a result rather than by an
+  id in `data` needs no convention about `data`, and cannot reach a different collider that happens to carry the same id.
+- **`<Collider onReceive>`** is called with each value. Its type is the tag's `ColliderMessages` entry, declared beside
+  `ColliderData`; `ColliderProps` and the `Collider` class take the tag as a type parameter, the generator names a literal tag in
+  an element's field type (`Collider<{}, "foe">`) and in a `<Collider>` root's `extends`, and the manifest marks the parameter
+  `contextual`, so the generated callback is left unannotated and typed from the props. `onReceive` is typed as a method so a
+  collider of one tag is still a `Collider`.
+
+**When it is delivered** (decided 2026-11-17). At the end of the step's update phase, after every `useUpdate` and timer, before
+the step renders: so it lands in the step it was sent, with no step of delay, and what a receiver changes is drawn that step.
+In the order sent (handlers run in tree order, so the order repeats), each send's receivers nearest first. A value sent from an
+`onReceive` joins the end of the queue and is delivered in the same phase; past 100,000 deliveries in one step it throws, as only
+receivers sending to each other without end get there. A value sent outside a tick (from a collision callback, which the player
+runs after the tick) waits for the next step's phase. It runs while the world is frozen or paused, as collisions do, since a send
+from `useInput` should still land. Delivery is in `World.tick`, so the Node player, the Rust host's QuickJS and
+`@tsengine/testing` all deliver at the same moment without a call of their own.
 
 ## Tilemap, assets and the other built-ins
 
@@ -2879,7 +2919,9 @@ lists reflow with no extra work, and in steady state it allocates nothing. `back
 behind the children, at the box's size. Each child's offset is rounded to a whole pixel (sizes stay exact), so centred
 text is not blurred. A `Flex` with an `onPress` is pressable over its laid-out box, in the same draw-order list as
 `Pointer`s (both are a `Pressable`). A `<Text width={80} align="center">` is laid out as an 80-wide box and drawn
-centred in it. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
+centred in it. Without `width` or `maxWidth`, outside a `Flex`, `align` aligns each line on the text's x (a damage number centred
+on a point, 2026-11-17): the line widths count from a box of 0 (`textAlignBox`), and a parent's extent counts the text where it
+is drawn. A `Flex` child without a width is still laid out at its own size and not moved. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
 minimums; a leaf's minimum is its size unless the measurer reports a smaller one (`minWidth` / `minHeight`, for
 wrapping text), so in a real game nothing shrinks yet and overflow is visible. Not built yet: floating boxes (U5), text wrapping.
 

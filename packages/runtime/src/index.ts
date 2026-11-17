@@ -30,7 +30,16 @@ export {
 export { Entity, type EntityProps } from "./components/Entity.ts";
 export { Game, type GameProps } from "./components/Game.ts";
 export { isStyled, Sprite, type SpriteLook, type SpriteOptions, type SpriteProps } from "./components/Sprite.ts";
-export { Collider, type BaseContact, type ColliderProps, type Contact, type ContactOf } from "./components/Collider.ts";
+export {
+  Collider,
+  type BaseContact,
+  type ColliderProps,
+  type Contact,
+  type ContactOf,
+  type MessageOf,
+  type Nearby,
+  type SendTarget,
+} from "./components/Collider.ts";
 export { Sound, addSoundPreload, getSoundSink, getVolume, setSoundSink, setVolume, type SoundSink, type VolumeGroup } from "./Sound.ts";
 export {
   createMemoryStorage,
@@ -204,7 +213,7 @@ export {
 export { ContextReader, createContext, Provider, readContext, type Context, type ProviderProps } from "./context.ts";
 export { Body, createBody, boxesOverlap, type BodyHit, type BodyOptions, type BodySpace, type Box } from "./body.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
-export { CALLBACK_PRIMITIVES, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
+export { CALLBACK_PRIMITIVES, CALLBACK_CONTEXTUAL, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
 export { findPath, lineOfSight, type Cell, type PathGrid, type PathOptions, type PathPoint } from "./path.ts";
 export {
   activeProfiler,

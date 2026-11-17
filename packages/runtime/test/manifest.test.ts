@@ -38,6 +38,7 @@ import {
   Tooltip,
   TextInput,
   CALLBACK_PRIMITIVES,
+  CALLBACK_CONTEXTUAL,
   createInputState,
   runtimeManifest,
 } from "../src/index.ts";
@@ -139,7 +140,9 @@ describe("runtime manifest", () => {
         assert.ok(name in (instances[tag] ?? {}), `${tag}.${name} must be a field`);
         for (const p of params)
           assert.ok(
-            p.type in runtimeManifest.handleTypes || (CALLBACK_PRIMITIVES as readonly string[]).includes(p.type),
+            p.type in runtimeManifest.handleTypes ||
+              (CALLBACK_PRIMITIVES as readonly string[]).includes(p.type) ||
+              p.type === CALLBACK_CONTEXTUAL,
             `${tag}.${name}: ${p.type} is neither a handle type nor a plain value`
           );
       }

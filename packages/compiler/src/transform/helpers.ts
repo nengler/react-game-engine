@@ -221,7 +221,14 @@ export function checkStaticCycles(components: readonly ComponentIR[], diagnostic
 
 /**
  * The timer functions a handler may call (`after(0.15, () => setFlash(false))`), and how many arguments each takes. They are the
- * component's own (`GameObject.after`, `every`, `cancelTimers`), so a call is written `this.after(…)`: a timer belongs to the
+ * component's own (`GameObject.after`, `every`, `cancelTimer`, `cancelTimers`), so a call is written `this.after(…)`: a timer belongs to the
  * component that set it and goes when it does.
  */
-export const TIMER_FUNCTIONS: Readonly<Record<string, number>> = { after: 2, every: 2, cancelTimers: 0 };
+export const TIMER_FUNCTIONS: Readonly<Record<string, number>> = { after: 2, every: 2, cancelTimer: 1, cancelTimers: 0 };
+
+/**
+ * The functions a handler may call that ask or tell the colliders of the component's world (`nearby("enemy", x, y, 60)`,
+ * `send("enemy", { x, y, radius }, blast)`), and how many arguments each takes. They are the component's own
+ * (`GameObject.nearby`, `send`), written `this.nearby(…)`, so they reach the world it is in and leave out its own colliders.
+ */
+export const WORLD_FUNCTIONS: Readonly<Record<string, number>> = { nearby: 4, send: 3 };

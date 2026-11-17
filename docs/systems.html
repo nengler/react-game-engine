@@ -171,6 +171,28 @@ export {};
 </script></pre>
   <p>Once it is declared, every tag a game compares must be in it.</p>
   <div class="callout"><p><strong>Collider or tile?</strong> Contacts are found after every step, and what a callback changes is rendered before the next step and drawn in the same frame. But a callback still runs <em>after</em> the step's <code>useUpdate</code>, so code that must know mid-step (movement against walls, a precise death) reads <strong>tiles</strong> instead: Kite reads spikes and exits as tiles inside its movement step, and uses <code>Collider</code> for the optional gem pickup.</p></div>
+  <h3 id="nearby-send">Finding and hitting things in an area: <code>nearby</code> and <code>send</code></h3>
+  <p>A component has no handle on another, so a tower cannot call an enemy. It asks the colliders instead: <code>nearby(tag, x, y, radius)</code> lists the colliders of a tag whose boxes come within a circle (a real circle, not a square), nearest first, each with its <code>tag</code>, <code>owner</code>, <code>data</code>, the middle of its box (<code>x</code>, <code>y</code>) and its <code>distance</code> (0 inside the box). <code>send(tag, where, value)</code> hands <code>value</code> to the <code>onReceive</code> of the colliders of a tag in a circle (<code>{ x, y, radius }</code>), or of the one collider a <code>nearby</code> result is. Both are called in a handler (<code>useUpdate</code>, <code>useInput</code>, a callback prop), and leave out the colliders the asking component draws itself.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+// A tower: the nearest enemy in reach, hit; or everything in a splash.
+useUpdate(() => {
+  const foes = nearby("enemy", x, y, reach);
+  if (foes.length === 0) return;
+  send("enemy", foes[0], { damage: 5, from: id });                          // that one enemy
+  send("enemy", { x: foes[0].x, y: foes[0].y, radius: 16 }, { damage: 2, from: id }); // every enemy in the splash
+});
+
+// An enemy: what it was sent, typed by its tag.
+<Collider tag="enemy" width={10} height={10} data={{ id, hp: s.hp }} onReceive={(blast) => { s.hp -= blast.damage; }} />
+</script></pre>
+  <div class="tablewrap"><table>
+    <tr><th>Rule</th><th>Meaning</th></tr>
+    <tr><td>When it arrives</td><td>At the end of the step's update phase: after every <code>useUpdate</code> and timer, before the step renders and before its collisions are found. So it lands in the step it was sent, and what a receiver changes is drawn that step.</td></tr>
+    <tr><td>In what order</td><td>The order values were sent (handlers run in tree order, so that order repeats), each send's receivers nearest first. A value sent from an <code>onReceive</code> is delivered later in the same phase; one sent from a collision callback, at the end of the next step's update phase. Replays and the two players give the same result.</td></tr>
+    <tr><td>Where things are</td><td>Boxes are where they were when the step's updates began, as for <code>useBody</code>. A <code>nearby</code> result is good for its step: keep an id from its <code>data</code>, not the result, across steps. A receiver that left the world before delivery hears nothing.</td></tr>
+    <tr><td>Types</td><td>Declare what each tag can be sent beside <code>ColliderData</code>: <code>interface ColliderMessages { enemy: Blast }</code>. Then <code>send("enemy", …, value)</code> and <code>onReceive</code>'s value are typed by the tag; undeclared, the value is <code>unknown</code>.</td></tr>
+  </table></div>
+  <p>This replaces a collider that lives for one step just to carry a message (a blast's collider whose <code>data</code> every enemy it touches checks): no extra collider, no step of delay, no re-checking whether the blast was meant for it.</p>
   <h3>Pointer presses</h3>
   <p>A left click goes to the <strong>topmost</strong> <code>Pointer</code> or <code>Flex onPress</code> under the mouse. HUD buttons work however the camera moves.</p>
 </section>

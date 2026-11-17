@@ -79,7 +79,7 @@
         ["size", "number", "16", "Pixels."],
         ["color", "CSS colour", '"white"', ""],
         ["width", "number", "text width", "Box width for layout and <code>align</code>."],
-        ["align", '"left" | "center" | "right"', '"left"', "Where each line sits inside <code>width</code> (else inside <code>maxWidth</code>)."],
+        ["align", '"left" | "center" | "right"', '"left"', "Where each line sits inside <code>width</code> (else inside <code>maxWidth</code>). Without a width, <code>x</code> is the left edge, middle or right edge of each line: <code>&lt;Text x={x} align=\"center\"&gt;</code> centres a damage number on a point. A text a <code>&lt;Flex&gt;</code> lays out without a width keeps its own place."],
         ["maxWidth", "number", "none", "Wrap to lines no wider than this: breaks at spaces, inside a word only when the word alone is too wide; <code>\\n</code> always breaks. One text record (or run of glyphs) per line."],
         ["lineGap", "number", "0", "Extra pixels between wrapped lines."],
         ["reveal", "number", "all", "Draw only the first <em>n</em> characters but lay out the whole text, so a box does not grow or rewrap as a page types out. The game's rules count it up."],
@@ -115,7 +115,8 @@
         ["shape", '"box" | "circle" | "polygon"', '"box"', "Its shape inside its box: the circle inside it, or the convex polygon of <code>points</code>. A pair with a shape is tested exactly, turned with its objects; bodies still stop at a solid collider's box."],
         ["points", "number[]", "[]", "A polygon's corners in order, <code>[x0, y0, x1, y1, …]</code>, in its own pixels, inside its box."],
         ["onCollisionEnter", "(other) =&gt; void", "–", "Starts touching. <code>other</code> has <code>tag</code> and <code>owner</code>."],
-        ["onCollisionExit", "(other) =&gt; void", "–", "Stops touching."]
+        ["onCollisionExit", "(other) =&gt; void", "–", "Stops touching."],
+        ["onReceive", "(value) =&gt; void", "–", "What <code>send(tag, where, value)</code> sent it, at the end of the step's update phase; typed by its <code>tag</code> through <code>ColliderMessages</code>. See <a href=\"systems.html#nearby-send\">nearby and send</a>."]
       ] },
     { name: "Pointer", kind: "leaf", sum: "An invisible clickable area. Pair with a <code>Sprite</code> or <code>Shape</code> to make a button.",
       props: [

@@ -8,6 +8,7 @@ import { runtimeManifest, type RuntimeManifest } from "@tsengine/runtime";
 import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
 import {
   AUTHORING_HOOKS,
+  WORLD_FUNCTIONS,
   Compiler,
   formatDiagnostic,
   type ChildIR,
@@ -54,7 +55,13 @@ export interface CompiledModule {
  */
 export function withAuthoringImports(source: string, manifest: RuntimeManifest = runtimeManifest): string {
   if (source.includes(`from "${manifest.authoringModule}"`)) return source;
-  const exported = [...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions), ...LIBRARY_HOOKS];
+  const exported = [
+    ...manifest.intrinsics,
+    ...AUTHORING_HOOKS,
+    ...Object.keys(manifest.functions),
+    ...LIBRARY_HOOKS,
+    ...Object.keys(WORLD_FUNCTIONS),
+  ];
   // A name the source declares or imports itself is its own component, which shadows a built-in of that name.
   const own = (name: string): boolean =>
     new RegExp(`(function|const|class)\\s+${name}\\b|import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"\\.`).test(source);

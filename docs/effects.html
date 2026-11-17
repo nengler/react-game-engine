@@ -316,11 +316,12 @@ function Pause() {
   </ul>
   <h3 id="timers">Timers: <code>after</code> and <code>every</code></h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
-import { after, cancelTimers, every } from "@tsengine/runtime/jsx";
+import { after, cancelTimer, cancelTimers, every } from "@tsengine/runtime/jsx";
 
 onCollisionEnter={(other) => {
+  cancelTimer(s.flashTimer);                 // a second hit restarts the flash, and only the flash
   s.flash = true;
-  after(0.15, () => { s.flash = false; });   // once, 0.15 s of game time from now
+  s.flashTimer = after(0.15, () => { s.flash = false; });   // once, 0.15 s of game time from now
 }}
 useMount(() => {
   every(1, () => { s.ticks += 1; });         // every second, until it unmounts
@@ -330,6 +331,7 @@ cancelTimers();                              // all of this component's timers
   <ul>
     <li>Statements in a handler, as <code>setTimeout</code> is in React. The function is a handler too: it writes state, calls actions, plays sounds.</li>
     <li>A timer is the component's: it is cancelled when the component unmounts, so it never sets state on one that is gone.</li>
+    <li><code>after</code> and <code>every</code> return the timer's id (1, 2, 3… for the component, never 0, so <code>0</code> in state means none). <code>cancelTimer(id)</code> stops that one timer and leaves the others; an id that is done, or 0, is ignored.</li>
     <li>They count game time in the update phase: they follow the fixed step and replay, and stop during <code>freeze</code> and <code>&lt;Game paused&gt;</code>.</li>
     <li><strong>A timer or state?</strong> A timer is code, so it is not saved and a hot reload drops it (the log says so). Use one for what is only for the eye: a flash, a blink, a beat before a title appears. A delay that is part of the game (a few seconds of safety after a hit, a slow) is state that counts down in <code>useUpdate</code>, or a time it ends at kept in state: it is then saved, reloaded and tested like any state.</li>
   </ul>

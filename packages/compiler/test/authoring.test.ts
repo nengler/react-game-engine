@@ -10,7 +10,7 @@ import { Transform, runtimeManifest } from "@tsengine/runtime";
 import * as authoring from "@tsengine/runtime/jsx";
 
 import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
-import { TIMER_FUNCTIONS, AUTHORING_HOOKS, DiagnosticCode, TRANSFORM_FIELDS } from "../src/index.ts";
+import { TIMER_FUNCTIONS, WORLD_FUNCTIONS, AUTHORING_HOOKS, DiagnosticCode, TRANSFORM_FIELDS } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, compile, getCompiler } from "./helpers.ts";
 
 after(() => {
@@ -38,6 +38,7 @@ describe("the authoring module", () => {
       ...Object.keys(runtimeManifest.functions),
       ...LIBRARY_HOOKS,
       ...Object.keys(TIMER_FUNCTIONS),
+      ...Object.keys(WORLD_FUNCTIONS),
     ].sort();
     assert.deepEqual(Object.keys(authoring).sort(), expected);
   });
