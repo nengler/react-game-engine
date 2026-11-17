@@ -30,6 +30,7 @@ export {
 } from "./loop.ts";
 export { hashState, replayMoment, Rewind, type Moment, type RewindOptions } from "./rewind.ts";
 export * from "./protocol.ts";
+export { BUILTIN_FONT_METRICS, type BuiltinFontMetrics } from "./fonts.ts";
 export {
   applyInputFrame,
   RecordingBackend,

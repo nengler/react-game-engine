@@ -46,6 +46,7 @@ import {
 } from "@tsengine/runtime";
 
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
+import { BUILTIN_FONT_METRICS } from "./fonts.ts";
 import { borderRoom, Layouter, textAlignBox, type MeasuredSize } from "./layout.ts";
 import {
   TSE_BLEND_ADD,
@@ -1120,6 +1121,17 @@ export function rootScreen(root: GameObject): Screen | null {
 /** A bitmap font sheet holds the characters 32 to 127 in this many columns and rows. */
 const FONT_COLUMNS = 16;
 const FONT_ROWS = 6;
+
+/** A built-in font's advances (each character's own width), or undefined for a font file, which moves on a cell at a time. */
+function builtinAdvances(font: string): readonly number[] | undefined {
+  return isBuiltinName(font) ? BUILTIN_FONT_METRICS[font]?.advances : undefined;
+}
+
+/** How far a character moves the next one on, in a font's own pixels: what it draws, a `?` for one outside 32 to 127. */
+function glyphAdvance(advances: readonly number[], ch: string): number {
+  const code = ch.codePointAt(0) as number;
+  return advances[code >= 32 && code < 128 ? code - 32 : 63 - 32] as number;
+}
 
 /** The size of the square drawn where a texture could not be loaded. */
 const MISSING_TEXTURE_SIZE = 16;
@@ -2781,14 +2793,19 @@ export class FrameBuilder {
     return sheet.height > 0 ? sheet.height / FONT_ROWS : text.size;
   }
 
-  /** The size of a text drawn with a bitmap font: a cell's width for each character, the size as its height. */
+  /**
+   * The size of a text drawn with a bitmap font: each character's advance (a built-in font's own, else a cell's width), the size
+   * as its height.
+   */
   #bitmapSize(font: string, text: string, size: number): Size {
     const sheet = this.#imageSize(font);
     if (sheet.width === 0 || sheet.height === 0) return { width: estimateTextWidth(text, size), height: size };
+    const cellW = sheet.width / FONT_COLUMNS;
     const scale = size / (sheet.height / FONT_ROWS);
-    let characters = 0;
-    for (const _ of text) characters++;
-    return { width: characters * (sheet.width / FONT_COLUMNS) * scale, height: size };
+    const advances = builtinAdvances(font);
+    let width = 0;
+    for (const ch of text) width += advances === undefined ? cellW : glyphAdvance(advances, ch);
+    return { width: width * scale, height: size };
   }
 
   /** Text drawn from a bitmap font: one region of the font sheet for each character, in the text's colour. Wrapped and revealed text draws line by line. */
@@ -2807,6 +2824,7 @@ export class FrameBuilder {
     const cellW = sheet.width / FONT_COLUMNS;
     const cellH = sheet.height / FONT_ROWS;
     const scale = (text.sized ? text.size : cellH) / cellH;
+    const advances = builtinAdvances(font);
     const color = this.#ink ?? this.#color(text.color);
     const cos = Math.cos(at.rotation);
     const sin = Math.sin(at.rotation);
@@ -2848,7 +2866,7 @@ export class FrameBuilder {
             color
           );
         }
-        x += cellW * scale;
+        x += (advances === undefined ? cellW : glyphAdvance(advances, ch)) * scale;
       }
     }
   }
@@ -3024,7 +3042,7 @@ export class FrameBuilder {
         }
         this.#textures.set(image, handle);
         if (handle < 0 && (BUILTIN_FONTS as readonly string[]).includes(image))
-          this.#warner.once(`texture:${image}`, `This libtse has no '${image}' (it needs ABI v14 or newer).`);
+          this.#warner.once(`texture:${image}`, `This libtse has no '${image}' (it needs ABI v15 or newer).`);
         return handle;
       }
       const path = `${this.#assets}/${image}`;

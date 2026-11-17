@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define TSE_ABI_VERSION 14
+#define TSE_ABI_VERSION 15
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -185,8 +185,9 @@ void    tse_close(void);
  * Returns 0, or nonzero when there is no window or it is hidden (tests, CI). The next tse_frame reports the new size. */
 int32_t tse_set_fullscreen(int32_t on);
 
-/* A texture from an image file, or a font built into libtse by its "tse:" name (since ABI v14): "tse:small" is a bitmap font
- * sheet of 3x5 glyphs in 4x6 cells, characters 32 to 127 in 16 columns and 6 rows (64x36), white on transparent.
+/* A texture from an image file, or a font built into libtse by its "tse:" name (since ABI v14; all but "tse:small" since v15): a
+ * bitmap font sheet of the characters 32 to 127 in 16 columns and 6 rows of equal cells, white on transparent. "tse:small" is
+ * 3x5 glyphs in 4x6 cells (64x36); the names and sheet sizes are TSE_BUILTIN_FONT_SHEETS in protocol.ts.
  * Returns a handle >= 0, or -1 if it could not be loaded (a missing file, or a "tse:" name that is not built in). */
 int32_t tse_load_texture(const char *path);
 /* A shader for TSE_OP_LAYER_END, from a file holding one function, in GLSL (since ABI v11):

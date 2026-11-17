@@ -312,13 +312,18 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
 - **`<Particles>`** keeps its particles in one flat `Float64Array`, runs from a seeded generator (mulberry32) so a run repeats, and
   stamps itself changed only on ticks where it has particles, so an idle emitter costs a copied record.
 - **Bitmap fonts** (`<Text font>`): a sheet of characters 32 to 127 in 16 × 6 cells, a region record per character, tinted by the
-  text's colour; `size` is the cell's height.
-- **Built-in fonts** (ABI v14). A `tse:` name is a font sheet built into libtse, not a file: `tse_load_texture("tse:small")` makes
-  the 64 × 36 sheet of `tse:small` (3 × 5 glyphs in 4 × 6 cells, g j p q y reaching the sixth row) from a table in
-  `native/src/fonts.c`, white on transparent, so the Node and Rust hosts both have it and `tse package` ships nothing for it. The
-  player passes a `tse:` name as it is, not under the assets folder, and refuses one that is not in `BUILTIN_FONTS` (runtime) with
-  a warning naming them; the compiler's asset check does the same. `TSE_BUILTIN_FONT_SHEETS` (protocol.ts) gives the sheet sizes
-  libtse makes, which `RecordingBackend` reports.
+  text's colour; `size` is the cell's height. A font file moves the next character on by a cell; a built-in font by the
+  character's own advance (below), and layout measures and wraps by the same widths.
+- **Built-in fonts** (ABI v14; all but `tse:small` since v15). A `tse:` name is a font sheet built into libtse, not a file:
+  `tse_load_texture("tse:m5x7")` makes its sheet from a one-bit table in `native/src/fonts_data.h`, white on transparent, so the
+  Node and Rust hosts both have it and a game ships no file for it. There are eleven, from 3 × 5 (`tse:small`, Tom Thumb) to
+  8 × 16 (`tse:unscii-tall`); `BUILTIN_FONTS` (runtime) lists them. Each character's advance is in `packages/player/src/fonts.ts`
+  (`BUILTIN_FONT_METRICS`); `tools/fonts/make-fonts.py` writes both files from the original fonts and gives the digits one
+  width, so a counting number does not shift. The player passes a `tse:` name as it is, not under the assets folder, and refuses
+  one that is not in `BUILTIN_FONTS` with a warning naming them; the compiler's asset check does the same.
+  `TSE_BUILTIN_FONT_SHEETS` (protocol.ts) gives the sheet sizes libtse makes, which `RecordingBackend` reports. The fonts' own
+  licenses (CC0, public domain and the SIL OFL) are in `native/FONTS.md`, which `npm run pack` puts in `@tsengine/native` and
+  `tse package` puts beside a game.
 - **`freeze(steps)`** skips `onUpdate` for that many ticks; input and renders still run, and key edges are kept for the step after.
 - **`<Router>`**. Only the shown `<Route>` is in the world; a route's components are made when it comes and dropped when it has gone
   (as React Router does), unless `keepAlive`. During a transition the screen being left is inert (`World.setInert`): it draws but

@@ -368,6 +368,29 @@ export default function Main() {
 <Text size={16} color="#ffee88" outline="#000000" shadow="#000000" shadowY={2}>Score: {score}</Text>
 </script></pre>
 
+  <h3>Built-in fonts</h3>
+  <p>The engine has pixel fonts built in, so a game at a small resolution needs no font file: give <code>font</code> a <code>tse:</code> name on a <code>&lt;Text&gt;</code>, or on <code>&lt;Game&gt;</code> for every text. Each is drawn at its own height unless the text has a <code>size</code> (use a whole multiple of the line to keep pixels square). Their letters keep their own widths, and their digits share one width, so a score does not shift as it counts. Try several: <code>tse preview packages/demo</code> shows each one on a game screen at 320 × 180, 480 × 270 and 640 × 360.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Screen</th><th>Font</th><th>Line (px)</th><th>Look</th></tr>
+    <tr><td rowspan="3">320 × 180</td><td><code>tse:small</code></td><td>6</td><td>Tom Thumb: 3 × 5, the smallest that reads</td></tr>
+    <tr><td><code>tse:micro5</code></td><td>8</td><td>Condensed, fits the most text a line</td></tr>
+    <tr><td><code>tse:tiny5</code></td><td>8</td><td>Wider and rounder</td></tr>
+    <tr><td rowspan="3">480 × 270</td><td><code>tse:m5x7</code></td><td>10</td><td>m5x7: clean, with lower case and descenders</td></tr>
+    <tr><td><code>tse:silkscreen</code></td><td>9</td><td>Wide capitals, for titles and labels</td></tr>
+    <tr><td><code>tse:caps</code></td><td>8</td><td>5 × 7 capitals only, retro</td></tr>
+    <tr><td rowspan="5">640 × 360</td><td><code>tse:arcade</code></td><td>9</td><td>Bold 8 × 8 arcade (Press Start 2P)</td></tr>
+    <tr><td><code>tse:unscii</code></td><td>9</td><td>8 × 8 home-computer style</td></tr>
+    <tr><td><code>tse:unscii-thin</code></td><td>9</td><td>The same, with thin strokes, lighter for body text</td></tr>
+    <tr><td><code>tse:jersey10</code></td><td>14</td><td>Tall and sporty, for HUD numbers</td></tr>
+    <tr><td><code>tse:unscii-tall</code></td><td>17</td><td>8 × 16, readable at length for dialogue</td></tr>
+  </table></div>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+<Game width={480} height={270} font="tse:m5x7">
+  <Text font="tse:silkscreen" size={18}>THE LANTERN KEEPER</Text>
+</Game>
+</script></pre>
+  <p>Where each comes from and its license is in <code>native/FONTS.md</code>, which <code>tse package</code> puts beside a packaged game.</p>
+
   <h3><code>Hud</code></h3>
   <p>A layer drawn after the world that ignores the camera. Coordinates are screen pixels (game pixels under a <code>Screen</code>), top-left 0, 0. Put it directly in the game's root. A <code>&lt;Fade&gt;</code> goes here too.</p>
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
 
-import { CollisionTracker, createPlayer, KEYS, TSE_ABI_VERSION, type PlayerConfig } from "@tsengine/player";
+import { CollisionTracker, createPlayer, KEYS, TSE_ABI_VERSION, TSE_BUILTIN_FONT_SHEETS, type PlayerConfig } from "@tsengine/player";
 import {
   Camera,
   Collider,
@@ -134,11 +134,13 @@ describe("libtse through koffi", { skip }, () => {
     }
   });
 
-  it("draws tse:small, the font built into libtse: a 64 × 36 sheet, 3 × 5 glyphs, crisp at its own size", () => {
+  it("draws tse:small, a font built into libtse: a 64 × 36 sheet, 3 × 5 glyphs, crisp at its own size; and makes every built-in sheet", () => {
     const backend = createNodeBackend(library);
     try {
       backend.open({ width: 64, height: 48, title: "fonts", hidden: true, vsync: false });
       assert.deepEqual(backend.textureSize(backend.loadTexture("tse:small")), { width: 64, height: 36 });
+      for (const [name, sheet] of Object.entries(TSE_BUILTIN_FONT_SHEETS))
+        assert.deepEqual(backend.textureSize(backend.loadTexture(name)), sheet, `${name}: the sheet the player expects`);
       assert.equal(backend.loadTexture("tse:huge"), -1, "a tse: name that is not built in loads nothing");
     } finally {
       backend.close();

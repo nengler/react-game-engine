@@ -1203,6 +1203,19 @@ one, and a file each game ships would be the same file each time. It is named li
 has, which leaves room for more built-ins; the glyphs live in libtse, so there is nothing to package ([PLAYER.md](PLAYER.md),
 "Built-in fonts").
 
+**More built-in fonts, with their own widths** (2026-11-17, ABI v15). One small font left every other resolution to a file per
+game, and the bitmap-font format, equal cells, made the fonts most used in small games (m5x7, Tiny5, Micro 5) look gappy: an `i`
+took the room of an `m`. So there are eleven built-ins now, two or three for each of 320 × 180, 480 × 270 and 640 × 360, and a
+built-in font carries an advance per character, which drawing, measuring and wrapping use. `tse:small` became Tom Thumb's glyphs
+(still 3 × 5 in 4 × 6 cells, so its sheet and line height did not change). The fonts come from CC0, public-domain and SIL OFL
+originals, rasterised by `tools/fonts/make-fonts.py` into a C table (the sheet) and a TypeScript one (the advances), which a test
+keeps to the same names as `BUILTIN_FONTS`. Each is named for the font it comes from, except `tse:caps` (Kite's capitals) and `tse:arcade`: Press Start 2P's
+license reserves its name for the original. The OFL asks for its text to go with the fonts, so `native/FONTS.md` goes wherever
+libtse does. The digits share one advance in every font (a narrow `1` is centred in it), so a score or timer does not shift as
+it counts. Not done: advances for a font file. A sheet gives no widths, and reading them from its pixels would need the image
+on the TypeScript side, so a game's own font still moves a cell at a time. `tse preview packages/demo` shows every built-in on a
+game screen at each resolution (`FontSampler` and its stories).
+
 ## Shape
 
 `<Shape>` (M11) is a filled rectangle or circle, for debugging colliders and

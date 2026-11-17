@@ -5,7 +5,9 @@
  */
 import { KEY_NAMES, type KeyName } from "@tsengine/runtime";
 
-export const TSE_ABI_VERSION = 14;
+import { BUILTIN_FONT_METRICS } from "./fonts.ts";
+
+export const TSE_ABI_VERSION = 15;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const TSE_OP_VIEW = 1;
@@ -49,10 +51,13 @@ export const TSE_BLEND_SCREEN = 3;
 /** How deep layers nest. */
 export const TSE_LAYER_MAX = 4;
 
-/** The sheet libtse makes for each built-in font name (since ABI v14): a bitmap font sheet, 16 × 6 cells. */
-export const TSE_BUILTIN_FONT_SHEETS: Readonly<Record<string, { readonly width: number; readonly height: number }>> = {
-  "tse:small": { width: 64, height: 36 },
-};
+/**
+ * The sheet libtse makes for each built-in font name (since ABI v14; the fonts other than `tse:small` since v15): a bitmap font
+ * sheet, 16 × 6 cells. Each font's advances are in fonts.ts, which tools/fonts/make-fonts.py writes with the sheets.
+ */
+export const TSE_BUILTIN_FONT_SHEETS: Readonly<Record<string, { readonly width: number; readonly height: number }>> = Object.fromEntries(
+  Object.entries(BUILTIN_FONT_METRICS).map(([name, { width, height }]) => [name, { width, height }])
+);
 
 // Flags of a sprite region record.
 export const TSE_SPRITE_FLIP_X = 1;
