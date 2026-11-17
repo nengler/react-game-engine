@@ -130,3 +130,70 @@ function A() {
     assert.ok(check(source.replace("(other) =>", "(other: string) =>")).length > 0, "the parameter is typed");
   });
 });
+
+// What a game declares once: what each tag carries, and what each tag can be sent.
+const MESSAGES = `declare global {
+  interface ColliderData { foe: { id: number } }
+  interface ColliderMessages { foe: { damage: number } }
+}
+export {};
+`;
+
+const TOWER = `
+export function Tower() {
+  const s = useMutable({ seen: 0 });
+  useUpdate(() => {
+    const foes = nearby("foe", 0, 0, 50);
+    s.seen = foes.length > 0 ? foes[0]!.data.id + foes[0]!.distance : -1;
+    if (foes.length > 0) send("foe", foes[0]!, { damage: 3 });
+    send("foe", { x: 0, y: 0, radius: 20 }, { damage: 1 });
+  });
+  return <Entity />;
+}
+export function Foe() {
+  const s = useMutable({ hp: 10 });
+  return <Collider width={4} height={4} tag="foe" data={{ id: 7 }} onReceive={(blast) => { s.hp -= blast.damage; }} />;
+}
+export function Ward() {
+  const s = useMutable({ hp: 10 });
+  return <Entity><Collider width={4} height={4} tag="foe" data={{ id: 8 }} onReceive={(hit) => { s.hp -= hit.damage; }} /></Entity>;
+}`;
+
+describe("nearby, send and onReceive", () => {
+  it("compile to the component's own calls, and type-check by tag once the game declares ColliderMessages", () => {
+    const compiled = compile(TOWER);
+    assert.match(compiled.code, /this\.nearby\("foe", 0, 0, 50\)/);
+    assert.match(compiled.code, /this\.send\("foe", \{ x: 0, y: 0, radius: 20 \}, \{ damage: 1 \}\)/);
+    assert.match(compiled.code, /export class Foe extends Collider<\{\}, "foe">/, "a <Collider> root names its tag, which types onReceive");
+    assert.match(compiled.code, /this\.onReceive = \(blast\) => \{/);
+    assert.match(compiled.code, /onReceive: \(hit\) => \{/, "a <Collider> inside: typed by its tag where it is made");
+    const data = join(dirname(compiled.fileName), "colliders.ts");
+    assert.deepEqual(
+      getCompiler().typeCheck([
+        { fileName: compiled.fileName, text: compiled.code },
+        { fileName: data, text: MESSAGES },
+      ]),
+      []
+    );
+    const wrong = compile(TOWER.replace("{ damage: 1 }", "{ dmg: 1 }"));
+    const errors = getCompiler().typeCheck([
+      { fileName: wrong.fileName, text: wrong.code },
+      { fileName: join(dirname(wrong.fileName), "colliders.ts"), text: MESSAGES },
+    ]);
+    assert.ok(errors.length > 0, "a value that is not the tag's message is a type error");
+  });
+
+  it("is unknown until declared, so reading a member of what was received is a type error", () => {
+    const compiled = compile(TOWER);
+    assert.ok(typeCheck(compiled).length > 0);
+  });
+
+  it("is only valid in a handler, with the right number of arguments", () => {
+    const run = (body: string) => compileErrors(`function A() { ${body} return <Entity />; }`).map((d) => d.message);
+    assert.match(
+      run(`const f = nearby("foe", 0, 0, 5);`)[0]!,
+      /'nearby\(\)' asks where colliders are this step, so it is only valid in a handler/
+    );
+    assert.match(run(`useUpdate(() => { send("foe", { x: 0, y: 0, radius: 1 }); });`)[0]!, /send expects 3 arguments/);
+  });
+});

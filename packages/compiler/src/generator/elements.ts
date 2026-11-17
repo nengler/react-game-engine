@@ -42,10 +42,10 @@ export class ElementEmitter extends HandlerEmitter {
 
   protected emitElementField(child: Exclude<ChildIR, { kind: "ChildrenSlot" }>, presence: Presence): void {
     const el = child.element;
-    const type = el.component.name;
+    const type = fieldType(el);
     if (child.kind === "KeyedListChild") {
       // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
-      const itemType = child.alternate ? `${type} | ${child.alternate.component.name}` : type;
+      const itemType = child.alternate ? `${type} | ${fieldType(child.alternate)}` : type;
       this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
       if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
       this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
@@ -653,4 +653,32 @@ function readsListParams(e: ExprIR, list: KeyedListChildIR): boolean {
 /** Whether a render has props to send: a dynamic prop, or a spread that reads something that changes. */
 function hasDynamicProps(props: readonly PropIR[]): boolean {
   return props.some((p) => p.kind === "DynamicProp" || (p.kind === "SpreadProp" && p.dependencies.length > 0));
+}
+
+/**
+ * The type of an element's field: its class, and for a `<Collider tag="foe">` that tag too (`Collider<{}, "foe">`), so its
+ * `onReceive` is typed by the tag (`ColliderMessages`) where it is made.
+ */
+export function fieldType(el: {
+  readonly component: { readonly kind: string; readonly name: string };
+  readonly props: readonly unknown[];
+}): string {
+  const tag = colliderTag(el);
+  return tag === null ? el.component.name : `${el.component.name}<{}, ${tag}>`;
+}
+
+/** A built-in `<Collider>`'s literal `tag`, as TypeScript source (`"foe"`), or null. */
+export function colliderTag(el: {
+  readonly component: { readonly kind: string; readonly name: string };
+  readonly props: readonly unknown[];
+}): string | null {
+  if (el.component.kind !== "Intrinsic" || el.component.name !== "Collider") return null;
+  for (const prop of el.props as readonly {
+    readonly name?: string;
+    readonly value?: { readonly kind: string; readonly value?: unknown };
+  }[]) {
+    if (prop.name === "tag" && prop.value?.kind === "StringLiteral" && typeof prop.value.value === "string")
+      return JSON.stringify(prop.value.value);
+  }
+  return null;
 }
