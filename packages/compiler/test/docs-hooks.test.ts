@@ -6,11 +6,11 @@ import { describe, it } from "node:test";
 import { AUTHORING_HOOKS } from "../src/index.ts";
 
 const read = (name: string): string => readFileSync(new URL(`../../../docs/${name}`, import.meta.url), "utf8");
-const docs = read("reference.html") + read("language.html");
+const docs = read("reference.html") + read("guide.js") + read("language.html");
 
 describe("the docs", () => {
   it("mention every authoring hook", () => {
     const missing = AUTHORING_HOOKS.filter((name) => !docs.includes(name));
-    assert.deepEqual(missing, [], "hooks missing from docs/reference.html and docs/language.html");
+    assert.deepEqual(missing, [], "hooks missing from docs/reference.html, docs/guide.js and docs/language.html");
   });
 });

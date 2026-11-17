@@ -9,8 +9,9 @@ name: Release
 #
 #   "@tsengine/runtime": "https://github.com/nengler/tse/releases/download/v0.2.0/tsengine-runtime-0.2.0.tgz"
 #
-# @tsengine/native carries libtse and tse-host, desktop and headless, for Linux x64 (glibc 2.39 or newer: Ubuntu 24.04 and
-# later), macOS arm64 and x64 (11 or newer) and Windows x64. CI (ci.yml, including the `outside` job) is what checks the code,
+# @tsengine/native carries libtse and tse-host, desktop and headless, for Linux x64 (glibc 2.38 or newer: built on Ubuntu
+# 24.04, whose glibc is 2.39, but v0.3.0 and v0.4.0 ask for nothing newer than GLIBC_2.38, as `objdump -T` shows), macOS arm64
+# and x64 (11 or newer) and Windows x64. CI (ci.yml, including the `outside` job) is what checks the code,
 # on Linux; this builds what the tag points at on every platform and runs a smoke test on each, so tag a commit CI has passed.
 # Cost: the matrix is about 25 runner-minutes a release on top of the Linux packs job. Free while the repository is public; on
 # a private one macOS minutes bill at 10x and Windows at 2x.
