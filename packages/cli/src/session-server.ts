@@ -192,7 +192,7 @@ export class SessionServer {
       const session = this.session;
       const warnings = session.takeWarnings();
       const log = session.takeLog();
-      return { ...id, ok: true, frame: session.frame, ...result, ...(log ?? {}), ...(warnings.length > 0 ? { warnings } : {}) };
+      return { ...id, ok: true, frame: session.frame, ...result, ...log, ...(warnings.length > 0 ? { warnings } : {}) };
     } catch (error) {
       const frame = this.#session?.frame ?? 0;
       const warnings = this.#session?.takeWarnings() ?? [];
@@ -202,7 +202,7 @@ export class SessionServer {
         ok: false,
         frame,
         error: describeError(error, this.gameDir),
-        ...(log ?? {}),
+        ...log,
         ...(warnings.length > 0 ? { warnings } : {}),
       };
     }
