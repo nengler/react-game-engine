@@ -113,6 +113,7 @@ export class World implements BodySpace {
     countStep();
     this.#boxes = null;
     this.#indexes = null;
+    this.#rotateFound();
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const order = (this.#order ??= this.#treeOrder());
@@ -406,18 +407,11 @@ export class World implements BodySpace {
    * be handed to `send` to reach that one collider. Boxes are where they were when the step's updates began, as for bodies.
    */
   nearby<Tag extends string>(tag: Tag, x: number, y: number, radius: number, ignore: GameObject | null = null): Nearby<Tag>[] {
-    if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
-    const found: { collider: Collider; distance: number; order: number }[] = [];
-    // The circle's bounds, a pixel wider so a box that just touches the circle is looked at.
-    const bounds = { x: x - radius - 1, y: y - radius - 1, width: radius * 2 + 2, height: radius * 2 + 2 };
-    for (const entry of this.#indexOf(tag).query(bounds)) {
-      if (ignore !== null && componentOf(entry.collider) === ignore) continue;
-      const distance = distanceToBox(x, y, entry.box);
-      if (distance <= radius) found.push({ collider: entry.collider, distance, order: entry.order });
-    }
-    found.sort((a, b) => a.distance - b.distance || a.order - b.order);
-    return found.map(({ collider, distance }) => {
-      const box = this.#boxOf(collider);
+    const found = this.#nearbyEntries(tag, x, y, radius, ignore);
+    const out: Nearby<Tag>[] = [];
+    const { results, colliders } = this.#found;
+    for (const { entry, distance } of found) {
+      const { collider, box } = entry;
       const result = {
         tag: collider.tag,
         owner: collider.owner,
@@ -426,9 +420,70 @@ export class World implements BodySpace {
         y: box.y + box.height / 2,
         distance,
       };
-      FOUND.set(result, collider);
-      return result as unknown as Nearby<Tag>;
-    });
+      // Which collider it is, for `send`: kept in plain arrays, and put in `FOUND` only if the result is sent (`#colliderOf`).
+      results.push(result);
+      colliders.push(collider);
+      out.push(result as unknown as Nearby<Tag>);
+    }
+    return out;
+  }
+
+  /** The index entries `nearby` answers with, nearest first, with their distances: without making a result for each. */
+  #nearbyEntries(tag: string, x: number, y: number, radius: number, ignore: GameObject | null): { entry: IndexEntry; distance: number }[] {
+    if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
+    const found: { entry: IndexEntry; distance: number }[] = [];
+    // The circle's bounds, a pixel wider so a box that just touches the circle is looked at.
+    const bounds = { x: x - radius - 1, y: y - radius - 1, width: radius * 2 + 2, height: radius * 2 + 2 };
+    for (const entry of this.#indexOf(tag).query(bounds)) {
+      if (ignore !== null && (entry.component === undefined ? (entry.component = componentOf(entry.collider)) : entry.component) === ignore)
+        continue;
+      const distance = distanceToBox(x, y, entry.box);
+      if (distance <= radius) found.push({ entry, distance });
+    }
+    if (found.length > 1) found.sort((a, b) => a.distance - b.distance || a.entry.order - b.entry.order);
+    return found;
+  }
+
+  /**
+   * The results `nearby` gave in this step and the one before (a result found in a collision callback is sent in the next step), with
+   * the collider each is. Registering every result in a `WeakMap` as it was made cost more than the rest of the query in a crowd
+   * (a thousand enemies each asking which are next to it); most results are only read, so a result is looked up here, and put in
+   * `FOUND`, only when it is sent.
+   */
+  #found: FoundResults = { results: [], colliders: [] };
+  #lastFound: FoundResults = { results: [], colliders: [] };
+  /** The results above by object, made the first time a step sends to one; how many of `#found` it holds. */
+  #foundMap: Map<object, Collider> | null = null;
+  #foundMapped = 0;
+
+  /** A step starts: this step's results become the last step's, and the ones before are let go. */
+  #rotateFound(): void {
+    if (this.#found.results.length === 0 && this.#lastFound.results.length === 0) return;
+    const spare = this.#lastFound;
+    spare.results.length = 0;
+    spare.colliders.length = 0;
+    this.#lastFound = this.#found;
+    this.#found = spare;
+    this.#foundMap = null;
+    this.#foundMapped = 0;
+  }
+
+  /** The collider a `nearby` result is: one already sent to, or one found in this step or the last. */
+  #colliderOf(result: object): Collider | undefined {
+    const known = FOUND.get(result);
+    if (known !== undefined) return known;
+    let map = this.#foundMap;
+    if (map === null) {
+      map = this.#foundMap = new Map();
+      const last = this.#lastFound;
+      for (let i = 0; i < last.results.length; i++) map.set(last.results[i]!, last.colliders[i]!);
+    }
+    const { results, colliders } = this.#found;
+    for (let i = this.#foundMapped; i < results.length; i++) map.set(results[i]!, colliders[i]!);
+    this.#foundMapped = results.length;
+    const collider = map.get(result);
+    if (collider !== undefined) FOUND.set(result, collider);
+    return collider;
   }
 
   /**
@@ -439,6 +494,8 @@ export class World implements BodySpace {
    * delivered at the end of the next step's update phase. A receiver that left the world by then hears nothing.
    */
   send<Tag extends string>(tag: Tag, where: SendTarget<Tag>, value: unknown): void {
+    // A `nearby` result is tied to its collider now, so it reaches that collider whenever it is delivered.
+    if (!("radius" in where)) this.#colliderOf(where);
     this.#sends.push({ tag, where, value });
   }
 
@@ -465,7 +522,7 @@ export class World implements BodySpace {
             ? [one]
             : []
           : "radius" in where
-            ? this.nearby(tag, where.x, where.y, where.radius).map((found) => FOUND.get(found) as Collider)
+            ? this.#nearbyEntries(tag, where.x, where.y, where.radius, null).map((found) => found.entry.collider)
             : [];
       for (const receiver of receivers) {
         if (receiver.world !== this) continue;
@@ -746,6 +803,14 @@ interface IndexEntry {
   readonly order: number;
   /** The query that last looked at it, so an entry in several cells is taken once. */
   seen: number;
+  /** The component it belongs to (`componentOf`), worked out the first time a query needs it. */
+  component?: GameObject | null;
+}
+
+/** Results `nearby` made, and the collider each is, in two arrays side by side. */
+interface FoundResults {
+  readonly results: object[];
+  readonly colliders: Collider[];
 }
 
 let queries = 0;

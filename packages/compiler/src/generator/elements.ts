@@ -593,7 +593,15 @@ export class ElementEmitter extends HandlerEmitter {
             : branch === 1
               ? ` if (${test}) return undefined; $assume(!(${test}));`
               : ` if (!(${test})) return undefined; $assume(${test});`;
-      return `() => { const $l = ${source}${filter}; const $i = $l.findIndex((${params}) => ${key} === $key); if ($i < 0) return undefined; const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()}; }`;
+      // Without a filter the list is the state's own array, the same one until it is replaced: its keys are indexed once per array
+      // (`$indexOfKey`), so a thousand items each reading a prop is not a thousand searches of a thousand items. A filter makes a new
+      // array each time, so a filtered list is searched.
+      if (filter === "") this.usesKeyIndex = true;
+      const find =
+        filter === ""
+          ? `$indexOfKey($l, ${JSON.stringify(key)}, $key, (${params}) => ${key})`
+          : `$l.findIndex((${params}) => ${key} === $key)`;
+      return `() => { const $l = ${source}${filter}; const $i = ${find}; if ($i < 0) return undefined; const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()}; }`;
     };
     if (spread) {
       // A spread's members are not known here: every value prop is worked out at once, in order, as the construction does.
@@ -604,7 +612,14 @@ export class ElementEmitter extends HandlerEmitter {
             ? `...(${value(p.value)})`
             : `${propertyKey((p as { name: string }).name)}: ${value((p as { value: ExprIR }).value)}`
         );
-      return `{ $all: ${wrap(() => `({ ${all.join(", ")} })`)} }`;
+      // A value prop written after every spread is that value whatever the spreads hold, so it gets a getter of its own: reading
+      // `px` in `<Enemy {...e} px={s.px} />` does not build every prop to read one.
+      const lastSpread = el.props.map((p) => p.kind).lastIndexOf("SpreadProp");
+      const own = el.props
+        .slice(lastSpread + 1)
+        .filter((p) => p.kind === "DynamicProp")
+        .map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`);
+      return `{ ${[...own, `$all: ${wrap(() => `({ ${all.join(", ")} })`)}`].join(", ")} }`;
     }
     return `{ ${dynamic.map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`).join(", ")} }`;
   }
