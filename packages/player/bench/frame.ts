@@ -29,8 +29,12 @@ import {
   Camera,
   Collider,
   Entity,
+  Flex,
+  Hud,
+  Pointer,
   Shape,
   Sprite,
+  Text,
   Tilemap,
   World,
   registerTilemaps,
@@ -198,6 +202,66 @@ interface Scene {
   readonly scriptSweep?: boolean;
   /** Under `<Game fixedStep={60} interpolate>`: each frame runs one step and is drawn blended from the step before. */
   readonly interpolated?: boolean;
+  /** A `<Hud>` of `n` rows (a label, a bar and a button each) in one column: `"still"`, or with one label `"changing"` every frame. */
+  readonly hud?: "still" | "changing";
+  /** `n` press targets side by side under one parent (the tiles of a board), the mouse over the one that is asked last. */
+  readonly grid?: boolean;
+}
+
+/** Writes a new text into a label every frame and says so, as a compiled component's render does for a score that counts up. */
+class Counter extends Entity {
+  static readonly managed = true;
+  readonly #label: Text;
+  #count = 0;
+  constructor(label: Text) {
+    super();
+    this.#label = label;
+  }
+  override onUpdate(): void {
+    this.#label.text = `ROW ${++this.#count}`;
+    this.#label.markChanged();
+  }
+}
+
+/**
+ * A side panel's worth of HUD, and more: `n` rows in a column, each a label, a bar and a button with a label of its own (two boxes,
+ * two texts and a shape a row). Still, its layout is kept from frame to frame; with a label that changes it is laid out every frame.
+ */
+function buildHudScene(rows: number, changing: boolean): Entity {
+  const root = new Entity();
+  const hud = new Hud();
+  const column = new Flex({ direction: "column", gap: 1, padding: 4 });
+  let first: Text | null = null;
+  for (let i = 0; i < rows; i++) {
+    const row = new Flex({ direction: "row", gap: 4, alignItems: "center" });
+    const label = new Text({ text: `ROW ${i}`, size: 8 });
+    first ??= label;
+    row.addChild(label);
+    row.addChild(new Shape({ kind: "rect", width: 20 + (i % 7), height: 4 }));
+    const button = new Flex({ paddingX: 2, background: "#334466", onPress: () => {} });
+    button.addChild(new Text({ text: "UP", size: 8 }));
+    row.addChild(button);
+    column.addChild(row);
+  }
+  hud.addChild(column);
+  root.addChild(hud);
+  if (changing && first !== null) root.addChild(new Counter(first));
+  return root;
+}
+
+/** A board of press targets: `n` pointers under one parent. The bench's mouse stays at (0, 0), over the first, which hover asks last. */
+function buildGridScene(n: number): Entity {
+  const root = new Entity();
+  const board = new Entity();
+  const side = Math.ceil(Math.sqrt(n));
+  for (let i = 0; i < n; i++) {
+    const tile = new Pointer({ width: 14, height: 14, onPress: () => {} });
+    tile.transform.x = (i % side) * 16;
+    tile.transform.y = Math.floor(i / side) * 16;
+    board.addChild(tile);
+  }
+  root.addChild(board);
+  return root;
 }
 
 /** 80 animated enemies, 20 towers and 50 shots, built from engine pieces so the bench does not depend on the game package. */
@@ -270,9 +334,13 @@ function buildScene({
   pile = false,
   map = false,
   churn = false,
+  hud,
+  grid = false,
   moving = n,
 }: Scene): Entity {
   if (tower) return buildTowerScene(n);
+  if (hud !== undefined) return buildHudScene(n, hud === "changing");
+  if (grid) return buildGridScene(n);
   if (churn) {
     const root = new Entity();
     root.addChild(new Spawner(n));
@@ -369,6 +437,12 @@ const scenes: [string, Scene][] = [
   ["20 x 20 tilemap scrolled", { n: 20, map: true }],
   // Mounting and unmounting while the game runs: 200 rects made and 200 dropped every frame.
   ["200 rects spawned and removed a frame", { n: 200, churn: true }],
+  // A HUD is laid out only when something under it changed: a still one costs its walk (0.09 ms here), a changing one its layout
+  // too (0.25 ms, which a still one cost as well before layouts were kept).
+  ["a HUD of 100 rows, still", { n: 100, hud: "still" }],
+  ["a HUD of 100 rows, one label changing", { n: 100, hud: "changing" }],
+  // Hover asks every press target each frame where it is; siblings share their parent's place (0.16 ms; 0.27 when each walked up the tree).
+  ["900 press targets in a grid", { n: 900, grid: true }],
 ];
 // Under a host with a broad phase, the same scenes with the script's sweep, to compare.
 if (hostOverlaps !== undefined) {

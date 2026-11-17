@@ -1,4 +1,5 @@
 import { GameObject, type InputScopeProps } from "../GameObject.ts";
+import type { WorldTransform } from "../Transform.ts";
 import type { PressableProps } from "./Pointer.ts";
 
 /** The main axis of a `<Flex>`. The manifest's `intrinsicLiterals` reads these lists, so the compiler cannot drift from them. */
@@ -238,6 +239,11 @@ export class FlexBox {
   readonly rawSizing: unknown[] = [undefined, undefined];
   readonly sizingMode = new Uint8Array(2);
   readonly sizingValue = new Float64Array(2);
+  /**
+   * The player's note of the pass that last laid this box out as a layout root, by which it leaves the layout alone while nothing
+   * under the box changes. Owned by `FrameBuilder`; nothing else reads or writes it.
+   */
+  laidOut: object | null = null;
 
   ensure(count: number): void {
     if (count <= this.childKind.length) return;
@@ -261,9 +267,9 @@ export class FlexBox {
 
 /**
  * A container that places its children in a row or a column, with the props of CSS flexbox and the sizing of Clay
- * (see docs/LAYOUT.md). The player lays it out every frame, before drawing: each child's `layoutX` / `layoutY`
- * is written, so a child's own `transform` still moves it within its slot. A `Shape`, `Sprite` or `Text` keeps its
- * own size; only a `<Flex>` is resized by layout.
+ * (see docs/LAYOUT.md). The player lays it out before drawing, on each frame where something under its layout root has
+ * changed: each child's `layoutX` / `layoutY` is written, so a child's own `transform` still moves it within its slot.
+ * A `Shape`, `Sprite` or `Text` keeps its own size; only a `<Flex>` is resized by layout.
  */
 /**
  * The pixels of border a `<Flex>` keeps room for on each side: its `borderWidth` when it has a border colour in any state (so the
@@ -450,9 +456,17 @@ export class Flex<P extends object = {}> extends GameObject<P> {
    * part that many pixels in from every edge counts (what a clipping box shows: inside its border).
    */
   contains(x: number, y: number, inset = 0): boolean {
+    return this.#containsAt(this.worldTransform(), x, y, inset);
+  }
+
+  /** `contains`, for a caller that already holds the `childSpace()` of this box's parent (see `Pressable.containsIn`). */
+  containsIn(parentSpace: WorldTransform, x: number, y: number): boolean {
+    return this.#containsAt(this.worldTransformIn(parentSpace), x, y, 0);
+  }
+
+  #containsAt(t: WorldTransform, x: number, y: number, inset: number): boolean {
     const width = this.box.size[0] as number;
     const height = this.box.size[1] as number;
-    const t = this.worldTransform();
     if (!(width > 0 && height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
     const dx = x - t.x;
     const dy = y - t.y;

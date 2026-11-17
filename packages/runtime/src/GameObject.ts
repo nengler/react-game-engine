@@ -415,8 +415,15 @@ export class GameObject<P extends object = {}> {
    * the layout offset; a `global` transform ignores all three.
    */
   worldTransform(): WorldTransform {
-    const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.childSpace();
-    return composeTransforms(composeTransforms(offsetTransform(parent, this.layoutX, this.layoutY), this.placement), this.transform);
+    return this.worldTransformIn(this.parent === null ? IDENTITY_TRANSFORM : this.parent.childSpace());
+  }
+
+  /**
+   * `worldTransform()` for a caller that already holds the parent's `childSpace()` (the identity with no parent): asking each of
+   * many siblings in turn then walks up the tree once, not once for each of them.
+   */
+  worldTransformIn(parentSpace: WorldTransform): WorldTransform {
+    return composeTransforms(composeTransforms(offsetTransform(parentSpace, this.layoutX, this.layoutY), this.placement), this.transform);
   }
 
   /**

@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { WorldTransform } from "../Transform.ts";
 import type { World } from "../World.ts";
 
 /**
@@ -14,6 +15,11 @@ export interface Pressable {
   onPointerLeave?: (() => void) | undefined;
   /** Whether the world-space point (the HUD's, for one inside a `<Hud>`) is on it as it is drawn. */
   contains(x: number, y: number): boolean;
+  /**
+   * `contains`, for a caller that already holds the `childSpace()` of its parent: the player asks every pressable under the mouse each
+   * frame, and neighbours with one parent (the tiles of a grid) then share one walk up the tree.
+   */
+  containsIn?(parentSpace: WorldTransform, x: number, y: number): boolean;
   /** A key or an action (`"wave"`) whose press calls `onPress`, like the DOM's `accessKey` (see `World.tick`). */
   pressKey?: string | undefined;
   /** It takes the focus: the arrow keys move between focusable things, and the confirm key presses the focused one. */
@@ -122,7 +128,14 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
    * negative or not a number), or a zero scale, is never hit.
    */
   contains(x: number, y: number): boolean {
-    const t = this.worldTransform();
+    return this.#containsAt(this.worldTransform(), x, y);
+  }
+
+  containsIn(parentSpace: WorldTransform, x: number, y: number): boolean {
+    return this.#containsAt(this.worldTransformIn(parentSpace), x, y);
+  }
+
+  #containsAt(t: WorldTransform, x: number, y: number): boolean {
     if (!(this.width > 0 && this.height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
     const dx = x - t.x;
     const dy = y - t.y;

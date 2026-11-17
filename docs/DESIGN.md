@@ -2524,7 +2524,9 @@ centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's o
 **Hover** (2026-11-11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
 `pointerenter` / `pointerleave`: each frame the player finds the topmost pressable under the mouse (last frame's draw order,
 the same search a press makes) and `World.reportHover` tells the one before it left and the new one it was entered; an inert one
-counts as none, and a mouse off the screen is over nothing. A `<Flex>` with only hover callbacks is collected for the mouse but
+counts as none, and a mouse off the screen is over nothing. Each pressable is asked where it is, which means where its parent
+is: neighbours in the list with one parent (the tiles of a board) share that answer (`containsIn`), so a board of 180 tiles
+walks up the tree once a frame, not 180 times. A `<Flex>` with only hover callbacks is collected for the mouse but
 lets a press through to what is under it. State is the component's: `onPointerEnter={() => setHovered(true)}`.
 
 **Functions passed whole** (2026-11-11). `onPress={resume}` where `resume` is a game-state action, and
@@ -2758,6 +2760,9 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
 - **What the walk must see every frame is never reused**: a `<Camera>`, `<Pointer>`, `<Hud>`, `<Flex>` (they feed lists besides the
   draw records, or lay out their children) and anything with a non-zero `z`. A subtree containing one is rebuilt, and so are its
   ancestors, though their other children are still copied.
+- **A `<Flex>`'s records are made again every frame, but its layout is not.** The same stamps say whether anything under a layout
+  root changed since it was laid out; when nothing did, the layout is kept (LAYOUT.md, "A layout that cannot have changed is
+  kept").
 - **Collisions follow it.** A collider in a reused subtree comes with the same `ColliderEntry` object as last frame, and one that is
   not gets a new one, so `CollisionTracker` tests again only the colliders whose entry is new (see its doc comment). An entry must not be
   changed after it is handed over.
@@ -2874,8 +2879,9 @@ fit sizes bottom-up, then sharing out space top-down, widths first and then heig
 slot). Sizing is per axis: `"fit"`, `"grow"`, a number or a percentage, with min and max; free space goes to the
 smallest growing child first and stops at each maximum. Only a `Flex` is resized by layout; a `Shape`, `Sprite` or
 `Text` keeps its own size. An `Entity` or component child is sized by the bounding box of what it draws. A root that
-grows fills the game's area (the canvas, else the window). Layout runs every frame, so conditional children and keyed
-lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
+grows fills the game's area (the canvas, else the window). Layout runs on every frame where something under the root
+changed (a root nothing has changed under keeps its layout: LAYOUT.md, "A layout that cannot have changed is kept"), so
+conditional children and keyed lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
 behind the children, at the box's size. Each child's offset is rounded to a whole pixel (sizes stay exact), so centred
 text is not blurred. A `Flex` with an `onPress` is pressable over its laid-out box, in the same draw-order list as
 `Pointer`s (both are a `Pressable`). A `<Text width={80} align="center">` is laid out as an 80-wide box and drawn

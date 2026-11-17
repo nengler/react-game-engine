@@ -2,6 +2,7 @@ import {
   activeProfiler,
   Flex,
   Game,
+  IDENTITY_TRANSFORM,
   WIDGET_NONE,
   World,
   captureHotState,
@@ -486,15 +487,25 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     if (screen === null || onScreen(screen, input.screenX, input.screenY)) {
       const at = input.worldPoint(input.screenX, input.screenY);
       const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
+      // Every pressable is asked every frame, topmost first, and each answer needs where its parent is. Neighbours in the list are
+      // mostly siblings (the tiles of a grid, the rows of a menu), so the parent's space is worked out once for a run of them.
+      let siblingsOf: GameObject | null | undefined;
+      let space = IDENTITY_TRANSFORM;
       for (let i = pointers.length - 1; i >= 0 && hovered === null; i--) {
         const pointer = pointers[i] as Pressable;
+        if (pointer.world !== world) continue;
         const point = i >= hudPointersFrom ? hudAt : at;
-        if (
-          pointer.world === world &&
-          pointer.contains(point.x, point.y) &&
-          !clippedOff(pointer as unknown as GameObject, point.x, point.y)
-        )
-          hovered = pointer;
+        let over: boolean;
+        if (pointer.containsIn === undefined) over = pointer.contains(point.x, point.y);
+        else {
+          const parent = (pointer as unknown as GameObject).parent;
+          if (parent !== siblingsOf) {
+            siblingsOf = parent;
+            space = parent === null ? IDENTITY_TRANSFORM : parent.childSpace();
+          }
+          over = pointer.containsIn(space, point.x, point.y);
+        }
+        if (over && !clippedOff(pointer as unknown as GameObject, point.x, point.y)) hovered = pointer;
       }
     }
     world.reportHover(hovered);

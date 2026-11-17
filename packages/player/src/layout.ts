@@ -521,6 +521,9 @@ export class Layouter {
 
   /** Step 4: where each child goes inside this box, written to its `layoutX` / `layoutY`; then the same inside each child `Flex`. */
   #position(f: Flex): void {
+    // Whatever was noted of an earlier layout of this box as a root (`FlexBox.laidOut`) is no longer so: it has been sized again, here
+    // perhaps as a child of another box. The builder notes the root of this pass afresh.
+    f.box.laidOut = null;
     if (this.#wraps(f)) {
       this.#positionWrapped(f);
       return;

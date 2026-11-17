@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Camera, Entity, Pointer, World } from "../src/index.ts";
+import { Camera, Entity, Flex, Pointer, World } from "../src/index.ts";
 
 function mounted(options: { x?: number; y?: number; presses?: number[] } = {}) {
   const presses = options.presses ?? [];
@@ -100,5 +100,46 @@ describe("Pointer", () => {
     const off = camera.viewToWorld(60, 4);
     assert.equal(world.reportPress(pointer, off.x, off.y), false, "a point on screen beside it");
     assert.equal(presses.length, 1);
+  });
+});
+
+describe("containsIn", () => {
+  it("answers as contains does, given the parent's child space: under moved, scaled and turned parents, a camera, and a layout offset", () => {
+    const world = new World();
+    const outer = new Entity();
+    outer.transform.x = 40;
+    outer.transform.y = -15;
+    outer.transform.rotation = 0.6;
+    const camera = new Camera({ zoom: 2 });
+    const inner = new Entity();
+    inner.transform.scaleX = 1.5;
+    inner.transform.scaleY = 0.5;
+    inner.placement.x = 7;
+    inner.layoutX = 3;
+    inner.layoutY = 9;
+    const pointer = new Pointer({ width: 20, height: 10, originX: 4, originY: 2 });
+    pointer.transform.x = 11;
+    pointer.transform.rotation = -0.3;
+    pointer.layoutX = 5;
+    const box = new Flex({ width: 30, height: 12 });
+    box.box.size[0] = 30;
+    box.box.size[1] = 12;
+    box.transform.y = 6;
+    inner.addChild(pointer);
+    inner.addChild(box);
+    camera.addChild(inner);
+    outer.addChild(camera);
+    world.mount(outer);
+    const space = inner.childSpace();
+    let inside = 0;
+    for (let x = -40; x <= 120; x += 4)
+      for (let y = -60; y <= 80; y += 4) {
+        assert.equal(pointer.containsIn(space, x, y), pointer.contains(x, y), `pointer at ${x},${y}`);
+        assert.equal(box.containsIn(space, x, y), box.contains(x, y), `box at ${x},${y}`);
+        if (pointer.contains(x, y) || box.contains(x, y)) inside++;
+      }
+    assert.ok(inside > 5, `some of the points are on them (${inside})`);
+    assert.deepEqual(pointer.worldTransformIn(space), pointer.worldTransform());
+    assert.deepEqual(outer.worldTransformIn({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 }), outer.worldTransform());
   });
 });
