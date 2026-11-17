@@ -9,7 +9,8 @@ It has a compiler, a runtime, and a native player that draws, plays sound and re
 through raylib. The player runs under Node while you develop (with hot reload and rewind); a packaged game is one folder that
 runs on V8 or on a small Rust + QuickJS-ng host. Three games are built on it: [Kite](packages/kite) (a precision platformer),
 [Hearth](packages/hearth) (a tower defense) and [Bramble](games/bramble) (a top-down adventure made from the template, outside
-the workspaces). Linux is the supported platform.
+the workspaces). Their art and sound effects are Kenney's free CC0 packs ([kenney.nl](https://kenney.nl)), laid out by each
+game's `tools/make-assets.ts` from the files in its `tools/kenney/`. Linux is the supported platform.
 
 Start with the [authoring guide](docs/index.html) (open it in a browser): [Getting started](docs/start.html) goes from an
 empty folder to a packaged game (`tse create my-game`, or `--template menu` / `--template platformer`), and
