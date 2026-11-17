@@ -142,17 +142,17 @@ mark { background: var(--accent-soft); color: inherit; }
 <section id="gotchas" data-group="Reference" data-title="Gotchas and tips">
   <h2>Gotchas and tips</h2>
   <ul>
-    <li><strong>Nothing moves?</strong> Did you multiply by <code>dt</code>? Is the component mounted?</li>
-    <li><strong>A change to a list through another name is refused</strong> (<code>const e = s.list[0]; e.hp = 0</code>, or a loop variable). Write through the field (<code>s.list[0].hp = 0</code>), or give it a new list: <code>s.list = s.list.map(…)</code>. <code>s.list.push(x)</code> itself is fine.</li>
-    <li><strong>A callback under <code>{s.x !== null &amp;&amp; …}</code> does not narrow <code>s.x</code>.</strong> Take <code>const x = s.x</code> above and read <code>x</code>: TypeScript keeps a <code>const</code>'s narrowing in a closure.</li>
-    <li><strong><code>&lt;Game&gt;</code> settings are literals</strong> (<code>width={640}</code>, never state), and it is only ever a root.</li>
-    <li><strong><code>&lt;Text&gt;</code></strong> takes <code>text=</code> <em>or</em> children (<code>Score: {score}</code>), never both.</li>
-    <li><strong>Collider never fires?</strong> Both sides' <code>hits</code> must allow the other's <code>layer</code>, and neither may be in a <code>&lt;Hud&gt;</code>.</li>
-    <li><strong>Blurry pixel art?</strong> Keep <code>smooth</code> off and use <code>Screen fit="integer"</code>.</li>
-    <li><strong>Full screen:</strong> <code>F11</code> or <code>Alt + Enter</code>; <code>fullscreenKey={false}</code> disables F11.</li>
-    <li><strong>Effect store does nothing?</strong> Mount its <code>&lt;ParticleLayer&gt;</code>, next to the <code>Camera</code> rather than inside it.</li>
-    <li><strong>Imported constants do not re-render.</strong> Changing one never updates the screen; use <code>useGame</code> for that.</li>
-    <li><strong>Debug a hitbox:</strong> put a translucent <code>Shape</code> of the same size beside it.</li>
+    <li>If nothing moves, check that you multiplied by <code>dt</code> and that the component is mounted.</li>
+    <li>A change to a list item through another name is refused (<code>const e = s.list[0]; e.hp = 0</code>, or a loop variable). Write through the field (<code>s.list[0].hp = 0</code>), or give it a new list: <code>s.list = s.list.map(…)</code>. <code>s.list.push(x)</code> itself is fine.</li>
+    <li>A callback under <code>{s.x !== null &amp;&amp; …}</code> does not narrow <code>s.x</code>. Take <code>const x = s.x</code> above it and read <code>x</code>: TypeScript keeps a <code>const</code>'s narrowing in a closure.</li>
+    <li><code>&lt;Game&gt;</code> settings are literals (<code>width={640}</code>, never state), and <code>&lt;Game&gt;</code> is only ever a root.</li>
+    <li><code>&lt;Text&gt;</code> takes <code>text=</code> <em>or</em> children (<code>Score: {score}</code>), never both.</li>
+    <li>If a collider never fires, check both sides: each one's <code>hits</code> must allow the other's <code>layer</code>, and neither may be in a <code>&lt;Hud&gt;</code>.</li>
+    <li>For sharp pixel art, keep <code>smooth</code> off and use <code>Screen fit="integer"</code>.</li>
+    <li><code>F11</code> or <code>Alt + Enter</code> goes full screen; <code>fullscreenKey={false}</code> disables F11.</li>
+    <li>An effect store does nothing until you mount its <code>&lt;ParticleLayer&gt;</code>, next to the <code>Camera</code> rather than inside it.</li>
+    <li>Changing an imported constant never updates the screen, because constants do not re-render. Use <code>useGame</code> for a value that changes.</li>
+    <li>To debug a hitbox, put a translucent <code>Shape</code> of the same size beside it.</li>
   </ul>
 </section>
 <div class="pager"><a href="effects.html">← Effects and input</a><span></span></div>
