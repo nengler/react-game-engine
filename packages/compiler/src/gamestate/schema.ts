@@ -27,6 +27,11 @@ export interface GameStateLeaf {
   readonly kind: "leaf";
   readonly type: ValueType;
   readonly initial: number | string | boolean;
+  /**
+   * Written with a type (`"meadow" as MapId`, `1 as Level`): TypeScript's type of it is the author's, not the literal's
+   * primitive, so a selector reading it is typed from the store (`MapId`, not a widened `string`).
+   */
+  readonly typed?: true;
 }
 
 /** An object in the game state: its keys, each a leaf, another object or a value. */
@@ -72,7 +77,7 @@ const SHAPE =
 /**
  * Reads `GameState.ts`: `createGameState(data, actions)`, exported under a name components import. The data is an object
  * literal: its leaves are number, string or boolean literals (a negative number is fine; a leaf's type is its literal's: `0`
- * is a `number`), and objects of those nested as deep as you like. Any other value (an array, a call such as `newRun()`) is a
+ * is a `number`; one written with a type, `"meadow" as MapId`, keeps it), and objects of those nested as deep as you like. Any other value (an array, a call such as `newRun()`) is a
  * `GameStateValue`: its type comes from TypeScript. The actions are an object literal of functions. Spreads and computed keys
  * are `TSE1109`, and so is the removed `(set) => ({ … })` form, with what to write instead.
  */
@@ -210,8 +215,9 @@ function readNode(object: ObjectLiteralExpression, fail: Fail): GameStateNode {
       children[key] = { kind: "value" };
       continue;
     }
-    const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
-    if (value === null || isArrowFunction(value) || isFunctionExpression(value)) {
+    const written = isPropertyAssignment(p) ? p.initializer : null;
+    const value = written === null ? null : unwrap(written);
+    if (written === null || value === null || isArrowFunction(value) || isFunctionExpression(value)) {
       fail(
         `'${key}' is a function in the game state's data: actions go in the second argument, \`createGameState(data, { ${key}(s) { … } })\`.`,
         p
@@ -222,7 +228,8 @@ function readNode(object: ObjectLiteralExpression, fail: Fail): GameStateNode {
       children[key] = readNode(value, fail);
       continue;
     }
-    children[key] = literalLeaf(value) ?? { kind: "value" };
+    const leaf = literalLeaf(value);
+    children[key] = leaf === null ? { kind: "value" } : withType(written) ? { ...leaf, typed: true } : leaf;
   }
   return { kind: "node", children };
 }
@@ -233,6 +240,19 @@ function unwrap(expression: Expression): Expression {
   for (;;) {
     if (isParenthesizedExpression(current) || isAsExpression(current) || isSatisfiesExpression(current)) current = current.expression;
     else return current;
+  }
+}
+
+/** Whether a value is written with a type (`"meadow" as MapId`, `x satisfies Level`, `as const`) other than its primitive's. */
+function withType(expression: Expression): boolean {
+  let current = expression;
+  for (;;) {
+    if (isAsExpression(current) || isSatisfiesExpression(current)) {
+      const kind = current.type.kind;
+      if (kind !== SyntaxKind.NumberKeyword && kind !== SyntaxKind.StringKeyword && kind !== SyntaxKind.BooleanKeyword) return true;
+      current = current.expression;
+    } else if (isParenthesizedExpression(current)) current = current.expression;
+    else return false;
   }
 }
 

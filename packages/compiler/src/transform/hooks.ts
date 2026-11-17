@@ -540,8 +540,9 @@ export class HookLowering extends ExpressionLowering {
     }
     if (!this.claimName(name, at)) return null;
     const id = stateId(this.component.name, name);
-    // A leaf the schema knows keeps its primitive type; an object, an array or a computed value is typed by TypeScript, from
-    // the store itself: it re-renders when any value under it changes.
+    // A leaf the schema knows keeps its primitive type; an object, an array, a computed value or a leaf written with a type
+    // (`"meadow" as MapId`, which would otherwise widen to `string`) is typed by TypeScript, from the store itself: an object
+    // re-renders when any value under it changes.
     const leaf = node.kind === "leaf" && walked.length === path.length ? node : null;
     const initialValue: ExprIR =
       leaf === null
@@ -552,7 +553,7 @@ export class HookLowering extends ExpressionLowering {
             ? { kind: "StringLiteral", value: leaf.initial as string }
             : { kind: "BooleanLiteral", value: leaf.initial as boolean };
     const type: TypeIR =
-      leaf === null
+      leaf === null || leaf.typed
         ? {
             kind: "SourceType",
             text: `ReturnType<typeof ${definition.name}.getState>${path.map((k) => `[${JSON.stringify(k)}]`).join("")}`,

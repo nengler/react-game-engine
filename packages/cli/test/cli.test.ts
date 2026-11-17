@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 // @tsengine/* resolve to the workspace; tools/check-outside.ts is the check that installs packed tarballs instead.
 import { pinEngine } from "../src/commands/create.ts";
 import { findLibrary } from "../src/native.ts";
+import { cliScript } from "../src/run.ts";
 
 const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../src/cli.ts");
 const repo = resolve(dirname(cli), "../../..");
@@ -259,6 +260,10 @@ test("screenshot --gpu says what is missing when the desktop build is not there"
   });
   assert.equal(ran.status, 2);
   assert.match(ran.stderr, /--gpu needs the desktop build of libtse: run `npm run native:build`/);
+});
+
+test("cliScript, which `screenshot --gpu` runs again under xvfb-run, is the running entry: cli.ts in the repository", () => {
+  assert.equal(cliScript(), cli);
 });
 
 test("a CLI from npm pins a new game's engine packages to its own version", () => {
