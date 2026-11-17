@@ -116,7 +116,7 @@
         ["points", "number[]", "[]", "A polygon's corners in order, <code>[x0, y0, x1, y1, …]</code>, in its own pixels, inside its box."],
         ["onCollisionEnter", "(other) =&gt; void", "–", "Starts touching. <code>other</code> has <code>tag</code> and <code>owner</code>."],
         ["onCollisionExit", "(other) =&gt; void", "–", "Stops touching."],
-        ["onReceive", "(value) =&gt; void", "–", "What <code>send(tag, where, value)</code> sent it, at the end of the step's update phase; typed by its <code>tag</code> through <code>ColliderMessages</code>. See <a href=\"systems.html#nearby-send\">nearby and send</a>."]
+        ["onReceive", "(value) =&gt; void", "–", "What <code>send(tag, where, value)</code> sent it, at the end of the step's update phase; typed by its <code>tag</code> through <code>ColliderMessages</code>. A component's own sends never reach its own colliders. See <a href=\"systems.html#nearby-send\">nearby and send</a>."]
       ] },
     { name: "Pointer", kind: "leaf", sum: "An invisible clickable area. Pair with a <code>Sprite</code> or <code>Shape</code> to make a button.",
       props: [

@@ -67,6 +67,8 @@ export interface PlacedSpec extends ContactSpec {
   readonly x: number;
   readonly y: number;
   readonly layer?: string;
+  /** Called with each value the component `send`s to this collider: what a test reads to see what was sent. */
+  readonly onReceive?: (value: unknown) => void;
 }
 
 /** A component mounted for a test. Every method that runs the world flushes it after, so what is read is what would be drawn. */
@@ -139,6 +141,7 @@ export class Rendered<Root extends GameObject = GameObject> {
       tag: spec.tag ?? "",
       data: spec.data,
       layer: spec.layer,
+      onReceive: spec.onReceive,
     });
     collider.transform.x = spec.x;
     collider.transform.y = spec.y;
@@ -198,6 +201,17 @@ export class Rendered<Root extends GameObject = GameObject> {
       this.world.reportCollision(own, them);
       this.world.flush();
     }
+    return this;
+  }
+
+  /**
+   * Send `value` to the colliders with `tag` that `where` names (a circle `{ x, y, radius }` in world space, or a `nearby` result),
+   * as a component's `send` would, and deliver it now to their `onReceive`, without running a step: as `collide` reports a contact.
+   */
+  send(tag: string, where: { readonly x: number; readonly y: number; readonly radius: number } | object, value: unknown): this {
+    this.world.send(tag, where as never, value);
+    this.world.deliverSends();
+    this.world.flush();
     return this;
   }
 

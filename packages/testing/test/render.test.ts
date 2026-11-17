@@ -220,3 +220,49 @@ export function Field() {
     assert.equal((fields(t).log as string[]).length, 2);
   });
 });
+
+describe("t.send and a placed collider's onReceive", () => {
+  const TARGET = `
+export function Target() {
+  const s = useMutable({ hp: 10, got: 0 });
+  return (
+    <Entity>
+      <Collider x={0} y={0} width={10} height={10} tag="foe" data={{ id: 1 }} onReceive={(blast) => { s.hp -= blast.damage; s.got += 1; }} />
+    </Entity>
+  );
+}`;
+
+  it("delivers to the component's collider at once, without a step, to a circle or to one nearby result", async () => {
+    const { Target } = await build<{ Target: new () => GameObject }>(TARGET);
+    const t = render(Target, {}, { collisions: true });
+    t.send("foe", { x: 5, y: 5, radius: 2 }, { from: 0, damage: 3 });
+    assert.deepEqual([fields(t).hp, fields(t).got], [7, 1], "delivered in the call, no step run");
+    t.send("foe", { x: 100, y: 100, radius: 5 }, { from: 0, damage: 3 });
+    assert.equal(fields(t).got, 1, "a circle that reaches nothing delivers nothing");
+    const [found] = t.world.nearby("foe", 5, 5, 1);
+    t.send("foe", found!, { from: 0, damage: 2 });
+    assert.deepEqual([fields(t).hp, fields(t).got], [5, 2]);
+  });
+
+  const SHOOTER = `
+export function Shooter() {
+  const s = useMutable({ step: 0 });
+  useUpdate(() => {
+    s.step += 1;
+    const foes = nearby("foe", 0, 0, 50);
+    if (foes.length > 0) send("foe", foes[0]!, { from: s.step, damage: 4 });
+  });
+  return <Entity />;
+}`;
+
+  it("tells a placed collider what the component sent it, in the step it was sent", async () => {
+    const { Shooter } = await build<{ Shooter: new () => GameObject }>(SHOOTER);
+    const t = render(Shooter, {}, { collisions: true });
+    const got: unknown[] = [];
+    t.place({ tag: "foe", data: { id: 9 }, x: 20, y: 0, width: 8, height: 8, onReceive: (value) => got.push(value) });
+    t.step();
+    assert.deepEqual(got, [{ from: 1, damage: 4 }]);
+    t.step(2);
+    assert.equal(got.length, 3);
+  });
+});
