@@ -418,6 +418,20 @@
   });
   var diagEl = document.getElementById("diag"); if (diagEl) diagEl.innerHTML = dh;
 
+  /* ---------- tables: on a phone, a row of three or more columns reads as a card ---------- */
+  document.querySelectorAll(".tablewrap table").forEach(function (table) {
+    var head = table.rows[0];
+    if (!head || head.cells.length < 3 || head.cells[0].tagName !== "TH") return;
+    var labels = [].map.call(head.cells, function (c) { return c.textContent.trim(); });
+    table.parentNode.classList.add("stack");
+    [].slice.call(table.rows, 1).forEach(function (row) {
+      [].forEach.call(row.cells, function (cell, i) {
+        if (i > 0 && labels[i]) cell.setAttribute("data-label", labels[i]);
+        if (i > 0 && /^[\s–]*$/.test(cell.textContent)) cell.classList.add("blank");
+      });
+    });
+  });
+
   /* ---------- code blocks ---------- */
   var KW = /^(import|from|export|default|function|const|let|return|if|else|interface|type|new|as|true|false|null|undefined|extends|typeof|async|await)$/;
   var TOKEN = /(\{\s*\/\*[\s\S]*?\*\/\s*\}|\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*(?=\n|$))|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|(<\/?[A-Z][A-Za-z0-9]*|\/>|<>|<\/>)|(\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_$][\w$]*\b)/g;
