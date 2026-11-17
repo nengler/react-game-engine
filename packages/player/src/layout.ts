@@ -1,4 +1,4 @@
-import { Camera, FLEX_ANCHORS, Flex, flexBorderRoom, type FlexAnchor, type GameObject } from "@tsengine/runtime";
+import { Camera, FLEX_ANCHORS, Flex, flexBorderRoom, Text, type FlexAnchor, type GameObject } from "@tsengine/runtime";
 
 /**
  * `<Flex>` layout, after Clay (see docs/LAYOUT.md, "The algorithm"). Everything below one layout root (a
@@ -263,6 +263,8 @@ export class Layouter {
       width = this.#measured.width;
       height = this.#measured.height;
       drawn = true;
+      // A text aligned on its point draws to the left of it: its widest line's share (a line is shifted by its own width).
+      if (object instanceof Text && textAlignBox(object) === 0) ox += object.align === "center" ? Math.round(-width / 2) : -width;
     }
     if (drawn) {
       if (ox < (e[0] as number)) e[0] = ox;
@@ -826,4 +828,16 @@ export class Layouter {
       kid.layoutY -= y;
     }
   }
+}
+
+/**
+ * The width a `<Text>`'s lines are aligned inside: its `width`, else its `maxWidth`, else 0 when it is aligned on its point (no box,
+ * `align` center or right, and not placed by a `<Flex>`, which lays it out at its own size), so that its x is the middle or the
+ * right end of each line. Undefined when there is nothing to align in (left, or a `<Flex>` child without a width).
+ */
+export function textAlignBox(text: Text): number | undefined {
+  if (text.width !== undefined) return text.width;
+  if (text.maxWidth !== undefined) return text.maxWidth;
+  if (text.align === "left" || text.parent instanceof Flex) return undefined;
+  return 0;
 }

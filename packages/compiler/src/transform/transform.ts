@@ -8,7 +8,7 @@ import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type TypeDeclarationIR, type ComponentIR, type IRModule, type SourceSpan } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { ElementLowering } from "./elements.ts";
-import { GAME_TAG, TIMER_FUNCTIONS, SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
+import { GAME_TAG, TIMER_FUNCTIONS, WORLD_FUNCTIONS, SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
 import { type ModuleContext } from "./lowering.ts";
 import { type LoweringContext } from "./statements.ts";
 
@@ -81,6 +81,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
     ...AUTHORING_HOOKS,
     ...Object.keys(manifest.functions),
     ...Object.keys(TIMER_FUNCTIONS),
+    ...Object.keys(WORLD_FUNCTIONS),
   ]);
   const authoredTypes = new Set(AUTHORING_TYPES);
   for (const i of analysis.authoringImports) {

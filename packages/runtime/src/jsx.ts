@@ -1,7 +1,7 @@
 import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
 import type { ButtonProps } from "./components/Button.ts";
 import type { CameraProps } from "./components/Camera.ts";
-import type { ColliderProps, ContactOf } from "./components/Collider.ts";
+import type { ColliderProps, ContactOf, MessageOf, Nearby, SendTarget } from "./components/Collider.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { FadeProps } from "./components/Fade.ts";
 import type { FlexProps } from "./components/Flex.ts";
@@ -284,8 +284,8 @@ export function Sprite(_props: SpriteProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Sprite");
 }
 
-/** A hit area for collisions. */
-export function Collider(_props: ColliderProps & TransformShorthand & OpacityShorthand): JSX.Element {
+/** A hit area for collisions, and what `nearby` finds and `send` reaches. Its `onReceive` is typed by its `tag` (`ColliderMessages`). */
+export function Collider<Tag extends string = string>(_props: ColliderProps<Tag> & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Collider");
 }
 
@@ -473,22 +473,61 @@ export function Route(_props: RouteProps & { children?: Child }): JSX.Element {
 }
 
 /**
- * Call `fn` once, `seconds` of game time from now: `after(0.15, () => setFlash(false))`, as a statement in a handler. The timer is
- * this component's: it counts the fixed step's time in the update phase (so it stops during `freeze` and `<Game paused>`, and
- * replays), and it is cancelled when the component unmounts, so it never sets state on a component that is gone.
+ * Call `fn` once, `seconds` of game time from now: `after(0.15, () => { s.flash = false; })` in a handler. The timer is this
+ * component's: it counts the fixed step's time in the update phase (so it stops during `freeze` and `<Game paused>`, and replays),
+ * and it is cancelled when the component unmounts, so it never sets state on a component that is gone. Returns the timer's id (1,
+ * 2, 3… for this component, never 0), which `cancelTimer` takes: keep it in state to restart one timer and leave the others.
+ *
+ *     cancelTimer(s.flashTimer);
+ *     s.flashTimer = after(0.08, () => { s.flash = false; });
  */
-export function after(_seconds: number, _fn: () => void): void {
+export function after(_seconds: number, _fn: () => void): number {
   return compileTimeOnly("after");
 }
 
-/** Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimers()` or the component unmounts. */
-export function every(_seconds: number, _fn: () => void): void {
+/**
+ * Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimer(id)` with the id it returns,
+ * `cancelTimers()`, or the component unmounts.
+ */
+export function every(_seconds: number, _fn: () => void): number {
   return compileTimeOnly("every");
+}
+
+/** Cancel one timer: the one whose id `after` or `every` returned. Its other timers keep running. An id that is done, or 0, is ignored. */
+export function cancelTimer(_id: number): void {
+  return compileTimeOnly("cancelTimer");
 }
 
 /** Cancel every timer this component has set. */
 export function cancelTimers(): void {
   return compileTimeOnly("cancelTimers");
+}
+
+/**
+ * The colliders with `tag` whose boxes come within `radius` of (`x`, `y`) in world space, nearest first, not counting the
+ * colliders this component draws itself (a child component's count): a tower finding the enemies in reach. Each is the collider's `tag`, `owner` and `data` (typed by tag through
+ * `ColliderData`), where its box's middle is (`x`, `y`) and its `distance` from the point (0 inside the box). Hand one to `send`
+ * to reach that collider. Call it in a handler (`useUpdate`, `useInput`, a callback prop); boxes are where they were when the
+ * step's updates began.
+ *
+ *     const foes = nearby("enemy", x, y, 60);
+ *     if (foes.length > 0) send("enemy", foes[0], { damage: 5 });
+ */
+export function nearby<Tag extends string>(_tag: Tag, _x: number, _y: number, _radius: number): Nearby<Tag>[] {
+  return compileTimeOnly("nearby");
+}
+
+/**
+ * Send `value` to the `onReceive` of the colliders with `tag` that `where` names: every one whose box comes within a circle
+ * (`{ x, y, radius }`), or the one collider a `nearby` result is. Delivered at the end of this step's update phase, after every
+ * `useUpdate` and timer, in the order values were sent (each send's receivers nearest first), so it lands in the same step and
+ * replays the same way. A value sent from an `onReceive` is delivered later in the same phase; one sent from a collision callback,
+ * at the end of the next step's update phase. Typed by tag through `ColliderMessages`. Call it in a handler.
+ *
+ *     send("enemy", { x: target.x, y: target.y, radius: 24 }, blast);
+ */
+export function send<Tag extends string>(_tag: Tag, _where: SendTarget<Tag>, _value: MessageOf<Tag>): void {
+  return compileTimeOnly("send");
 }
 
 /**

@@ -310,15 +310,71 @@ describe("<Text align>", () => {
     );
   });
 
-  it("does nothing without a width, since the box is then the text itself", () => {
+  it("without a width, aligns on its x: the middle of the text for center, its end for right", () => {
+    assert.deepEqual(
+      textRecords(label({ align: "left" })).map((t) => t.x),
+      [100]
+    );
     assert.deepEqual(
       textRecords(label({ align: "center" })).map((t) => t.x),
-      [100]
+      [100 - 15],
+      "30 wide, so it starts 15 to the left"
     );
     assert.deepEqual(
       textRecords(label({ align: "right" })).map((t) => t.x),
-      [100]
+      [100 - 30]
     );
+  });
+
+  it("aligns each line of a text without a width on its x, by that line's own width", () => {
+    const text = new Text({ text: "Hello\nHi", size: 10, align: "center" }); // 30 and 12 wide under the recorder's estimate
+    text.transform.x = 100;
+    assert.deepEqual(
+      textRecords(text).map((t) => t.x),
+      [100 - 15, 100 - 6]
+    );
+    const right = new Text({ text: "Hello\nHi", size: 10, align: "right", reveal: 7 });
+    right.transform.x = 100;
+    assert.deepEqual(
+      textRecords(right).map((t) => [t.text, t.x]),
+      [
+        ["Hello", 70],
+        ["H", 88],
+      ],
+      "a revealed line keeps the place of the whole line, so it does not slide as it appears"
+    );
+  });
+
+  it("draws its shadow aligned with it", () => {
+    const text = new Text({ text: "Hello", size: 10, align: "center", shadow: "black" });
+    text.transform.x = 100;
+    assert.deepEqual(
+      textRecords(text).map((t) => t.x),
+      [86, 85],
+      "the shadow 1 to the right of the text, both centred on 100"
+    );
+  });
+
+  it("is laid out by a <Flex> at its own size as before: a Flex child without a width is not moved off its place", () => {
+    const flex = new Flex({ direction: "column" });
+    flex.addChild(new Text({ text: "Hello", size: 10, align: "center" }));
+    flex.addChild(new Text({ text: "Hi", size: 10, align: "right" }));
+    assert.deepEqual(
+      textRecords(flex).map((t) => t.x),
+      [0, 0]
+    );
+  });
+
+  it("counts a text aligned on its point where it really is when a <Flex> sizes the entity holding it", () => {
+    const flex = new Flex({ direction: "row" });
+    const holder = new Entity();
+    const text = new Text({ text: "Hello", size: 10, align: "center" });
+    holder.addChild(text);
+    flex.addChild(holder);
+    flex.addChild(new Shape({ kind: "rect", width: 4, height: 4 }));
+    const shape = draw(flex).records.find((r) => r.op === "rect");
+    // The entity's box runs from -15 to 15: 30 wide, so the shape after it starts at 30, not at 15.
+    assert.equal(shape?.op === "rect" ? shape.x : NaN, 30);
   });
 
   it("overflows a box that is too small, from the start for left and by the excess for the others", () => {

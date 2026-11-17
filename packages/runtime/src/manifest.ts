@@ -92,9 +92,15 @@ export interface RuntimeManifest {
 /** The plain values a callback prop may be given as a parameter, besides a handle type: a slider's `onChange(value: number)`. */
 export const CALLBACK_PRIMITIVES = ["number", "boolean", "string"] as const;
 
+/**
+ * A callback parameter whose type the element's own props give (`onReceive`'s value, typed by the collider's tag): left
+ * unannotated in the generated code, and read like any value.
+ */
+export const CALLBACK_CONTEXTUAL = "contextual";
+
 export interface CallbackParamManifest {
   readonly name: string;
-  /** A key of `handleTypes`, or one of `CALLBACK_PRIMITIVES`. */
+  /** A key of `handleTypes`, one of `CALLBACK_PRIMITIVES`, or `CALLBACK_CONTEXTUAL`. */
   readonly type: string;
 }
 
@@ -284,6 +290,7 @@ export const runtimeManifest: RuntimeManifest = {
       "data",
       "onCollisionEnter",
       "onCollisionExit",
+      "onReceive",
       "owner",
       "hitsLayer",
     ],
@@ -570,6 +577,8 @@ export const runtimeManifest: RuntimeManifest = {
     Collider: {
       onCollisionEnter: [{ name: "other", type: "Contact" }],
       onCollisionExit: [{ name: "other", type: "Contact" }],
+      // What was sent: its type comes from the collider's tag (`ColliderMessages`), so the parameter is left to the props type.
+      onReceive: [{ name: "value", type: CALLBACK_CONTEXTUAL }],
     },
     Pointer: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [] },
     Flex: {
@@ -676,8 +685,13 @@ export const runtimeManifest: RuntimeManifest = {
     "markMoved",
     "after",
     "every",
+    "cancelTimer",
     "cancelTimers",
+    "nearby",
+    "send",
     "pendingTimers",
+    "nextTimerId",
+    "resumeTimerIds",
     "stepTimers",
     "renderCount",
     "reportsChanges",

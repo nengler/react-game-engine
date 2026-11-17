@@ -23,8 +23,8 @@ export interface TextProps {
   /** A CSS color. Default: the game's `<Game textColor>`, else white. */
   color?: string;
   /**
-   * The width in pixels of the box the text sits in, for layout and for `align`. Without it the box is the text's own
-   * width, which `align` cannot move within. A text wider than its box overflows it.
+   * The width in pixels of the box the text sits in, for layout and for `align`. Without it the box is the text's own width, and
+   * `align` places the text on its x instead (see `align`). A text wider than its box overflows it.
    */
   width?: number;
   /**
@@ -40,7 +40,11 @@ export interface TextProps {
    * grow or rewrap as it appears. The game's rules count it up; the engine has no timer for it. Default: all of it.
    */
   reveal?: number;
-  /** Where the text sits inside `width`: `"left"` (the default), `"center"` or `"right"`. */
+  /**
+   * Where each line sits inside `width` (else `maxWidth`): `"left"` (the default), `"center"` or `"right"`. Without either, x is the
+   * line's left edge, middle or right edge: `<Text x={x} align="center">` centres a number on a point. A `<Flex>` child without a
+   * width is laid out at its own size, so `align` does not move it.
+   */
   align?: TextAlign;
   /**
    * A bitmap font: the name of an image holding the glyphs of the ASCII characters 32 to 127 in a grid of 16 columns and 6 rows,

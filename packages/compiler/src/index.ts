@@ -30,7 +30,7 @@ export {
   type HookCallAnalysis,
 } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
-export { TIMER_FUNCTIONS } from "./transform/helpers.ts";
+export { TIMER_FUNCTIONS, WORLD_FUNCTIONS } from "./transform/helpers.ts";
 export {
   generateModule,
   generateModuleWithMap,

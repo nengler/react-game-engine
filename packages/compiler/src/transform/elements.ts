@@ -1,4 +1,5 @@
 // Layer 3 of ComponentLowering: the JSX tree (elements, props, transforms, children, keyed lists) into ElementIR.
+import { CALLBACK_CONTEXTUAL } from "@tsengine/runtime";
 import {
   SyntaxKind,
   type CallExpression,
@@ -75,9 +76,17 @@ const LIVE_GAME_SETTINGS: ReadonlySet<string> = new Set(["timeScale", "paused"])
  * The type of a built-in callback prop's parameter, from the manifest: a plain value (a slider's `onChange(value: number)`) is a
  * primitive, which a handler uses as any number, flag or string; anything else is a handle type, which it can only call methods on.
  */
+/**
+ * A built-in callback parameter's type, from the manifest: a primitive, a runtime handle (`Contact`), or `"contextual"` for a value
+ * whose type the element's props give (`onReceive`'s value, typed by the collider's tag), left unannotated.
+ */
 function callbackParamType(
   type: string
-): { readonly kind: "Primitive"; readonly name: "number" | "boolean" | "string" } | { readonly kind: "Named"; readonly name: string } {
+):
+  | { readonly kind: "Primitive"; readonly name: "number" | "boolean" | "string" }
+  | { readonly kind: "Named"; readonly name: string }
+  | { readonly kind: "Contextual" } {
+  if (type === CALLBACK_CONTEXTUAL) return { kind: "Contextual" };
   return type === "number" || type === "boolean" || type === "string" ? { kind: "Primitive", name: type } : { kind: "Named", name: type };
 }
 

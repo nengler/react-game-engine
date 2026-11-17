@@ -12,7 +12,7 @@ import {
   walkFunction,
 } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
-import { ElementEmitter } from "./elements.ts";
+import { ElementEmitter, colliderTag } from "./elements.ts";
 import { RenderGuard } from "./expressions.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access, mutableObject } from "./helpers.ts";
 import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
@@ -374,7 +374,14 @@ class ComponentGenerator extends ElementEmitter {
     // A component with props passes them (and its defaults) up to the runtime host, which owns `this.props`.
     // `children` is not a runtime prop: the parent mounts elements at the `{children}` slot instead.
     const runtimeProps = c.propsType && c.acceptsChildren ? `Omit<${c.propsType}, "children">` : c.propsType;
-    const extendsClause = runtimeProps ? `${c.root.component.name}<${runtimeProps}>` : c.root.component.name;
+    // A `<Collider tag="foe">` root passes its tag on too, so `onReceive`'s value is typed by it (`ColliderMessages`).
+    const tag = colliderTag(c.root);
+    const extendsClause =
+      tag !== null
+        ? `${c.root.component.name}<${runtimeProps ?? "{}"}, ${tag}>`
+        : runtimeProps
+          ? `${c.root.component.name}<${runtimeProps}>`
+          : c.root.component.name;
     w.block(`export class ${c.name} extends ${extendsClause}`, () => {
       // What a compiled component draws changes only in its constructor, its `render()` and structural changes, which the
       // runtime reports; its hooks only call setters. So the player may reuse its draw records while it stands still (see `FrameBuilder`).

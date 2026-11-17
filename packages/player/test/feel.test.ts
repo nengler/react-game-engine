@@ -449,6 +449,21 @@ describe("bitmap fonts", () => {
     assert.deepEqual([glyphs[2]?.x, (glyphs[2]?.y ?? 0) - (glyphs[0]?.y ?? 0)], [0, 6], "the next line is 6 pixels down");
   });
 
+  it("align without a width on their x: centred, or ending there, line by line", () => {
+    const centre = run(() => new Text({ text: "AB\nC", font: "tse:small", align: "center" }), 1);
+    const glyphs = ofOp(centre.backend.lastFrame.records, "spriteRegion");
+    assert.deepEqual(
+      glyphs.map((g) => g.x),
+      [-4, 0, -2],
+      "AB is 8 wide, so it starts 4 to the left; C is 4 wide, 2 to the left"
+    );
+    const right = run(() => new Text({ text: "AB", font: "tse:small", align: "right" }), 1);
+    assert.deepEqual(
+      ofOp(right.backend.lastFrame.records, "spriteRegion").map((g) => g.x),
+      [-8, -4]
+    );
+  });
+
   it("refuse a tse: name that is not built in, naming the ones there are, and load nothing for it", () => {
     const { backend, warnings } = run(() => new Text({ text: "A", font: "tse:huge" }), 1);
     assert.ok(

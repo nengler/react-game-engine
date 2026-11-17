@@ -46,7 +46,7 @@ import {
 } from "@tsengine/runtime";
 
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
-import { borderRoom, Layouter, type MeasuredSize } from "./layout.ts";
+import { borderRoom, Layouter, textAlignBox, type MeasuredSize } from "./layout.ts";
 import {
   TSE_BLEND_ADD,
   TSE_BLEND_MULTIPLY,
@@ -2813,7 +2813,7 @@ export class FrameBuilder {
     const multiline = isMultiline(text);
     const wrapped = multiline ? this.#wrap(text, font) : null;
     const lineHeight = this.#bitmapHeight(text, font);
-    const box = text.width ?? text.maxWidth;
+    const box = textAlignBox(text);
     const lines = wrapped === null ? [text.text] : wrapped.lines;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] as string;
@@ -2915,7 +2915,7 @@ export class FrameBuilder {
     if (isMultiline(text)) {
       // Wrapped, broken or revealed: a record for each line, one line height (and the gap) below the last, aligned by itself.
       const wrapped = this.#wrap(text, undefined);
-      const box = text.width ?? text.maxWidth;
+      const box = textAlignBox(text);
       const lineHeight = this.#lineSize(text, undefined, "").height;
       const cos = Math.cos(world.rotation);
       const sin = Math.sin(world.rotation);
@@ -2946,9 +2946,10 @@ export class FrameBuilder {
       return;
     }
     let at = world;
-    if (text.width !== undefined && text.align !== "left") {
-      // Aligned inside its own width: shift along the text's own x axis, by whole pixels.
-      const room = text.width - this.#textSize(text.text, text.size).width;
+    const box = textAlignBox(text);
+    if (box !== undefined && text.align !== "left") {
+      // Aligned inside its own width, or on its point (a box of 0): shift along the text's own x axis, by whole pixels.
+      const room = box - this.#textSize(text.text, text.size).width;
       const shift = text.align === "center" ? Math.round(room / 2) : text.align === "right" ? Math.round(room) : 0;
       if (shift !== 0) {
         const along = shift * world.scaleX;

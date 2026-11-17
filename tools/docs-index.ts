@@ -1,9 +1,10 @@
 /**
- * Rebuilds the guide's search index: the `MANIFEST` array written into every page of `docs/`, one entry per `<section id>`
- * named in it, whose `text` is what the search box matches. Run it after changing a section of the guide:
+ * Rebuilds the guide's search index: the `MANIFEST` array in `docs/search-index.js`, which every page of `docs/` loads before
+ * `docs/guide.js`, one entry per `<section id>` of the pages, whose `text` is what the search box matches. Run it after changing a
+ * section of the guide:
  *
- *   node tools/docs-index.ts          # rewrite the index in every page
- *   node tools/docs-index.ts --check  # fail if any page's index is stale (a test runs this)
+ *   node tools/docs-index.ts          # rewrite docs/search-index.js
+ *   node tools/docs-index.ts --check  # fail if it is stale (a test runs this)
  *
  * There is one entry for each `<section id>` of the pages, in page order. Its text is the section's HTML with every tag replaced
  * by a space, entities decoded, in lower case (code included). A new section's title is its `data-title`, and its group is the
@@ -15,7 +16,9 @@ import { fileURLToPath } from "node:url";
 
 const docs = resolve(import.meta.dirname, "../docs");
 const PAGES = ["index.html", "language.html", "systems.html", "effects.html", "reference.html"];
+const INDEX = resolve(docs, "search-index.js");
 const MANIFEST = /var MANIFEST = (\[.*?\]);\n/s;
+const HEADER = "/* The guide's search index, written by tools/docs-index.ts from the <section>s of the pages: do not edit it by hand. */\n";
 
 interface Entry {
   readonly id: string;
@@ -46,8 +49,8 @@ export function sectionText(html: string, id: string): string {
 /** The index as it should be, from the pages as they are. */
 export function buildIndex(): string {
   const html = new Map(PAGES.map((page) => [page, readFileSync(resolve(docs, page), "utf8")]));
-  const current = MANIFEST.exec(html.get(PAGES[0]!)!);
-  if (!current) throw new Error(`${PAGES[0]} has no MANIFEST`);
+  const current = MANIFEST.exec(readFileSync(INDEX, "utf8"));
+  if (!current) throw new Error("docs/search-index.js has no MANIFEST");
   const known = new Map((JSON.parse(current[1]!) as Entry[]).map((entry) => [entry.id, entry]));
   const sections = [...html].flatMap(([page, text]) =>
     [...text.matchAll(/<section id="([^"]+)"([^>]*)>/g)].map((section) => {
@@ -76,28 +79,21 @@ export function buildIndex(): string {
   return JSON.stringify(entries).replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 
-/** Pages whose index differs from `buildIndex()`; with `write`, they are rewritten. */
-export function updateIndex(write: boolean): string[] {
-  const index = buildIndex();
-  const stale: string[] = [];
-  for (const page of PAGES) {
-    const file = resolve(docs, page);
-    const html = readFileSync(file, "utf8");
-    const next = html.replace(MANIFEST, () => `var MANIFEST = ${index};\n`);
-    if (next === html) continue;
-    stale.push(page);
-    if (write) writeFileSync(file, next);
-  }
-  return stale;
+/** Whether docs/search-index.js differs from `buildIndex()`; with `write`, it is rewritten. */
+export function updateIndex(write: boolean): boolean {
+  const next = `${HEADER}var MANIFEST = ${buildIndex()};\n`;
+  if (readFileSync(INDEX, "utf8") === next) return false;
+  if (write) writeFileSync(INDEX, next);
+  return true;
 }
 
 // Run as a script (not imported by the test): `import.meta.main` is newer than the Node this repository supports.
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const check = process.argv.includes("--check");
   const stale = updateIndex(!check);
-  if (check && stale.length > 0) {
-    console.error(`The search index is stale in ${stale.join(", ")}: run node tools/docs-index.ts`);
+  if (check && stale) {
+    console.error("docs/search-index.js is stale: run node tools/docs-index.ts");
     process.exit(1);
   }
-  console.log(stale.length === 0 ? "The search index is up to date." : `Rewrote the search index in ${stale.join(", ")}.`);
+  console.log(stale ? "Rewrote docs/search-index.js." : "The search index is up to date.");
 }
