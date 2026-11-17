@@ -208,6 +208,49 @@ test(
   }
 );
 
+test(
+  "screenshot compiles first: a change to a component shows in the next shot without tse build, and a compile error shoots nothing",
+  { timeout: 120_000, skip: findLibrary("headless") === null ? "libtse is not built (npm run native:build:headless)" : false },
+  () => {
+    const main = join(game, "src/Main.tsx");
+    const source = readFileSync(main, "utf8");
+    const out = join(root, "fresh");
+    const corner = () => {
+      const shot = tse(["screenshot", game, "--out", out]);
+      assert.equal(shot.status, 0, shot.stdout + shot.stderr);
+      const png = execFileSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `import { readFileSync } from "node:fs";
+         import { decodePng } from "@tsengine/player-node";
+         const p = decodePng(readFileSync(${JSON.stringify(join(out, "step-0.png"))}));
+         process.stdout.write([...p.rgba.subarray(0, 3)].join(","));`,
+        ],
+        { cwd: root, encoding: "utf8" }
+      );
+      return png;
+    };
+    try {
+      assert.equal(corner(), "16,19,28", "the template's background, #10131c");
+      writeFileSync(main, source.replace('background="#10131c"', 'background="#ff0000"'));
+      assert.equal(corner(), "255,0,0", "the new background, with no tse build in between");
+      writeFileSync(
+        main,
+        source.replace("export default function Main() {", "export default function Main() {\n  const x: number = 'no';")
+      );
+      rmSync(join(out, "step-0.png"));
+      const broken = tse(["screenshot", game, "--out", out]);
+      assert.equal(broken.status, 1);
+      assert.match(broken.stderr, /did not compile, so nothing was shot/);
+      assert.ok(!existsSync(join(out, "step-0.png")), "no stale shot is written");
+    } finally {
+      writeFileSync(main, source);
+    }
+  }
+);
+
 test("screenshot --gpu says what is missing when the desktop build is not there", () => {
   const ran = spawnSync(process.execPath, [cli, "screenshot", game, "--gpu"], {
     cwd: root,
