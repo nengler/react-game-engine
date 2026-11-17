@@ -13,17 +13,7 @@ import {
   walkStatements,
 } from "../ir/types.ts";
 import { HandlerEmitter } from "./handlers.ts";
-import {
-  type Mount,
-  mountOf,
-  addChild,
-  queueAddChild,
-  queueRemoveChild,
-  type Presence,
-  transformTarget,
-  propertyKey,
-  access,
-} from "./helpers.ts";
+import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, propertyKey, access } from "./helpers.ts";
 
 export class ElementEmitter extends HandlerEmitter {
   /** The parameters of the keyed lists being emitted (the item, its index): what a child's prop may not read if it is to have a getter. */
@@ -101,7 +91,7 @@ export class ElementEmitter extends HandlerEmitter {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.w.at(child.element.span, () => {
-        this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
+        this.emitStaticTransform(child.element.transform, ref);
         this.w.line(`${addChild(mount, ref, children, index)};`);
       });
       this.emitStaticWiring(child.element.children, mountOf(child.element, ref));
@@ -140,7 +130,7 @@ export class ElementEmitter extends HandlerEmitter {
         this.within({ conditions: [...this.mode.conditions, child.condition], guard: null }, () => {
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.construct(el)};`);
-            this.emitStaticTransform(el.transform, ref, transformTarget(el));
+            this.emitStaticTransform(el.transform, ref);
             this.emitMountStatics(el.children, mountOf(el, ref));
             w.line(`${queueAddChild(mount, ref, children, index)};`);
           });
@@ -172,7 +162,7 @@ export class ElementEmitter extends HandlerEmitter {
 
   protected emitElementUpdates(el: ElementIR, ref: string, presence: Presence): void {
     this.emitPropUpdates(el, ref);
-    this.emitDynamicTransform(el.transform, ref, transformTarget(el));
+    this.emitDynamicTransform(el.transform, ref);
     this.emitChildUpdates(el.children, mountOf(el, ref), presence);
   }
 
@@ -271,7 +261,7 @@ export class ElementEmitter extends HandlerEmitter {
     const test = list.condition ? this.arrowBody(list.condition) : "true";
     const construct = (e: ElementIR, branch: 0 | 1 | null = null): void => {
       w.line(`$item = ${this.construct(e, list, branch)};`);
-      this.emitStaticTransform(e.transform, "$item", transformTarget(e));
+      this.emitStaticTransform(e.transform, "$item");
     };
     w.open("{");
     w.line(`const $parent = ${mount.ref};`);
@@ -357,9 +347,9 @@ export class ElementEmitter extends HandlerEmitter {
       }
       w.close("}");
       if (alt) {
-        w.block(`if (${test})`, () => this.emitDynamicTransform(el.transform, view(el), transformTarget(el)));
-        w.block("else", () => this.emitDynamicTransform(alt.transform, view(alt), transformTarget(alt)));
-      } else this.emitDynamicTransform(el.transform, "$item", transformTarget(el));
+        w.block(`if (${test})`, () => this.emitDynamicTransform(el.transform, view(el)));
+        w.block("else", () => this.emitDynamicTransform(alt.transform, view(alt)));
+      } else this.emitDynamicTransform(el.transform, "$item");
     });
     w.block(`for (const [$key, $item] of ${items})`, () => {
       w.block("if (!$seen.has($key))", () => {
@@ -473,24 +463,24 @@ export class ElementEmitter extends HandlerEmitter {
       if (child.kind !== "StaticChild") continue;
       const ref = this.fieldRef(child.element);
       this.w.line(`${ref} = ${this.construct(child.element)};`);
-      this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
+      this.emitStaticTransform(child.element.transform, ref);
       this.w.line(`${addChild(mount, ref, children, index)};`);
       this.emitMountStatics(child.element.children, mountOf(child.element, ref));
     }
   }
 
   /** Transform fields that never change are set once, right after the element is constructed. */
-  protected emitStaticTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
+  protected emitStaticTransform(transform: readonly PropIR[], ref: string): void {
     for (const p of transform) {
-      if (p.kind === "StaticProp") this.w.line(`${ref}.${target}.${p.name} = ${this.expr(p.value, true)};`);
+      if (p.kind === "StaticProp") this.w.line(`${ref}.transform.${p.name} = ${this.expr(p.value, true)};`);
     }
   }
 
   /** Transform fields that read state are re-applied on render, like any dynamic prop; a change to them is a move of that object. */
-  protected emitDynamicTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
+  protected emitDynamicTransform(transform: readonly PropIR[], ref: string): void {
     const dynamic = transform.filter((p) => p.kind === "DynamicProp");
     this.emitReportedWrites(
-      dynamic.map((p) => ({ target: `${ref}.${target}.${p.name}`, value: p.value })),
+      dynamic.map((p) => ({ target: `${ref}.transform.${p.name}`, value: p.value })),
       `${ref}.markMoved()`
     );
   }

@@ -20,7 +20,7 @@ function Level() {
   const s = useMutable({ wave: 1 });
   return (
     <Entity name="Level">
-      <Camera zoom={s.wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
+      <Camera zoom={s.wave > 5 ? 2 : 1} x={160} y={120} />
       <Sprite image="bg.png" />
     </Entity>
   );
@@ -30,7 +30,7 @@ function Player() {
   const s = useMutable({ x: 0 });
   useUpdate((dt) => { s.x += dt * 10; });
   return (
-    <Entity name="Player" transform={{ x: s.x }}>
+    <Entity name="Player" x={s.x}>
       <Sprite image="player.png" />
     </Entity>
   );
@@ -42,7 +42,7 @@ function Stage() {
     <Entity name="Stage">
       <Camera zoom={2}>
         <Player />
-        {s.pet && <Sprite image="pet.png" transform={{ x: 100 }} />}
+        {s.pet && <Sprite image="pet.png" x={100} />}
       </Camera>
     </Entity>
   );
@@ -59,7 +59,7 @@ function Swarm() {
     <Entity name="Swarm">
       <Camera>
         {s.units.map((u) => (
-          <Entity key={u.id} name={u.id} transform={{ x: u.x }} />
+          <Entity key={u.id} name={u.id} x={u.x} />
         ))}
       </Camera>
     </Entity>
@@ -70,7 +70,7 @@ function Hero() {
   const s = useMutable({ x: 0 });
   useUpdate((dt) => { s.x += dt * 10; });
   return (
-    <Entity name="Hero" transform={{ x: s.x }}>
+    <Entity name="Hero" x={s.x}>
       <Sprite image="hero.png" />
       <Camera zoom={2} />
     </Entity>
@@ -183,7 +183,7 @@ describe("<Camera>: authored source type-checks", () => {
 
   it("accepts a zoom, a placement, and children to follow", () => {
     assert.deepEqual(check(`<Camera />`), []);
-    assert.deepEqual(check(`<Camera zoom={n} transform={{ x: 10 }} />`), []);
+    assert.deepEqual(check(`<Camera zoom={n} x={10} />`), []);
     assert.deepEqual(check(`<Camera zoom={2}><Entity name="player" /></Camera>`), []);
     assert.deepEqual(check(`<Camera>{n > 0 && <Entity name="player" />}</Camera>`), []);
   });
@@ -312,7 +312,7 @@ function Rig({ children }: RigProps) {
 function Runner() {
   const s = useMutable({ x: 0 });
   useUpdate((dt) => { s.x += dt * 4; });
-  return <Entity name="Runner" transform={{ x: s.x }}><Sprite image="runner.png" /></Entity>;
+  return <Entity name="Runner" x={s.x}><Sprite image="runner.png" /></Entity>;
 }
 
 function Stage() {

@@ -13,7 +13,7 @@ export const DiagnosticCode = {
   UnknownHook: "TSE1102",
   InvalidUseState: "TSE1103",
   UnsupportedStateType: "TSE1104",
-  /** Retired: `useTransform` was replaced by the `transform={{ x, y }}` attribute driven by state. */
+  /** Retired: `useTransform` was replaced by state written as `x` and `y` props. */
   InvalidUseTransform: "TSE1105",
   ElementRef: "TSE1106",
   /** `useSound` that is not `const play = useSound("file.wav")`: a path that is not a string literal, or a name already taken. */
@@ -29,7 +29,7 @@ export const DiagnosticCode = {
   LocalComponentProps: "TSE1204",
   ComponentCycle: "TSE1205",
   DuplicateComponent: "TSE1206",
-  /** `transform={{ ... }}` that is malformed, or on an element that has no transform. */
+  /** A `transform` attribute (there is none), `x` and the rest on a built-in that has no transform, or a malformed one. */
   InvalidTransformAttribute: "TSE1207",
   /** A component's props parameter or props type is not in the supported form, or a prop is passed the wrong way. */
   InvalidProps: "TSE1208",

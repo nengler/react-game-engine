@@ -4,16 +4,9 @@
  * declarations exist so an editor and `tsc` can type-check the TSX itself.
  */
 
-import type { Transform } from "./Transform.ts";
-
-/** Position, rotation, scale and `global`, derived from the runtime's `Transform`. All optional. */
-/** `transform={{ … }}`: the place, turn, scale and draw order. Not `opacity`, which is a prop of its own (`opacity={…}`). */
-export type TransformProps = Partial<Omit<Transform, "opacity">>;
-
 /**
- * The transform's place as props of their own, on every built-in that takes `transform`: `<Sprite image="coin.png" x={spot.x}
- * y={spot.y} />` is `transform={{ x: spot.x, y: spot.y }}`. Writing a field both ways is an error. Not on components, whose `x`
- * is whatever their props say; place a component with `transform`.
+ * Where a built-in is, as props: `<Sprite image="coin.png" x={spot.x} y={spot.y} />`, relative to its parent unless `global`.
+ * Not on components, whose `x` is whatever their props say: place a component by wrapping it, `<Entity x={…} y={…}><Coin /></Entity>`.
  */
 export interface TransformShorthand {
   x?: number;
@@ -22,6 +15,8 @@ export interface TransformShorthand {
   rotation?: number;
   scaleX?: number;
   scaleY?: number;
+  /** World space: the parent's place, turn and scale are ignored. */
+  global?: boolean;
 }
 
 /**
@@ -48,16 +43,9 @@ export namespace JSX {
   export interface ElementChildrenAttribute {
     children: {};
   }
-  /**
-   * Attributes of every element, whatever its props type: `key` (keyed lists
-   * use it, a later milestone) and `transform`. On a built-in, `transform`
-   * sets its own transform; on a component, it places the component, so the
-   * component's props type never declares it.
-   */
+  /** Attributes of every element, whatever its props type: `key`, which keyed lists use. */
   export interface IntrinsicAttributes {
     key?: string | number;
-    /** Relative to the parent unless `global: true`. Values may come from state. */
-    transform?: TransformProps;
   }
 }
 

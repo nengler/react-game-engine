@@ -137,7 +137,7 @@ export function Walker() {
   const [first, , third] = [x, y, f];
   return (
     <Entity name={s.blink ? "on" : "off"}>
-      <Sprite image="hero.png" frame={f} transform={{ x, y }} />
+      <Sprite image="hero.png" frame={f} x={x} y={y} />
       <Text>{\`\${first} \${third}\`}</Text>
     </Entity>
   );

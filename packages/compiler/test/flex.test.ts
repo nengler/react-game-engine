@@ -535,9 +535,7 @@ describe("Flex: diagnostics", () => {
   });
 
   it("is a container, can be placed with transform, takes elements as children, and type-checks generated", () => {
-    assert.doesNotThrow(() =>
-      compile(`function C() { return <Flex transform={{ x: 4 }}><Shape kind="rect" width={1} height={1} /></Flex>; }`)
-    );
+    assert.doesNotThrow(() => compile(`function C() { return <Flex x={4}><Shape kind="rect" width={1} height={1} /></Flex>; }`));
     assert.deepEqual(typeCheck(compile(SOURCE, "FlexGame.tsx")), []);
   });
 

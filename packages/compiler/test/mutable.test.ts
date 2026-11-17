@@ -337,7 +337,7 @@ describe("useMutable: read whole, and handed back by a hook", () => {
         shake.duration = 0.25;
         shake.elapsed = 0;
       });
-      return <Camera shake={shake}><Sprite image="a.png" transform={{ scaleX: squash.x, scaleY: squash.y }} /></Camera>;
+      return <Camera shake={shake}><Sprite image="a.png" scaleX={squash.x} scaleY={squash.y} /></Camera>;
     }`);
     assert.deepEqual(typeCheck(compiled), []);
   });

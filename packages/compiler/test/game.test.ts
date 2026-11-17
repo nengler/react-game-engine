@@ -166,7 +166,7 @@ describe("<Game> as a component's root", () => {
       /<Game> has no prop 'fps'\. Its settings: id, title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, interpolate, gamepadDeadzone, upscale, showFps, fpsKey, font, controls, timeScale, paused, textSize, textColor, overlayKey\./
     );
     assert.deepEqual(
-      errors(`function A() { return <Game transform={{ x: 1 }} />; }`).map((d) => d.code),
+      errors(`function A() { return <Game x={1} />; }`).map((d) => d.code),
       [DiagnosticCode.InvalidTransformAttribute]
     );
   });

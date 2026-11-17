@@ -19,7 +19,7 @@ function fix(source: string, code: string): string {
       .map((d) => `${d.code} ${d.message}`)
       .join("\n")}`
   );
-  const fixes = fixesFor(source, diagnostic, compiler);
+  const fixes = fixesFor(source, diagnostic);
   const chosen = fixes.find((f) => f.preferred) ?? fixes[0];
   assert.ok(chosen, `no fix for ${code}: ${diagnostic.message}`);
   return applyEdits(source, chosen.edits);
@@ -77,7 +77,7 @@ describe("quick fixes", () => {
 
   it("turns useMemo into the value and useCallback into the function", () => {
     const memo = fix(
-      `import { Entity, useMemo, useMutable } from "@tsengine/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity transform={{ x: twice }} />;\n}\n`,
+      `import { Entity, useMemo, useMutable } from "@tsengine/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity x={twice} />;\n}\n`,
       "TSE1102"
     );
     assert.match(memo, /const twice = s\.x \* 2;/);
@@ -120,15 +120,15 @@ describe("quick fixes", () => {
   });
 
   it("takes a component written as for React to one that compiles, with the quick fixes alone", () => {
-    let source = `import { useEffect, useMemo, useState } from "react";
-import { Entity } from "@tsengine/runtime/jsx";
+    let source = `import { useEffect, useMemo } from "react";
+import { Entity, useMutable } from "@tsengine/runtime/jsx";
 
 export function Lamp() {
-  const [lit, setLit] = useState(false);
+  const s = useMutable({ lit: false });
   useEffect(() => {
-    setLit(true);
+    s.lit = true;
   }, []);
-  const glow = useMemo(() => (lit ? 1 : 0.2), [lit]);
+  const glow = useMemo(() => (s.lit ? 1 : 0.2), [s.lit]);
   return (
     <Entity opacity={glow}>
       <Text text="lamp" />
@@ -141,7 +141,7 @@ export function Lamp() {
       const found = diagnose(source).filter((d) => d.severity === "error");
       if (found.length === 0) break;
       const fixable = found
-        .map((d) => ({ d, fix: fixesFor(source, d, compiler).find((f) => f.preferred) ?? fixesFor(source, d, compiler)[0] }))
+        .map((d) => ({ d, fix: fixesFor(source, d).find((f) => f.preferred) ?? fixesFor(source, d)[0] }))
         .find((x) => x.fix !== undefined);
       assert.ok(fixable, `no fix left for:\n${found.map((d) => `${d.code} ${d.message}`).join("\n")}\n${source}`);
       applied.push(fixable.fix!.title);
@@ -154,7 +154,6 @@ export function Lamp() {
     assert.match(source, /useMount\(\(\) => \{\n {4}s\.lit = true;/);
     assert.match(source, /const glow = s\.lit \? 1 : 0\.2;/);
     assert.match(source, /<Text>lamp<\/Text>/);
-    assert.ok(applied.includes("Move this file's useState to useMutable"), applied.join("\n"));
-    assert.equal(applied.length, 6, applied.join("\n"));
+    assert.equal(applied.length, 5, applied.join("\n"));
   });
 });

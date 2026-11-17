@@ -22,7 +22,7 @@ export function Shelf() {
   });
   return (
     <Entity name="Shelf">
-      <Sprite image="shelf.png" transform={{ x: s.n }} />
+      <Sprite image="shelf.png" x={s.n} />
       {s.items.map((item) => <Sprite key={item.id} image="box.png" />)}
     </Entity>
   );

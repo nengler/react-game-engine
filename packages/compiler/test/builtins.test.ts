@@ -25,11 +25,11 @@ const check = (imports: string, body: string, extra = "") =>
 
 describe("authored source of the new built-ins type-checks, and wrong props do not", () => {
   it("Tilemap, Particles, Fade, Camera options and a bitmap font", () => {
-    assert.deepEqual(check("Screen", `<Tilemap map="room1" image="tiles.png" layer="Tiles" opacity={0.5} transform={{ x: 10 }} />`), []);
+    assert.deepEqual(check("Screen", `<Tilemap map="room1" image="tiles.png" layer="Tiles" opacity={0.5} x={10} />`), []);
     assert.deepEqual(
       check(
         "Screen",
-        `<Particles rate={20} burst={n} lifetime={0.4} speed={30} angle={270} spread={40} gravity={90} color="#fff" endColor="#f00" size={2} shrink fade emitting={on} max={32} space="world" seed={3} transform={{ x: n }} />`
+        `<Particles rate={20} burst={n} lifetime={0.4} speed={30} angle={270} spread={40} gravity={90} color="#fff" endColor="#f00" size={2} shrink fade emitting={on} max={32} space="world" seed={3} x={n} />`
       ),
       []
     );
@@ -201,7 +201,7 @@ describe("useUpdate takes the input, and an action can take it", () => {
       `function P() {
         const s = useMutable({ n: 0 });
         useUpdate((dt, input) => { if (input.down("Space")) { s.n += dt; } });
-        return <Entity name="P" transform={{ x: s.n }} />;
+        return <Entity name="P" x={s.n} />;
       }`,
       "P.tsx"
     );

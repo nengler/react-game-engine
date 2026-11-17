@@ -55,15 +55,13 @@ export class GameObject<P extends object = {}> {
   /**
    * Position, rotation and scale relative to the parent (unless `global`).
    * Every game object has one, so any built-in element can be placed; set
-   * with the `transform={{ x, y }}` attribute.
+   * with its `x`, `y`, … props.
    */
   readonly transform: Transform = new Transform();
   /**
-   * Where the parent placed this object, composed under `transform`: a
-   * component's own (state-driven) `transform` moves it relative to its
-   * placement, so `<Mover transform={{ x: 200 }} />` starts at 200 and moves
-   * from there. Set by the parent's `transform` attribute on a component
-   * element, or by a scene; identity otherwise.
+   * Where a scene placed this object, composed under `transform`: the
+   * object's own (state-driven) `transform` moves it relative to its
+   * placement. Identity unless a scene set it.
    */
   readonly placement: Transform = new Transform();
   /**

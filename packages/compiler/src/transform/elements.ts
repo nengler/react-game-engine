@@ -24,9 +24,6 @@ import {
   isJsxExpression,
   isJsxSelfClosingElement,
   isJsxText,
-  isObjectLiteralExpression,
-  isPropertyAssignment,
-  isShorthandPropertyAssignment,
   isArrowFunction,
   isJsxFragment,
   isStringLiteral,
@@ -43,7 +40,6 @@ import {
   readsParam,
   collectDependencies,
   elementId,
-  TRANSFORM_FIELDS,
   type TransformField,
   type TransformPropIR,
   type ValuePropIR,
@@ -639,29 +635,34 @@ export class ElementLowering extends HookLowering {
   }
 
   /**
-   * `transform={{ x, y: 0, rotation: angle }}`: each field becomes a static or
-   * dynamic prop on the element's runtime transform, so moving is `setX(...)`.
-   * Every intrinsic the manifest lists in `transformIntrinsics` takes it. On
-   * a component element it is placement by the parent: it sets the child's
-   * `placement`, which composes under the child's own `transform`.
+   * `x`, `y`, `z`, `rotation`, `scaleX`, `scaleY`, `global` and (on most built-ins) `opacity`, written as props of a built-in: each
+   * becomes a static or dynamic write to the element's runtime transform. Every intrinsic the manifest lists in
+   * `transformIntrinsics` takes them. A component takes none of them: `x` on a component is its own prop. There is no `transform`
+   * attribute: one way to place a built-in, and a component is placed by wrapping it (`<Entity x={…}><Coin /></Entity>`).
    */
   protected lowerTransform(attributes: JsxAttributes, tag: string, isComponent: boolean): TransformPropIR[] {
-    const attribute = findAttribute(attributes, "transform");
     const code = DiagnosticCode.InvalidTransformAttribute;
-    // `<Sprite x={…} y={…} />`: the shorthand, on a built-in only (on a component, `x` is one of its props).
-    const shorthand = isComponent
-      ? []
-      : attributes.properties.filter(
-          (a): a is JsxAttribute =>
-            isJsxAttribute(a) && isIdentifier(a.name) && isTransformShorthand(a.name.text, tag, this.manifest.intrinsicMembers)
-        );
-    if (!attribute && shorthand.length === 0) return [];
-    if (!isComponent && !this.manifest.transformIntrinsics.includes(tag)) {
-      const what = attribute ? "`transform`" : `\`${(shorthand[0]!.name as { text: string }).text}\``;
+    const attribute = findAttribute(attributes, "transform");
+    if (attribute) {
       this.report(
         code,
-        `<${tag}> cannot be placed with ${what} (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.hostIntrinsic}> to position it.`,
-        attribute ?? shorthand[0]!
+        isComponent
+          ? `A component is not placed with \`transform\`: wrap it, \`<${this.hostIntrinsic} x={…} y={…}><${tag} … /></${this.hostIntrinsic}>\`, or give it \`x\` and \`y\` props of its own and put them on its root.`
+          : `There is no \`transform\` attribute: write its fields as props, \`<${tag} x={…} y={…} rotation={…} />\`.`,
+        attribute
+      );
+    }
+    if (isComponent) return [];
+    const shorthand = attributes.properties.filter(
+      (a): a is JsxAttribute =>
+        isJsxAttribute(a) && isIdentifier(a.name) && isTransformShorthand(a.name.text, tag, this.manifest.intrinsicMembers)
+    );
+    if (shorthand.length === 0) return [];
+    if (!this.manifest.transformIntrinsics.includes(tag)) {
+      this.report(
+        code,
+        `<${tag}> cannot be placed with \`${(shorthand[0]!.name as { text: string }).text}\` (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.hostIntrinsic}> to position it.`,
+        shorthand[0]!
       );
       return [];
     }
@@ -669,73 +670,26 @@ export class ElementLowering extends HookLowering {
     for (const written of shorthand) {
       const field = (written.name as { text: string }).text as TransformField;
       const init = written.initializer;
-      let value: ExprIR | null = null;
-      if (init && isJsxExpression(init) && init.expression && !init.dotDotDotToken) value = this.lowerNode(init.expression);
-      else {
-        this.report(code, `\`${field}\` takes a number: \`${field}={${field === "rotation" ? "angle" : "12"}}\`.`, written);
+      if (!init && field === "global") {
+        out.push(valueProp(field, { kind: "BooleanLiteral", value: true }));
         continue;
       }
+      if (!init || !isJsxExpression(init) || !init.expression || init.dotDotDotToken) {
+        this.report(
+          code,
+          `\`${field}\` takes a ${field === "global" ? "boolean" : "number"}: \`${field}={${field === "rotation" ? "angle" : field === "global" ? "pinned" : "12"}}\`.`,
+          written
+        );
+        continue;
+      }
+      const value = this.lowerNode(init.expression);
       if (value) out.push(valueProp(field, value));
-    }
-    if (!attribute) return out;
-    const init = attribute.initializer;
-    const object = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
-    if (!object || !isObjectLiteralExpression(object)) {
-      this.report(code, "`transform` takes an object literal: `transform={{ x, y: 0 }}`.", attribute);
-      return out;
-    }
-    for (const property of object.properties) {
-      let field: string;
-      let valueNode: Expression;
-      if (isPropertyAssignment(property) && isIdentifier(property.name)) {
-        field = property.name.text;
-        valueNode = property.initializer;
-      } else if (isShorthandPropertyAssignment(property) && isIdentifier(property.name)) {
-        field = property.name.text;
-        valueNode = property.name;
-      } else {
-        this.report(
-          code,
-          "Transform fields must be written `field: value` or `field` (shorthand); no spreads or computed names.",
-          property
-        );
-        continue;
-      }
-      // One way to fade: `opacity` is a prop (`<Entity opacity={…}>`), not a transform field, though it is stored in the transform.
-      if (field === "opacity") {
-        this.report(
-          code,
-          isComponent
-            ? `\`opacity\` is not written in \`transform\`. To fade <${tag}>, wrap it: \`<${this.hostIntrinsic} opacity={…}><${tag} … /></${this.hostIntrinsic}>\`.`
-            : `\`opacity\` is a prop, not part of \`transform\`: write \`opacity={…}\` on the element.`,
-          property
-        );
-        continue;
-      }
-      if (!(TRANSFORM_FIELDS as readonly string[]).includes(field)) {
-        const fields = TRANSFORM_FIELDS.filter((f) => f !== "opacity").join(", ");
-        this.report(code, `'${field}' is not a transform field (${fields}).`, property);
-        continue;
-      }
-      if (out.some((p) => p.name === field)) {
-        this.report(
-          code,
-          shorthand.some((a) => (a.name as { text: string }).text === field)
-            ? `'${field}' is written twice: as a prop (\`${field}={…}\`) and in \`transform\`. Keep one.`
-            : `Duplicate transform field '${field}'.`,
-          property
-        );
-        continue;
-      }
-      const value = this.lowerNode(valueNode);
-      if (!value) continue;
-      out.push(valueProp(field as TransformField, value));
     }
     return out;
   }
 
   /**
-   * Props of an element. `transform` is lowered separately but still counts
+   * Props of an element. `transform` is rejected in `lowerTransform` but still counts
    * for duplicate detection; `ref` is rejected. An arrow function is a callback
    * prop: on a component element its parameters come from the child's props
    * type; on a built-in it must be one the runtime manifest lists

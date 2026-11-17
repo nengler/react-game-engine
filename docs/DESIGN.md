@@ -33,11 +33,11 @@ Decisions, each still in force:
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Line>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
-| Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
+| Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `x` and `y` are an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`, a `for … of` over a field writing its items) is lowered to the copy the author would write: the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value and an alias (`const e = s.enemies[i]; e.hp = 0`) are refused (`TSE1301` / `TSE1402`, with what to write instead); any other in-place write to something that is not a field or a `let` local is refused too. No dev-mode `Object.freeze`. See "State: `useMutable`" |
-| Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
+| Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they take no `x` or `y`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) |
-| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters |
+| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `x={…} y={…}` on any built-in element (decided 2026-11-08 as a `transform={{ x, y }}` attribute, written as props since 2026-11-17; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the props). A component is placed by an `<Entity>` around it. Transforms nest: relative to the parent by default, `global` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters |
 
 ## Pipeline
 
@@ -171,11 +171,11 @@ ignored):
   hook, built-in element or runtime function used without being imported is
   `TSE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
-* Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
+* Position is state: `x={…} y={0} rotation={…}` on any built-in
   element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`,
   `<AnimatedSprite>`, `<Pointer>`; the root or a child),
   relative to its parent unless
-  it sets `global: true`. There is no transform hook. A value that never renders is a `useMutable`
+  it sets `global`. A component is placed by an `<Entity x y>` around it. There is no transform hook. A value that never renders is a `useMutable`
   field. See "Transforms and sounds".
 * Hooks: top-level `useInput((input) => ...)`, `useUpdate((dt) => ...)`,
   `useMount(() => ...)` and `useUnmount(() => ...)` statements; each may
@@ -198,9 +198,8 @@ ignored):
 
 A component's state is `const s = useMutable({ hp: 3, foes: [] as Foe[] })`, written directly (`s.hp -= 1`,
 `s.foes.push(f)`). There is no `useState` and no `useRef`: each is `TSE1102`, whose message writes out the conversion in the
-author's names, once per hook. The editor's quick fix and `node tools/codemod-mutable.ts <files or folders>` convert a whole file
-(both are `convertToMutable`, `packages/compiler/src/codemod/mutable.ts`; a ref used as a value, such as returned from a hook, is
-left for a person).
+author's names, once per hook. The codemod that converted whole files was removed (2026-11-17) once no code in the repository
+used either hook.
 
 **Why not React's snapshot.** React's state is a snapshot: a handler sees the value from the last render, and a setter's value
 shows only after the next one. That suits UI, where a handler does one thing, and not a step function, which reads, changes and
@@ -273,8 +272,6 @@ callback prop (`onGone?.()`). `ref={…}` on an element is `TSE1106`.
 - TypeScript does not narrow a field inside a closure: `{s.waiting !== null && <Prompt onKey={() => bind(s.waiting)} />}` is a
   type error where `const waiting = s.waiting` above it is not. It is also a real hazard, since the callback runs later and the
   field may have changed. The guide teaches the `const`.
-- After the codemod, check `setX(x + 1); use(x + 1)`: under a snapshot `use` read the old `x`, but converted to
-  `s.x += 1; use(s.x + 1)` it adds one twice.
 - A hook's own state is named after the hook (`body.x`, `body2` for a second call or a clash), which `t.state()`, saves, hot
   reload and the inspector show.
 
@@ -314,9 +311,9 @@ Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
 * `hooks: HookIR[]` lists hook declarations in source order; `state: StateIR[]`
   lists the persistent storage slots they create. They are separate because
   hook order matters while storage does not.
-* `transform` is not a prop: elements carry `transform: TransformPropIR[]`,
-  the same static/dynamic props, restricted to the transform fields and
-  written to the element's runtime `transform`.
+* The transform props (`x`, `y`, `z`, `rotation`, `scaleX`, `scaleY`, `global`, and `opacity` on most built-ins) are not
+  in `props`: elements carry `transform: TransformPropIR[]`, the same static/dynamic props, written to the element's
+  runtime `transform`. It is always empty on a component element.
 
 ### How future features slot in
 
@@ -941,7 +938,7 @@ function Scoreboard() {
 from `Scoreboard`'s state and props and updated in `Scoreboard`'s `render()`, as if
 they were `Scoreboard`'s own children: `<Coin value={score} />` follows `score`
 without `Panel` knowing, and `{score > 10 && …}` is a conditional child of
-`Scoreboard`. `Panel` only says where they mount, so a passed child's `transform` is
+`Scoreboard`. `Panel` only says where they mount, so a passed child's `x` and `y` are
 relative to the container that holds `{children}`.
 
 **Receiving** (`TSE1208`/`TSE1202` otherwise):
@@ -1134,8 +1131,9 @@ repeated: validating props is a build step, so the runtime stays small.
 
 **Two ways to the same tree.** A scene is data; a component that composes
 prefabs is code. Both build the same objects, and a test compares the tree a
-scene builds with the one the equivalent TSX builds (type, props, placement,
-transform, children).
+scene builds with the one the equivalent TSX builds (type, props, transform,
+children). Only a scene sets `placement`: TSX places a component with an
+`<Entity>` around it.
 
 ## Text
 
@@ -1145,7 +1143,7 @@ where the words go, and `TextAttributes` leaves it out of the props; before, the
 attribute and the children were two ways to write one thing):
 
 ```tsx
-<Text size={12} color="gold" transform={{ x: 8, y: 8 }}>Score: {score}</Text>
+<Text size={12} color="gold" x={8} y={8}>Score: {score}</Text>
 <Text size={12}>{`Score: ${score}`}</Text>
 ```
 
@@ -1265,7 +1263,7 @@ Opacity is the `opacity` prop, as on any element. A line of no length, or no thi
 
 ## Pointer
 
-`<Pointer>` (M14) is a hit area for presses, positioned with `transform`:
+`<Pointer>` (M14) is a hit area for presses, positioned with `x` and `y`:
 
 ```tsx
 <Shape kind="rect" width={48} height={16} color="gray" />
@@ -1323,7 +1321,7 @@ and the defaults apply. A `<Game>` root overrides them, each prop only where it 
 **Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
 (`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `TSE1210`. Two are exceptions (below):
 `timeScale` and `paused` are read every frame and may be state. `<Game>` is only ever a
-component's root: as a child it is `TSE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
+component's root: as a child it is `TSE1003`. It is not placed, so it takes no `x` or `y`. A prop it does not have is
 `TSE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
 built-in's.
 
@@ -1387,8 +1385,8 @@ depends on it), so the camera does not move its children: they are placed in the
 camera's *parent's* space, as if the camera were not there. This is one
 runtime hook, `GameObject.childSpace()` (the space an object's children are
 placed in; its own world transform by default), which `worldTransform()` uses
-and `Camera` overrides. So `<Entity transform={{ x: 100 }}><Camera><Player
-transform={{ x: 10 }} /></Camera></Entity>` puts the player at 110, and the
+and `Camera` overrides. So `<Entity x={100}><Camera><Entity x={10}><Player
+/></Entity></Camera></Entity>` puts the player at 110, and the
 camera's own `transform`, `placement`, `zoom` and `global` never touch it.
 
 **The camera's own transform** is an offset from the followed point: the
@@ -1465,7 +1463,7 @@ rooted at the sprite also cannot name state `frames`, `fps`, `playing`, `frame`,
 
 Components should read like React: what is on screen, position included, is a
 function of state. So there is no transform hook: position is ordinary state,
-written with a `transform` attribute on a built-in element.
+written as `x`, `y` and the other transform props of a built-in element.
 
 ```tsx
 function Mover() {
@@ -1474,7 +1472,7 @@ function Mover() {
     s.x += 60 * dt;
   });
   return (
-    <Entity name="Mover" transform={{ x: s.x, y: 0 }}>
+    <Entity name="Mover" x={s.x} y={0}>
       <Sprite image={s.x > 100 ? "run.png" : "idle.png"} />
     </Entity>
   );
@@ -1507,10 +1505,10 @@ export class Mover extends Entity {
 
 (Abridged from `packages/example/generated/Mover.ts`, which also has the hot-reload hooks and the `s` view a handler passes whole.)
 
-**The transform attribute**: `transform={{ x, y: 0, rotation: angle }}` is an
-object literal whose keys are transform fields (`x`, `y`, `z`, `rotation`,
-`scaleX`, `scaleY`, `global`; plain or shorthand properties). Each field lowers
-like a prop: a field that reads no state is a `StaticProp`, set once right
+**The transform props**: `x={…} y={0} rotation={angle}` and the rest of the
+transform fields (`x`, `y`, `z`, `rotation`, `scaleX`, `scaleY`, `global`, and
+`opacity` on most built-ins; see "Placing things"). Each lowers like any
+prop: a field that reads no state is a `StaticProp`, set once right
 after the element is constructed (and, for a child, before it is attached);
 one that reads state is a `DynamicProp`, re-applied in `render()`. Fields not
 listed keep the runtime defaults (`x`, `y`, `z` and `rotation` 0, scales 1, not global). The runtime
@@ -1525,17 +1523,16 @@ the parent and added to the parent's position; rotations add, scales
 multiply per axis. `global: true` (default `false`) puts the transform in
 world space, ignoring every ancestor; its own children are relative to it as
 usual. `global` is an ordinary field, so it can come from state
-(`transform={{ x, global: pinned }}`). The runtime resolves this in
+(`global={pinned}`); `global` alone means `true`. The runtime resolves this in
 `GameObject.worldTransform()`, which is what a renderer reads; the compiler only
 writes local fields.
 
 Every built-in element the runtime manifest lists in `transformIntrinsics`
-takes the attribute (today all eight); one left out gets `TSE1207`. On a
-component element (`<Enemy transform={…} />`) it is placement by the parent,
-which composes with the child's own root transform (see "Placement" under
-"Props and callbacks"). Malformed objects (spreads,
-computed keys, unknown or duplicate fields) are `TSE1207`. `useTransform` was
-removed; calling it reports `TSE1102` with a pointer to the attribute
+takes the props; one left out gets `TSE1207`. A component element takes none of
+them (`x` on a component is its own prop): it is placed by an `<Entity>` around it
+(see "Placement" under "Props and callbacks"). A `transform` attribute on any
+element is `TSE1207`, whose message says what to write instead. `useTransform` was
+removed; calling it reports `TSE1102` with a pointer to the props
 (`TSE1105` is retired).
 
 **Cost**: moving every frame is a state change every frame, so the component
@@ -1555,7 +1552,7 @@ not state: it happens at once, not at the next render, and marks nothing
 dirty. Because it would play on every render, the function may only be called
 as a statement in a handler: in JSX, a derived `const`, an expression, as a
 value (`onCollisionEnter={play}`) or with arguments it is `TSE1305`. Sounds
-are not placed, so they do not take `transform`. `Sound` has no
+are not placed, so they take no `x` or `y`. `Sound` has no
 audio of its own: `play()` counts calls in `plays`, so game logic can be tested, and reports to the
 `SoundSink` a player installs with `setSoundSink` (see "Player").
 Options such as `volume` come later.
@@ -1732,7 +1729,7 @@ wrote and which reads like the Zustand anti-pattern it was an exception to.
 
 A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and call them in any expression (a prop, a derived value, a handler) or pass them as values (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
 
-**Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `transform={{ x: GEM_AT.x }}`, and a method of an imported object called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
+**Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `<Entity x={GEM_AT.x}>`, and a method of an imported object called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
 
 Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is lowered as a handler. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `tse-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
 
@@ -1940,20 +1937,30 @@ override render(): void {
 
 ## Placing things: `<Flex>` anywhere, and `x` / `y` as props (2026-11-13)
 
-- **Shorthand.** `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` are props of every built-in in the manifest's
-  `transformIntrinsics` (`TRANSFORM_SHORTHAND`, `lowerTransform`): they lower to the same transform writes as `transform={{ … }}`,
-  so nothing changes at run time and no member is reserved. `global` is not shorthand. A field written both ways is TSE1207, as
-  is the shorthand on a built-in that has no transform. The authoring types add `TransformShorthand` to those built-ins only.
-- **Opacity: one way, a prop** (2026-11-16). `opacity={…}` is a prop on every element and `transform={{ opacity }}` is TSE1207
-  (the message names the prop, or for a component the `<Entity opacity>` to wrap it in; `TransformProps` omits it, so the editor
-  says so too). On a built-in whose manifest members have no `opacity` of its own (`isTransformShorthand`: `<Entity>`,
+- **Props.** `x`, `y`, `z`, `rotation`, `scaleX`, `scaleY` and `global` are props of every built-in in the manifest's
+  `transformIntrinsics` (`TRANSFORM_SHORTHAND`, `lowerTransform`): they lower to writes to the object's runtime transform, and no
+  member is reserved. `global` alone means `true`. One on a built-in that has no transform is TSE1207. The authoring types add
+  `TransformShorthand` to those built-ins only.
+- **Opacity: one way, a prop** (2026-11-16). `opacity={…}` is a prop on every built-in; a component is faded by an
+  `<Entity opacity>` around it. On a built-in whose manifest members have no `opacity` of its own (`isTransformShorthand`: `<Entity>`,
   `<Shape>`, `<Line>`, `<Text>`, …) the prop is lowered like `x`, to the transform's opacity, which the draw pass already
   pushes for the object and everything under it; `<Sprite>`, `<AnimatedSprite>`, `<Flex>`, `<Tilemap>` and `<Layer>` keep the
   `opacity` prop they had, which fades the same way. A field on `Entity` was not used: every component extends `Entity`, so its
   members are names no component's props or state may take, and `<Layer>` (an `Entity`) has an `opacity` that means something
   else. Scenes (`.scene.json`) keep `opacity` in their `transform`: that is data, not JSX.
 - **Not on components.** The compiler compiles one file at a time and does not know whether an imported component declares an `x`,
-  so on a component `x` is always its own prop and placement is `transform`: one rule, with no case that depends on another file.
+  so on a component `x` is always its own prop: one rule, with no case that depends on another file. A component is placed by an
+  `<Entity x y>` around it, or takes `x` and `y` props of its own and puts them on its root (Hearth's `Pad` and `Shot` do).
+- **No `transform` attribute** (2026-11-17). Until then a built-in took its place two ways (props, or `transform={{ … }}`, and a
+  field written both ways was an error), a component was placed only with `transform`, `opacity` was only a prop and `global` only
+  a `transform` field: a split no rule explained. The games wrote props almost everywhere and used `transform` only to place a
+  component (Kite's gem, the demo's three pickups, the example project's six). Making `x` on a component mean placement would
+  break components that declare their own `x` (Hearth's `Tower` aims with it; `Pad` and `Shot` take it), so the attribute went
+  instead: built-ins take every field as a prop, and a component is wrapped as it already was for `opacity`. A `transform`
+  attribute is TSE1207, whose message names the props to write on a built-in and the wrapper on a component. The compiler's
+  component-placement path (writes to the child's `placement`) went with it; `placement` is now set only by scenes, whose
+  `transform` object is data. The cost is one `Entity` per wrapped component, which matters only for long lists, and those place
+  themselves through their own props.
 - `<Flex>` in world space needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and
   it draws the same pixels as the hand-placed version (its stories' screenshots did not change).
 
@@ -2053,7 +2060,7 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
   shake; a child that knows when to shake tells it with a callback prop.
 - **Squash and stretch is state: `const squash = useSquash(1.75)`** (decided 2026-11-11, replacing a
   `createSquash()` object with a `start` method, which was the imperative shape). `squash.x = 0.6; squash.y = 1.4` in a
-  handler, and `transform={{ scaleX: squash.x, scaleY: squash.y }}` on the sprite, which scales about its origin. It
+  handler, and `scaleX={squash.x} scaleY={squash.y}` on the sprite, which scales about its origin. It
   springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
   the same object at rest, so the state stops changing). `useSquash` is an engine-shipped custom hook: ordinary source
   (`useMutable` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
@@ -2318,7 +2325,9 @@ function Level() {
   const s = useMutable({ score: 0 });
   return (
     <Entity name="Level">
-      <Enemy speed={s.score > 10 ? 2 : 1} onDefeated={() => { s.score += 1; }} transform={{ x: 40 }} />
+      <Entity x={40}>
+        <Enemy speed={s.score > 10 ? 2 : 1} onDefeated={() => { s.score += 1; }} />
+      </Entity>
     </Entity>
   );
 }
@@ -2379,23 +2388,24 @@ parent (compiling one file at a time) cannot see. A function passed to a
 built-in, `key` and `children` are errors (`TSE1203`, `TSE1202`).
 
 **Reads.** A prop may be read in JSX, conditions, derived values, handlers,
-`transform` fields, and the initial value of a `useMutable` field (read once,
+transform props (`x={speed}`), and the initial value of a `useMutable` field (read once,
 at construction, as in React); a field initialised from a primitive prop
 takes its type from the prop's declaration.
 
-**Placement.** `transform` on a component element sets the child's
-`placement`, which composes under the child's own `transform`
-(`world = parent × placement × transform`). `<Mover transform={{ x: 200 }} />`
-starts at 200 and moves from there; nothing can conflict, because the parent
-and the child write different transforms. `global` works at either level. The
-attribute is reserved like `key`, so the component's props type never declares
-it; the JSX types accept it on every element.
+**Placement.** A parent places a component by an `<Entity>` around it:
+`<Entity x={200}><Mover /></Entity>` starts the mover at 200, and it moves from
+there; nothing can conflict, because the wrapper and the child write different
+transforms. `global` works at either level. A `transform` attribute is `TSE1207`
+(2026-11-17; before, it set the child's `placement`). `placement` stays on every
+object, under its own `transform` (`world = parent × placement × transform`), for
+scenes, which place prefabs by data. `key`, `ref`, `transform` and `children` stay
+reserved prop names.
 
 **Layout offset.** A third writer comes before both: `layoutX` and `layoutY`,
 a position the player's layout pass writes into an object a layout container
 places (`world = parent × layout × placement × transform`). `<Flex>` writes it
 (see [LAYOUT.md](LAYOUT.md)). Like placement, it cannot
-conflict: layout decides the slot, and the object's own `transform` nudges it
+conflict: layout decides the slot, and the object's own `x`, `y` and the rest nudge it
 within the slot, as CSS's `transform` does. Both names are reserved members.
 
 `children` is passed between elements, `<Panel>…</Panel>`: see "Children".
@@ -2498,7 +2508,7 @@ intrinsic (`Entity`), holds that one child (or the condition's children, as `{�
 `Flex` lays out such a child's children as its own (`FlexBox.kids`, flattened in `#measureChildren`; when no child is see-through,
 `kids` is `children` itself, so the no-allocation path is unchanged), and a `Flex` under one is not a layout root. So
 `BuildMenu` returning `<Panel>` inside the side panel's column still grows to the column's width. The wrapper sits at its
-parent's origin; a `transform` passed to such a component moves what it holds.
+parent's origin; an `<Entity x y>` around such a component moves what it holds.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
 
@@ -2848,8 +2858,8 @@ collider's path, so a very fast, thin one can pass through another between two s
 **What is drawn.**
 
 * *Order:* tree order, a parent before its children, children in their order (source order, then
-  keyed-list order), unless `z` says otherwise. Later is on top. **`z`** is a `transform` field beside `x`
-  and `y` (`<Sprite transform={{ x: 10, z: 2 }} />`; scenes take it too): what has a higher `z` is drawn
+  keyed-list order), unless `z` says otherwise. Later is on top. **`z`** is a transform field beside `x`
+  and `y` (`<Sprite x={10} z={2} />`; scenes take it too): what has a higher `z` is drawn
   later, so on top, negative is behind, and 0 is the default. Like position it adds to the parent's
   (`placement.z + transform.z`, on top of the parent's), so raising a component raises everything in it as
   one, and `global` cuts the chain (a global `transform` is its own `z`; a global `placement`
@@ -2861,8 +2871,8 @@ collider's path, so a very fast, thin one can pass through another between two s
   (`DrawList.sortByZ`, a stable sort by `(z, record order)`; skipped when they are already in order, as
   when a HUD sits at the top); the view stays first and a screen's border bars stay last. A `z` that is
   not a number (NaN) is 0, with one warning; an infinite one is the extreme of the order. Why it is a
-  transform field and not a `z=` attribute: `z` is a common prop name (a coordinate, a layer), and an
-  attribute would reserve it on every component. The cost is a read of two fields per object in the tree
+  transform field, a prop of built-ins only: `z` is a common prop name (a coordinate, a layer), and an
+  attribute of every element would reserve it on every component. The cost is a read of two fields per object in the tree
   walk: about 10% of the script time of the 2,000 and 5,000 moving-rect bench scenes under QuickJS
   (median of interleaved runs, noisy to about the same size). Setters on `Transform` that mark it changed would let
   a game that never sets `z` skip it.
@@ -2912,7 +2922,7 @@ identity), not through the camera.
 `packages/player/src/layout.ts` and is Clay's, ported ([LAYOUT.md](LAYOUT.md) has the rules and the reasons). The walk
 reaches a layout root (a `Flex` whose parent is not a `Flex`) and lays out everything under it before descending:
 fit sizes bottom-up, then sharing out space top-down, widths first and then heights, then positions, each child's
-`layoutX` / `layoutY` (composed before `placement` and `transform`, so a child's own `transform` moves it within its
+`layoutX` / `layoutY` (composed before `placement` and `transform`, so a child's own `x` and `y` move it within its
 slot). Sizing is per axis: `"fit"`, `"grow"`, a number or a percentage, with min and max; free space goes to the
 smallest growing child first and stops at each maximum. Only a `Flex` is resized by layout; a `Shape`, `Sprite` or
 `Text` keeps its own size. An `Entity` or component child is sized by the bounding box of what it draws. A root that

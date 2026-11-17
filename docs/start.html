@@ -158,7 +158,7 @@ npm run check</code></pre>
     const dirY = (input.down(&quot;ArrowDown&quot;) ? 1 : 0) - (input.down(&quot;ArrowUp&quot;) ? 1 : 0);
     move(dirX * speed * dt, dirY * speed * dt);   // stopped by anything solid, in the same step
   });
-  return &lt;Entity transform={{ x, y }}&gt;&lt;Sprite image=&quot;hero.png&quot; /&gt;&lt;/Entity&gt;;
+  return &lt;Entity x={x} y={y}&gt;&lt;Sprite image=&quot;hero.png&quot; /&gt;&lt;/Entity&gt;;
 }</code></pre>
 <p><code>useBody</code> is a box that moves a pixel at a time: add a <code>&lt;Tilemap solid&gt;</code> or a <code>&lt;Collider solid&gt;</code> to the level and <code>move</code> stops at it.</p>
 <p>Movement is over time, so it reads the held keys in <code>useUpdate</code>, which gets the same <code>input</code> as <code>useInput</code>. Something that happens once, on a press (<code>if (input.pressed(&quot;Z&quot;)) step();</code>), goes in <code>useInput</code>. There is no need to copy keys into a field to carry them from one to the other.</p>
@@ -185,7 +185,7 @@ step(s) {
 &lt;Router route={screen}&gt;
   &lt;Route name=&quot;title&quot;&gt;&lt;Title /&gt;&lt;/Route&gt;
   &lt;Route name=&quot;play&quot;&gt;
-    &lt;Entity name=&quot;Hero&quot; transform={{ x, y }}&gt;&lt;Sprite image=&quot;hero.png&quot; originX={8} originY={8} /&gt;&lt;/Entity&gt;
+    &lt;Entity name=&quot;Hero&quot; x={x} y={y}&gt;&lt;Sprite image=&quot;hero.png&quot; originX={8} originY={8} /&gt;&lt;/Entity&gt;
   &lt;/Route&gt;
 &lt;/Router&gt;
 

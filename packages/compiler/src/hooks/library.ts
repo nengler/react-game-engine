@@ -13,7 +13,7 @@ export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, spring
  *   const squash = useSquash();
  *   squash.x = 0.6;
  *   squash.y = 1.4;
- *   <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} />
+ *   <Sprite scaleX={squash.x} scaleY={squash.y} />
  */
 export function useSquash(recover = 1.75) {
   const squash = useMutable({ x: 1, y: 1 });

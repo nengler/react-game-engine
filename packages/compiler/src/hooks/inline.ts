@@ -10,7 +10,7 @@
  *     }
  *     function Player() {
  *       const { x } = usePlatformerBody(90);
- *       return <Entity name="Player" transform={{ x }} />;
+ *       return <Entity name="Player" x={x} />;
  *     }
  *
  * "Hooks are compiler intrinsics": the call does not exist at run time. Before a file is compiled, each call that is a statement

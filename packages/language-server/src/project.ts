@@ -131,11 +131,6 @@ export class GameProject {
     return out;
   }
 
-  /** The component moved from `useState` to `useMutable`, for the quick fix on a `useState`. */
-  convertToMutable(file: string, text: string): { readonly text: string; readonly changed: boolean } {
-    return this.#compiler.convertToMutable(toPosix(relative(this.game.dir, resolve(file))), text);
-  }
-
   close(): void {
     this.#compiler.close();
   }

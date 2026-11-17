@@ -24,7 +24,7 @@ export function Icon({ kind, angles, at }: IconProps) {
   const s = useMutable({ turns: 0 });
   const angle = angles[at] ?? 0;
   useUpdate(() => { s.turns += angles[at]! / (Math.PI * 2); });
-  return <Sprite image="icons.png" frame={FRAMES[kind]!} transform={{ rotation: angle + Math.PI }} />;
+  return <Sprite image="icons.png" frame={FRAMES[kind]!} rotation={angle + Math.PI} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
     assert.match(compiled.code, /FRAMES\[this\.props\.kind\]/);

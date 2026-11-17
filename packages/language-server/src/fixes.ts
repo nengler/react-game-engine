@@ -21,16 +21,8 @@ export interface Fix {
   readonly preferred?: boolean;
 }
 
-/** What moves a file from `useState` and `useRef` to `useMutable`: the compiler (`Compiler.convertToMutable`), which parses it. */
-export interface MutableConverter {
-  convertToMutable(fileName: string, text: string): { readonly text: string; readonly changed: boolean };
-}
-
-/**
- * The fixes for one diagnostic in `source`. With `converter`, a `useState` or `useRef` is offered its move to `useMutable`: the whole file
- * at once, since every read and every setter call of the state changes with it.
- */
-export function fixesFor(source: string, diagnostic: CompilerDiagnostic, converter?: MutableConverter): Fix[] {
+/** The fixes for one diagnostic in `source`. */
+export function fixesFor(source: string, diagnostic: CompilerDiagnostic): Fix[] {
   const span = diagnostic.span;
   if (span === null) return [];
   switch (diagnostic.code) {
@@ -55,23 +47,11 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic, convert
       return diagnostic.message.startsWith("Write the text as the children of <Text>") ? textToChildren(source, span.start, span.end) : [];
     case "TSE1108":
       return diagnostic.message.startsWith("Take actions with") ? wholeStateToActions(source, span.start, span.end) : [];
-    case "TSE1102": {
-      const replaced = /^`(useState|useRef)` is replaced by `useMutable`/.exec(diagnostic.message)?.[1];
-      if (replaced !== undefined) {
-        if (converter === undefined) return [];
-        const converted = converter.convertToMutable(span.fileName, source);
-        return converted.changed
-          ? [
-              {
-                title: `Move this file's ${replaced} to useMutable`,
-                edits: [{ start: 0, end: source.length, text: converted.text }],
-                preferred: true,
-              },
-            ]
-          : [];
-      }
-      return replaceReactHook(source, span.start, span.end);
-    }
+    case "TSE1102":
+      // `useState` and `useRef` have no fix: the message writes out the `useMutable` to use, in the author's names.
+      return /^`(useState|useRef)` is replaced by `useMutable`/.test(diagnostic.message)
+        ? []
+        : replaceReactHook(source, span.start, span.end);
     default:
       return [];
   }

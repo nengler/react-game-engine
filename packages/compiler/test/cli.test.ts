@@ -39,7 +39,7 @@ describe("the CLI: prefabs and scenes", () => {
   }
 
   const FILES = {
-    "Enemy.tsx": `import { Entity } from "@tsengine/runtime/jsx";\ninterface EnemyProps { speed: number }\nexport function Enemy({ speed }: EnemyProps) { return <Entity name="Enemy" transform={{ x: speed }} />; }`,
+    "Enemy.tsx": `import { Entity } from "@tsengine/runtime/jsx";\ninterface EnemyProps { speed: number }\nexport function Enemy({ speed }: EnemyProps) { return <Entity name="Enemy" x={speed} />; }`,
   };
   const GOOD = `{ "version": 1, "entities": [{ "id": "a", "prefab": "Enemy", "props": { "speed": 2 } }] }`;
   const TMJ = JSON.stringify({

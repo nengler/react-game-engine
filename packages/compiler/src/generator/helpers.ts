@@ -86,11 +86,6 @@ export function typeText(type: TypeIR): string {
   }
 }
 
-/** A transform attribute on a component element places it (`placement`); on a built-in it sets the object's own `transform`. */
-export function transformTarget(el: ElementIR): "transform" | "placement" {
-  return el.component.kind === "Intrinsic" ? "transform" : "placement";
-}
-
 export function escapeTemplate(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 }

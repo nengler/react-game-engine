@@ -266,11 +266,11 @@ export const REMOVED_HOOKS: Readonly<Record<string, string>> = {
   onInput: "'onInput' was renamed to 'useInput' (hooks start with `use`, as in React).",
   useState:
     "`useState` is replaced by `useMutable`, state you write directly: `const s = useMutable({ hp: 3 })`, read as `s.hp` and written as " +
-    "`s.hp = v` (where `setHp(v)` was). A handler reads its own writes at once. `node tools/codemod-mutable.ts <file>` converts a file.",
+    "`s.hp = v` (where `setHp(v)` was). A handler reads its own writes at once.",
   useRef:
     "`useRef` is replaced by `useMutable`: a value that persists and never renders is a field you do not read in the JSX " +
     "(`const s = useMutable({ timer: 0 })`, read and written as `s.timer`, where `timer.current` was). A render only redoes what reads a changed field, " +
-    "so such a field costs a comparison, not a redraw. `node tools/codemod-mutable.ts <file>` converts a file.",
+    "so such a field costs a comparison, not a redraw.",
   useEffect: EFFECT_MESSAGE("useEffect"),
   useLayoutEffect: EFFECT_MESSAGE("useLayoutEffect"),
   onCollisionEnter:

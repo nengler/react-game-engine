@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 /**
- * `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` as props of their own on a built-in that takes `transform` (DESIGN.md,
- * "Placing things"): `<Sprite x={spot.x} y={spot.y} />` is `transform={{ x: spot.x, y: spot.y }}`, lowered to the same writes.
+ * `x`, `y`, `z`, `rotation`, `scaleX`, `scaleY`, `global` and `opacity` as props of a built-in (DESIGN.md, "Placing things"):
+ * `<Sprite x={spot.x} y={spot.y} />` writes the sprite's runtime transform. There is no `transform` attribute.
  */
 import { after, describe, it } from "node:test";
 
@@ -25,8 +25,8 @@ const sourceErrors = (body: string): string[] =>
     ])
     .map((d) => d.message);
 
-describe("transform shorthand props", () => {
-  it("places a built-in with x, y, rotation and scale written as props, from state, as transform does", async () => {
+describe("transform props", () => {
+  it("places a built-in with x, y, rotation, scale and global written as props, from state", async () => {
     const compiled = compile(`import { Entity, Shape, useInput, useMutable } from "@tsengine/runtime/jsx";
 export function Row() {
   const s = useMutable({ at: 4 });
@@ -36,7 +36,7 @@ export function Row() {
   return (
     <Entity x={1} y={2}>
       <Shape kind="rect" width={2} height={2} color="red" x={s.at} y={s.at * 2} rotation={0.5} scaleX={2} scaleY={3} z={7} />
-      <Shape kind="rect" width={2} height={2} color="blue" transform={{ x: 9 }} y={5} />
+      <Shape kind="rect" width={2} height={2} color="blue" x={9} y={5} global />
     </Entity>
   );
 }`);
@@ -59,20 +59,26 @@ export function Row() {
       ],
       [4, 8, 0.5, 2, 3, 7]
     );
-    assert.deepEqual([second!.transform.x, second!.transform.y], [9, 5], "with transform for the other fields");
+    assert.deepEqual([second!.transform.x, second!.transform.y, second!.transform.global], [9, 5, true], "`global` alone is true");
+    assert.deepEqual([second!.worldTransform().x, second!.worldTransform().y], [9, 5], "ignores the parent at 1, 2");
     world.tick(1 / 60, { pressed: (key: string) => key === "Space", down: () => false, released: () => false } as never);
     world.flush();
     assert.deepEqual([first!.transform.x, first!.transform.y], [14, 28], "follows state");
   });
 
-  it("refuses a field written both ways, and a built-in that cannot be placed", () => {
-    const twice = compileErrors(`import { Shape } from "@tsengine/runtime/jsx";
+  it("refuses a transform attribute, and a built-in that cannot be placed", () => {
+    const attribute = compileErrors(`import { Shape } from "@tsengine/runtime/jsx";
 export function A() {
-  return <Shape kind="rect" width={1} height={1} color="red" x={1} transform={{ x: 2, y: 3 }} />;
+  return <Shape kind="rect" width={1} height={1} color="red" transform={{ x: 2, y: 3 }} />;
 }`);
     assert.deepEqual(
-      twice.map((d) => [d.code, d.message]),
-      [[DiagnosticCode.InvalidTransformAttribute, "'x' is written twice: as a prop (`x={…}`) and in `transform`. Keep one."]]
+      attribute.map((d) => [d.code, d.message]),
+      [
+        [
+          DiagnosticCode.InvalidTransformAttribute,
+          "There is no `transform` attribute: write its fields as props, `<Shape x={…} y={…} rotation={…} />`.",
+        ],
+      ]
     );
     const music = compileErrors(`import { Entity, Music } from "@tsengine/runtime/jsx";
 export function A() {
@@ -139,28 +145,20 @@ export function Card() {
     assert.equal(card.transform.opacity, 0.25, "follows state");
   });
 
-  it("refuses opacity inside transform, naming the prop to write instead (or the wrapper, on a component)", () => {
-    const builtIn = compileErrors(`import { Entity } from "@tsengine/runtime/jsx";
-export function A() {
-  return <Entity transform={{ x: 2, opacity: 0.2 }} />;
-}`);
-    assert.deepEqual(
-      builtIn.map((d) => [d.code, d.message]),
-      [[DiagnosticCode.InvalidTransformAttribute, "`opacity` is a prop, not part of `transform`: write `opacity={…}` on the element."]]
-    );
+  it("refuses a transform attribute on a component, naming the wrapper to place it with", () => {
     const component = compileErrors(`import { Entity } from "@tsengine/runtime/jsx";
 function Dot() {
   return <Entity />;
 }
 export function B() {
-  return <Entity><Dot transform={{ opacity: 0.5 }} /></Entity>;
+  return <Entity><Dot transform={{ x: 5 }} /></Entity>;
 }`);
     assert.deepEqual(
       component.map((d) => [d.code, d.message]),
       [
         [
           DiagnosticCode.InvalidTransformAttribute,
-          "`opacity` is not written in `transform`. To fade <Dot>, wrap it: `<Entity opacity={…}><Dot … /></Entity>`.",
+          "A component is not placed with `transform`: wrap it, `<Entity x={…} y={…}><Dot … /></Entity>`, or give it `x` and `y` props of its own and put them on its root.",
         ],
       ]
     );
@@ -169,7 +167,9 @@ export function B() {
   it("type-checks in the editor on built-ins that take a transform, and not where they do not", () => {
     assert.deepEqual(sourceErrors(`<Shape kind="rect" width={1} height={1} opacity={n / 3} /><Entity opacity={0.5} />`), [], "opacity");
     assert.equal(sourceErrors(`<Entity opacity="half" />`).length, 1);
-    assert.equal(sourceErrors(`<Entity transform={{ opacity: 0.5 }} />`).length, 1, "the editor refuses opacity in transform too");
+    assert.equal(sourceErrors(`<Entity transform={{ x: 1 }} />`).length, 1, "the editor refuses a transform attribute too");
+    assert.equal(sourceErrors(`<Dot x={2} transform={{ x: 1 }} />`).length, 1, "on a component as well");
+    assert.deepEqual(sourceErrors(`<Entity global x={1} />`), [], "global as a prop");
     assert.deepEqual(sourceErrors(`<Sprite image="coin.png" x={n} y={2} rotation={1} scaleX={2} scaleY={2} z={1} />`), []);
     assert.deepEqual(sourceErrors(`<Dot x={2} />`), [], "a component's own x");
     assert.equal(sourceErrors(`<Music src="a.wav" x={2} />`).length, 1);

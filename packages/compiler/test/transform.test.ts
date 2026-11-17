@@ -1,7 +1,7 @@
 /**
- * The `transform` attribute and value refs: lowering, diagnostics, type-checking of generated code, and runtime behaviour.
- * Position is ordinary state written to `transform={{ ... }}`; refs hold values that never render. Also `transform` on a
- * component element, which places the component under its own transform.
+ * A built-in's transform props (`x`, `y`, `rotation`, `global`, …): lowering, diagnostics, type-checking of generated code, and
+ * runtime behaviour. Position is ordinary state written to those props. There is no `transform` attribute; a component is placed
+ * by an <Entity> around it.
  */
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -28,10 +28,10 @@ function Runner() {
     }
   });
   return (
-    <Entity name="Runner" transform={{ x: s.x, y: -5, rotation: s.x / 100, scaleX: 2 }}>
+    <Entity name="Runner" x={s.x} y={-5} rotation={s.x / 100} scaleX={2}>
       <Sprite image={s.x > 100 ? "run.png" : "idle.png"} />
       <Sprite image={s.lives > 0 ? "alive.png" : "dead.png"} />
-      <Entity name="shadow" transform={{ y: 4 }} />
+      <Entity name="shadow" y={4} />
       <Collider width={4} height={4} onCollisionEnter={() => { s.lives -= 1; }} />
     </Entity>
   );
@@ -155,7 +155,7 @@ describe("transform: runtime behaviour", () => {
     const { Spawner } = await load<{ Spawner: new () => Entity & { s: { on: boolean; y: number } } }>(
       compile(`function Spawner() {
   const s = useMutable({ on: false, y: 3 });
-  return <Entity name="S">{s.on && <Entity name="marker" transform={{ x: 7, y: s.y }} />}</Entity>;
+  return <Entity name="S">{s.on && <Entity name="marker" x={7} y={s.y} />}</Entity>;
 }`)
     );
     const world = new World();
@@ -176,9 +176,9 @@ describe("transform: runtime behaviour", () => {
       compile(`function Ship() {
   const s = useMutable({ x: 100, pinned: true });
   return (
-    <Entity name="Ship" transform={{ x: s.x, y: 50 }}>
-      <Entity name="turret" transform={{ x: 10 }} />
-      <Entity name="hud" transform={{ x: 5, y: 5, global: s.pinned }} />
+    <Entity name="Ship" x={s.x} y={50}>
+      <Entity name="turret" x={10} />
+      <Entity name="hud" x={5} y={5} global={s.pinned} />
     </Entity>
   );
 }`)
@@ -205,9 +205,9 @@ describe("transform: runtime behaviour", () => {
     const compiled = compile(`function Coin() {
   const s = useMutable({ bob: 0 });
   return (
-    <Entity name="Coin" transform={{ x: 50, y: 20 }}>
-      <Sprite image="coin.png" transform={{ y: s.bob, rotation: 0.5 }} />
-      <Collider width={8} height={8} transform={{ x: -4, y: -4 }} />
+    <Entity name="Coin" x={50} y={20}>
+      <Sprite image="coin.png" y={s.bob} rotation={0.5} />
+      <Collider width={8} height={8} x={-4} y={-4} />
     </Entity>
   );
 }`);
@@ -227,7 +227,7 @@ describe("transform: runtime behaviour", () => {
   });
 
   it("type-checks `global` as a boolean", () => {
-    const bad = compile(`function C() { return <Entity name="C" transform={{ global: 1 }} />; }`);
+    const bad = compile(`function C() { return <Entity name="C" global={1} />; }`);
     assert.deepEqual(
       typeCheck(bad).map((d) => d.code),
       [DiagnosticCode.GeneratedTypeError]
@@ -245,10 +245,9 @@ function C() {
   return <Entity name="C">${jsx}</Entity>;
 }`).map((d) => d.code);
 
-  it("rejects malformed transform attributes", () => {
+  it("rejects a transform attribute, whatever it holds", () => {
     for (const jsx of [
-      "<Entity transform={{ w: 1 }} />",
-      "<Entity transform={{ x: 1, x: 2 }} />",
+      "<Entity transform={{ x: 1 }} />",
       "<Entity transform={5} />",
       '<Entity transform="x" />',
       "<Entity transform={{ ...other }} />",
@@ -256,7 +255,7 @@ function C() {
     ]) {
       assert.ok(jsxCodes(jsx).includes(DiagnosticCode.InvalidTransformAttribute), jsx);
     }
-    assert.ok(jsxCodes("<Entity transform={{ x: 1 }} transform={{ y: 1 }} />").includes(DiagnosticCode.UnsupportedAttribute));
+    assert.ok(jsxCodes("<Entity x={1} x={2} />").includes(DiagnosticCode.UnsupportedAttribute), "a prop written twice");
   });
 
   it("rejects the attribute on an intrinsic the manifest does not list as transformable", () => {
@@ -264,7 +263,7 @@ function C() {
     try {
       const result = compiler.compile(
         "C.tsx",
-        withAuthoringImports(`function C() { return <Entity name="C"><Sprite image="a" transform={{ x: 1 }} /></Entity>; }`)
+        withAuthoringImports(`function C() { return <Entity name="C"><Sprite image="a" x={1} /></Entity>; }`)
       );
       assert.deepEqual(
         result.diagnostics.map((d) => d.code),
@@ -275,11 +274,11 @@ function C() {
     }
   });
 
-  it("points useTransform at the transform attribute", () => {
+  it("points useTransform at the x and y props", () => {
     const diagnostics = compileErrors(`function C() { const t = useTransform({ x: 0 }); return <Entity name="C" />; }`);
     const removed = diagnostics.find((d) => d.code === DiagnosticCode.UnknownHook);
     assert.ok(removed);
-    assert.match(removed.message, /transform=\{\{ x, y \}\}/);
+    assert.match(removed.message, /<Entity x=\{s\.x\} y=\{s\.y\}>/);
   });
 
   it("rejects `ref={…}` on any element", () => {
@@ -301,31 +300,43 @@ function C() {
   });
 });
 
-describe("placing a component with transform", () => {
+describe("placing a component", () => {
   const SCENE = `
 function Mover() {
   const s = useMutable({ x: 0 });
-  return <Entity name="Mover" transform={{ x: s.x }} />;
+  return <Entity name="Mover" x={s.x} />;
 }
 function Scene() {
   const s = useMutable({ spawn: 50, pinned: false });
   return (
-    <Entity name="Scene" transform={{ x: 100 }}>
-      <Mover transform={{ x: s.spawn, y: 5, global: s.pinned }} />
+    <Entity name="Scene" x={100}>
+      <Entity x={s.spawn} y={5} global={s.pinned}>
+        <Mover />
+      </Entity>
     </Entity>
   );
 }`;
 
-  it("composes the parent's placement under the child's own transform", async () => {
+  it("refuses a transform attribute on a component, naming the wrapper to write", () => {
+    const found = compileErrors(`
+function Mover() { return <Entity name="Mover" />; }
+function Scene() { return <Entity name="Scene"><Mover transform={{ x: 5 }} /></Entity>; }`);
+    const placed = found.find((d) => d.code === DiagnosticCode.InvalidTransformAttribute);
+    assert.ok(placed, found.map((d) => d.message).join("\n"));
+    assert.match(placed.message, /<Entity x=\{…\} y=\{…\}><Mover … \/><\/Entity>/);
+  });
+
+  it("composes the wrapper's place over the child's own transform", async () => {
     const { Scene } = await load<{
-      Scene: new () => Entity & { mover: Entity & { s: { x: number } }; s: { spawn: number; pinned: boolean } };
+      Scene: new () => Entity & { s: { spawn: number; pinned: boolean } };
     }>(compile(SCENE));
     const world = new World();
     const scene = new Scene();
     world.mount(scene);
-    const mover = scene.mover;
-    assert.deepEqual([mover.placement.x, mover.placement.y, mover.transform.x], [50, 5, 0]);
-    assert.deepEqual([mover.worldTransform().x, mover.worldTransform().y], [150, 5], "scene 100 + placement 50, own transform 0");
+    const wrapper = scene.children[0]!;
+    const mover = wrapper.children[0] as Entity & { s: { x: number } };
+    assert.deepEqual([wrapper.transform.x, wrapper.transform.y, mover.transform.x], [50, 5, 0]);
+    assert.deepEqual([mover.worldTransform().x, mover.worldTransform().y], [150, 5], "scene 100 + wrapper 50, own transform 0");
 
     mover.s.x = 7;
     world.flush();
@@ -333,11 +344,11 @@ function Scene() {
 
     scene.s.spawn = 80;
     world.flush();
-    assert.equal(mover.worldTransform().x, 187, "placement follows the parent's state");
+    assert.equal(mover.worldTransform().x, 187, "the place follows the parent's state");
 
     scene.s.pinned = true;
     world.flush();
-    assert.equal(mover.worldTransform().x, 87, "a global placement ignores the scene's transform; the child's own still applies");
+    assert.equal(mover.worldTransform().x, 87, "a global wrapper ignores the scene's transform; the child's own still applies");
   });
 
   it("type-checks", () => {

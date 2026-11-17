@@ -38,7 +38,7 @@ export interface HostElementIR {
   readonly kind: "HostElement";
   readonly component: IntrinsicComponentRef;
   readonly props: readonly PropIR[];
-  /** `transform={{ x, y }}`: the instance's own transform. See `ElementIR.transform`. */
+  /** `x={…} y={…}`: the instance's own transform. See `ElementIR.transform`. */
   readonly transform: readonly TransformPropIR[];
   readonly children: readonly ChildIR[];
   /** The root was another component or a condition: the component is a container `<Flex>` layout sees through. */
@@ -55,9 +55,9 @@ export interface ElementIR {
   readonly component: ComponentRef;
   readonly props: readonly PropIR[];
   /**
-   * `transform={{ x: x, y: 0 }}`: writes to the element's runtime `transform`
-   * (only `<Entity>` elements have one). Each field is a static or dynamic
-   * prop like any other, so position is ordinary state: `setX(...)` moves it.
+   * `x={…}`, `y={0}` and the other transform props of a built-in: writes to the
+   * element's runtime `transform`. Each field is a static or dynamic prop like
+   * any other, so position is ordinary state. Always empty on a component.
    */
   readonly transform: readonly TransformPropIR[];
   /**

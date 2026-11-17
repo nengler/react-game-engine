@@ -43,7 +43,7 @@ interface MoverProps {
 export function Mover({ speed = 10 }: MoverProps) {
   const s = useMutable({ x: 0 });
   useUpdate((dt) => { s.x += dt * speed; });
-  return <Entity name="Mover" transform={{ x: s.x }} />;
+  return <Entity name="Mover" x={s.x} />;
 }
 
 interface ProbeProps {
@@ -66,8 +66,8 @@ export function Level() {
   return (
     <Entity name="Level">
       <Frame title="hud">
-        <Enemy speed={1} transform={{ x: 10 }} />
-        <Enemy speed={2} tint="blue" transform={{ x: 20, y: 5, rotation: 0.5 }} />
+        <Enemy speed={1} />
+        <Enemy speed={2} tint="blue" />
       </Frame>
       <Hidden />
     </Entity>

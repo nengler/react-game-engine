@@ -13,7 +13,7 @@ import { moveActorX, moveActorY, type PixelActor } from "./move.ts";
 import type { World } from "./World.ts";
 
 export interface BodyOptions {
-  /** Where the box's top left starts, in its component's parent's space (what `transform={{ x, y }}` on the component means). */
+  /** Where the box's top left starts, in its component's parent's space (what `<Entity x y>` around the component means). */
   readonly x: number;
   readonly y: number;
   readonly width: number;

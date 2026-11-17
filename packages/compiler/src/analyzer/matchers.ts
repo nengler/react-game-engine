@@ -61,7 +61,7 @@ export function matchUseStateStatement(statement: Statement): StatementMatch | n
   const message =
     `\`useState\` is replaced by \`useMutable\`, state you write directly: \`const s = useMutable({ ${value}: ${initial} })\`, read as \`s.${value}\`` +
     (setter !== null ? `, and \`${setter}(v)\` becomes \`s.${value} = v\`` : "") +
-    ". A handler reads its own writes at once. `node tools/codemod-mutable.ts <file>` converts a file.";
+    ". A handler reads its own writes at once.";
   return { kind: "invalid", code: DiagnosticCode.UnknownHook, message, call: init };
 }
 
@@ -80,8 +80,7 @@ export function matchUseRefStatement(statement: Statement): StatementMatch | nul
   const initial = init.arguments[0]?.getText() ?? "…";
   const message =
     `\`useRef\` is replaced by \`useMutable\`: a value that persists and never renders is a field the JSX does not read: \`const s = useMutable({ ${name}: ${initial} })\`, ` +
-    `read and written as \`s.${name}\` where \`${name}.current\` was. A render only redoes what reads a changed field, so such a field costs a comparison, not a redraw. ` +
-    "`node tools/codemod-mutable.ts <file>` converts a file.";
+    `read and written as \`s.${name}\` where \`${name}.current\` was. A render only redoes what reads a changed field, so such a field costs a comparison, not a redraw.`;
   return { kind: "invalid", code: DiagnosticCode.UnknownHook, message, call: init };
 }
 

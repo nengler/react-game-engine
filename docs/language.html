@@ -213,7 +213,7 @@ return <Panel title={`Bag (${total})`}>{rows.map((row) => <Label key={row.id}>{r
   </table></div>
 
   <h3 id="hook-usemutable"><code>useMutable</code><span id="hook-usestate"></span></h3>
-  <p>A component's state: an object of fields you write directly. Each field renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once, so a step needs no local copies and no setters; render sees what the frame committed. It replaces React's <code>useState</code>: a <code>useState</code> is <code>TSE1102</code>, whose message writes out the conversion, and the editor's quick fix converts the whole file (as <code>node tools/codemod-mutable.ts</code> does from the command line).</p>
+  <p>A component's state: an object of fields you write directly. Each field renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once, so a step needs no local copies and no setters; render sees what the frame committed. It replaces React's <code>useState</code>: a <code>useState</code> is <code>TSE1102</code>, whose message writes out the conversion in your names.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 const s = useMutable({
   health: 100,                 // number (a literal widens to number)
@@ -266,7 +266,7 @@ useUpdate((dt) => {
   }
 });
 </script></pre>
-  <p>A field cannot be written in <code>useUnmount</code>: the component is going away. Tell the parent with a callback prop. <code>node tools/codemod-mutable.ts &lt;file&gt;</code> and the editor's quick fix move a file's <code>useRef</code> and <code>useState</code> to <code>useMutable</code>.</p>
+  <p>A field cannot be written in <code>useUnmount</code>: the component is going away. Tell the parent with a callback prop.</p>
 
   <h3 id="hook-useinput"><code>useInput</code> and <code>InputState</code></h3>
   <p>Input is polled each frame. There are no key-event props.</p>
@@ -410,7 +410,7 @@ export function Player() {
 const squash = useSquash();                        // springs back to 1 at 1.75 a second
 squash.x = 0.6;                                    // in a handler: thin and tall
 squash.y = 1.4;
-<Sprite image="hero.png" transform={{ scaleX: squash.x, scaleY: squash.y }} />
+<Sprite image="hero.png" scaleX={squash.x} scaleY={squash.y} />
 
 const shake = useShake();
 shake.strength = 3;                                // in a handler: starts a shake
@@ -456,28 +456,28 @@ export function Player() {
     <li>You can call methods of imported objects (<code>fx.burst(…)</code>) in handlers and expressions. An array method on an imported array (<code>ROOMS.filter</code>) is still lowered, so its callback may read state.</li>
   </ul>
 </section>
-<section id="transform" data-group="Language" data-title="Transform and drawing order">
-  <h2>Transform and drawing order</h2>
-  <p>Every element except <code>Game</code>, <code>Screen</code>, <code>Router</code>, <code>Route</code>, <code>Fade</code> and <code>Music</code> accepts <code>transform</code>. All fields are optional and may come from state.</p>
+<section id="transform" data-group="Language" data-title="Position and drawing order">
+  <h2>Position and drawing order</h2>
+  <p>Every built-in except <code>Game</code>, <code>Screen</code>, <code>Router</code>, <code>Route</code>, <code>Fade</code> and <code>Music</code> takes these props. All are optional and may come from state.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
-<Entity transform={{ x: 100, y: 40, rotation: Math.PI / 4, scaleX: 2, z: 5 }} />
-<Sprite image="flag.png" transform={{ x: 0, y: 0, global: true }} />
+<Entity x={100} y={40} rotation={Math.PI / 4} scaleX={2} z={5} />
+<Sprite image="flag.png" x={0} y={0} global />
 </script></pre>
   <div class="tablewrap"><table>
-    <tr><th>Field</th><th>Default</th><th>Meaning</th></tr>
+    <tr><th>Prop</th><th>Default</th><th>Meaning</th></tr>
     <tr><td><code>x</code>, <code>y</code></td><td class="type">0</td><td>Pixels, relative to the parent. <strong>y points down.</strong></td></tr>
     <tr><td><code>rotation</code></td><td class="type">0</td><td>Radians. Positive turns clockwise.</td></tr>
     <tr><td><code>scaleX</code>, <code>scaleY</code></td><td class="type">1</td><td>Per-axis scale. Negative flips.</td></tr>
     <tr><td><code>z</code></td><td class="type">0</td><td>Draw order: higher is drawn later, so on top. Negative is behind. It adds to the parent's, so raising a component raises everything in it.</td></tr>
-    <tr><td><code>global</code></td><td class="type">false</td><td>True: the transform is in world space and ignores the parent.</td></tr>
+    <tr><td><code>global</code></td><td class="type">false</td><td>True (<code>global</code> alone, or <code>global={pinned}</code>): the element is placed in world space and ignores the parent.</td></tr>
       </table></div>
-  <p>Opacity is a prop on every element, not part of <code>transform</code>: <code>&lt;Entity opacity={fade}&gt;</code>, <code>&lt;Shape opacity={0.5} … /&gt;</code>, <code>&lt;Sprite opacity={…} … /&gt;</code>. It is 0 to 1 and fades the element and everything inside it, so an <code>&lt;Entity&gt;</code> fades a whole popup or card at once. It multiplies down the tree (0.5 inside 0.5 is 0.25), and each thing is drawn at it on its own, so where two overlap the one below shows through. <code>transform={{ opacity }}</code> is an error that says so (TSE1207). To fade a component, wrap it: <code>&lt;Entity opacity={…}&gt;&lt;Card /&gt;&lt;/Entity&gt;</code>; on the component itself <code>opacity</code> is whatever its own props say.</p>
+  <p>Opacity is a prop on every element too: <code>&lt;Entity opacity={fade}&gt;</code>, <code>&lt;Shape opacity={0.5} … /&gt;</code>, <code>&lt;Sprite opacity={…} … /&gt;</code>. It is 0 to 1 and fades the element and everything inside it, so an <code>&lt;Entity&gt;</code> fades a whole popup or card at once. It multiplies down the tree (0.5 inside 0.5 is 0.25), and each thing is drawn at it on its own, so where two overlap the one below shows through. To fade a component, wrap it: <code>&lt;Entity opacity={…}&gt;&lt;Card /&gt;&lt;/Entity&gt;</code>; on the component itself <code>opacity</code> is whatever its own props say.</p>
   <ul>
     <li>The origin is the top-left corner of a <code>Sprite</code>, <code>AnimatedSprite</code>, <code>Shape</code>, <code>Text</code>, <code>Collider</code>, <code>Pointer</code>; rotation and scale are about it.</li>
     <li>Children are relative: <code>x: 10</code> inside a parent at <code>x: 100</code> is at 110, and turns and scales with the parent.</li>
     <li>Equal <code>z</code> keeps tree order, globally across the tree.</li>
-    <li>On a component, <code>transform</code> places the whole component; do not declare it in the props type.</li>
-    <li>A malformed <code>transform</code> is <code>TSE1207</code>.</li>
+    <li>A component takes none of these: on a component, <code>x</code> is whatever its props say. Place one by wrapping it, <code>&lt;Entity x={40} y={8}&gt;&lt;Coin /&gt;&lt;/Entity&gt;</code>, or give it <code>x</code> and <code>y</code> props and put them on its root, as Hearth's <code>Pad</code> does.</li>
+    <li>There is no <code>transform</code> attribute: <code>transform={{ … }}</code> is <code>TSE1207</code>, whose message says what to write.</li>
   </ul>
 </section>
 <section id="props" data-group="Language" data-title="Props, callbacks and children">
@@ -497,7 +497,9 @@ export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
 }
 
 // parent
-<Enemy speed={s.score > 10 ? 2 : 1} onDefeated={() => { s.score += 1; }} transform={{ x: 40 }} />
+<Entity x={40}>
+  <Enemy speed={s.score > 10 ? 2 : 1} onDefeated={() => { s.score += 1; }} />
+</Entity>
 </script></pre>
   <ul>
     <li><code>props: EnemyProps</code> also works (<code>props.speed</code>), but <code>props</code> cannot be passed on or spread. Defaults go in the destructuring.</li>
@@ -517,7 +519,7 @@ export function Panel({ title, children }: PanelProps) {
   return (
     <Entity>
       <Sprite image={title + ".png"} />
-      <Entity name="Content" transform={{ y: 16 }}>{children}</Entity>
+      <Entity name="Content" y={16}>{children}</Entity>
     </Entity>
   );
 }
@@ -588,11 +590,11 @@ export function Label({ color = "#fff1d6", children }: LabelProps) {
 ))}
 
 // The items can be computed where they are drawn, as in React: a member, a mapped array, a helper's result.
-{spotsOf(run).map((s) => <Sprite key={s.id} image="things.png" frame={s.frame} transform={{ x: s.x, y: s.y }} />)}
+{spotsOf(run).map((s) => <Sprite key={s.id} image="things.png" frame={s.frame} x={s.x} y={s.y} />)}
 
 // An item may hold children, nested and conditional, that read it.
 {slots.map((slot) => (
-  <Entity key={slot.id} transform={{ x: slot.x, y: slot.y }}>
+  <Entity key={slot.id} x={slot.x} y={slot.y}>
     <Shape kind="rect" width={42} height={36} color="#1b2036" />
     {slot.filled && <Text>{slot.name}</Text>}
   </Entity>

@@ -239,19 +239,19 @@
         ["onSubmit", "(value: string) =&gt; void", "–", "Called with the text when Enter is pressed while it has the focus."],
         ["color / textSize / caretColor", "CSS colour / number / CSS colour", "the game's / the game's / \"#f2d17a\"", "The text's colour and size, and the caret's colour."]
       ] },
-    { name: "Router", kind: "container, no transform", sum: "Shows one <code>Route</code> at a time, with an optional transition. See <a href=\"systems.html#router\">Screens</a>.",
+    { name: "Router", kind: "container, not placed", sum: "Shows one <code>Route</code> at a time, with an optional transition. See <a href=\"systems.html#router\">Screens</a>.",
       props: [
         ["route", "string", "–", "Name of the <code>Route</code> to show. Changing it switches screens.", 1],
         ["transition", "function", "none", "<code>(progress, from, to) =&gt; frame</code>, from a <code>.ts</code> file."],
         ["duration", "number", "0.4", "Seconds a transition takes."],
         ["coverColor", "CSS colour", '"black"', "Colour a transition's <code>cover</code> fades to."]
       ] },
-    { name: "Route", kind: "container, no transform", sum: "One screen of a <code>Router</code>. In the world only while shown, being left, or being entered.",
+    { name: "Route", kind: "container, not placed", sum: "One screen of a <code>Router</code>. In the world only while shown, being left, or being entered.",
       props: [
         ["name", "string", "–", "What the router's <code>route</code> calls it.", 1],
         ["keepAlive", "boolean", "false", "Keep its components and their state while hidden. Off: each visit starts fresh."]
       ] },
-    { name: "Provider", kind: "container, no transform", sum: "Written <code>&lt;Theme.Provider value={…}&gt;</code>: gives a context's value to every <code>useContext(Theme)</code> below it. Layout sees through it; it draws nothing.",
+    { name: "Provider", kind: "container, not placed", sum: "Written <code>&lt;Theme.Provider value={…}&gt;</code>: gives a context's value to every <code>useContext(Theme)</code> below it. Layout sees through it; it draws nothing.",
       props: [
         ["context", "Context", "–", "The context (<code>createContext</code> in a <code>.ts</code> file). Written as the tag: <code>&lt;Theme.Provider&gt;</code>.", 1],
         ["value", "the context's type", "–", "What its readers read. A new value renders every reader again.", 1]
@@ -299,14 +299,14 @@
         ["shader", "string", "–", "A shader the light map goes through, as on a <code>&lt;Layer&gt;</code>."],
         ["params", "number[]", "[]", "The shader's eight numbers."],
       ] },
-    { name: "Fade", kind: "leaf, no transform", sum: "A full-screen cover that fades to a colour and back. Put it in a <code>&lt;Hud&gt;</code>.",
+    { name: "Fade", kind: "leaf, not placed", sum: "A full-screen cover that fades to a colour and back. Put it in a <code>&lt;Hud&gt;</code>.",
       props: [
         ["on", "boolean", "false", "<code>true</code> fades to <code>color</code>; <code>false</code> fades back."],
         ["color", "CSS colour", '"black"', ""],
         ["duration", "number", "0.25", "Seconds a full fade takes. 0 switches at once."],
         ["from", "number", "0", "How covered it starts, 0 to 1. <code>from={1}</code> fades in as the screen begins."]
       ] },
-    { name: "Music", kind: "leaf, no transform", sum: "Streamed, looping music. It plays while mounted, so put it in the root, where screen changes do not unmount it.",
+    { name: "Music", kind: "leaf, not placed", sum: "Streamed, looping music. It plays while mounted, so put it in the root, where screen changes do not unmount it.",
       props: [
         ["src", "string", "–", "File under <code>assets</code> (<code>.ogg</code>, <code>.mp3</code>, <code>.wav</code>).", 1],
         ["playing", "boolean", "true", "Off fades out then stops; on restarts from the beginning."],
@@ -334,7 +334,7 @@
     var rows = el.props.map(function (p) {
       return "<tr><td><code>" + p[0] + "</code>" + (p[4] ? '<span class="req">required</span>' : "") + '</td><td class="type">' + esc(p[1]).replace(/&amp;lt;/g, "&lt;") + '</td><td class="type">' + esc(p[2]) + "</td><td>" + p[3] + "</td></tr>";
     }).join("");
-    var tr = (el.name in TRANSFORM_NOTE) ? "No <code>transform</code>." : "Accepts <code>transform</code>.";
+    var tr = (el.name in TRANSFORM_NOTE) ? "Not placed: no <code>x</code> or <code>y</code>." : "Placed with <code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code>, <code>scaleY</code> and <code>global</code>.";
     d.innerHTML = '<h3 data-nav="&lt;' + el.name + "&gt;\">&lt;" + el.name + '&gt; <span class="tag">' + el.kind + "</span></h3><p>" + el.sum + " " + tr + "</p>" +
       (rows ? '<div class="tablewrap"><table><tr><th>Prop</th><th>Type</th><th>Default</th><th>Notes</th></tr>' + rows + "</table></div>" : "");
     docs.appendChild(d);
@@ -381,7 +381,7 @@
       ["TSE1203", "An unsupported attribute, or <code>key</code> on a component's root (it goes where the component is used)."],
       ["TSE1205", "A component that contains itself, directly or through other files."],
       ["TSE1206", "Two files export the same component name."],
-      ["TSE1207", "A malformed <code>transform</code>, or on an element that has none, or <code>opacity</code> inside it (write <code>opacity={…}</code> on the element)."],
+      ["TSE1207", "A <code>transform</code> attribute: there is none. Write <code>x</code>, <code>y</code> and the rest as props of a built-in, and wrap a component in <code>&lt;Entity x={…} y={…}&gt;</code> to place it. Also <code>x</code> and the rest on a built-in that cannot be placed."],
       ["TSE1208", "A props parameter or props type not in the supported form, or a prop passed the wrong way."],
       ["TSE1209", "A keyed list not in the supported form."],
       ["TSE1210", "A literal that is not allowed for a prop (<code>&lt;Shape kind=\"oval\"&gt;</code>), or <code>&lt;Game controls&gt;</code> that is not an imported name. Lists the choices."],
@@ -406,7 +406,7 @@
       ["TSE9001", "A type error in generated code, reported at the line of the <code>.tsx</code> it was written for (and where it was found in the generated file)."],
       ["TSE9002", "A type error in your TSX source."]]],
     ["Retired codes (never reported, never reused)", [
-      ["TSE1105", "<code>useTransform</code>. Place an element with its <code>x</code> and <code>y</code> props, or <code>transform={{ … }}</code>."],
+      ["TSE1105", "<code>useTransform</code>. Place an element with its <code>x</code> and <code>y</code> props."],
       ["TSE1204", "Props on a local or imported component. They are allowed."],
       ["TSE1303", "A non-constant initial state. An initial value may read state declared above it."],
       ["TSE1403", "A duplicate handler. A component may have several of one kind; they run in source order."]]]

@@ -111,7 +111,7 @@ function Scoreboard({ label }: HudProps) {
       <Text size={12}>
         Score: {s.score}
       </Text>
-      <Text color={s.score > 5 ? "gold" : "white"} transform={{ x: 4 }}>{label + ":"}</Text>
+      <Text color={s.score > 5 ? "gold" : "white"} x={4}>{label + ":"}</Text>
       <Text>{\`Total \${s.score * 2}\`}</Text>
       <Text>Fixed</Text>
     </Entity>
@@ -269,7 +269,7 @@ describe("<Text>: authored source type-checks", () => {
   it("accepts text between the tags, in expressions of strings or numbers, and the text prop", () => {
     assert.deepEqual(check(`<Text>Score</Text>`), []);
     assert.deepEqual(check(`<Text>Score: {n}</Text>`), []);
-    assert.deepEqual(check(`<Text size={12} color="red" transform={{ x: 1 }}>{\`n = \${n}\`}</Text>`), []);
+    assert.deepEqual(check(`<Text size={12} color="red" x={1}>{\`n = \${n}\`}</Text>`), []);
   });
 
   it("rejects what a Text cannot hold", () => {

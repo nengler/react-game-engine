@@ -145,7 +145,7 @@ mark { background: var(--accent-soft); color: inherit; }
     <li>A component is a function: hooks, then exactly one <code>return</code> of JSX. It is compiled, never run as written.</li>
     <li>Its root is a built-in (<code>Entity</code>, <code>Sprite</code>, <code>Game</code>…), which the generated class <em>extends</em>.</li>
     <li>State is written directly (<code>s.hp -= 1</code>), and a handler reads its own writes; render sees what the frame committed. All of a frame's writes cause one render.</li>
-    <li>Position is state: <code>x={s.x} y={s.y}</code> on any built-in (<code>transform={{ x, y }}</code> on a component), usually driven by <code>useMutable</code>. Rows and columns are a <code>&lt;Flex&gt;</code>, anywhere. See <a href="systems.html#placing">Placing things</a>.</li>
+    <li>Position is state: <code>x={s.x} y={s.y}</code> on any built-in (wrap a component in <code>&lt;Entity x y&gt;</code> to place it), usually driven by <code>useMutable</code>. Rows and columns are a <code>&lt;Flex&gt;</code>, anywhere. See <a href="systems.html#placing">Placing things</a>.</li>
     <li>Each frame runs <code>useInput</code>, then <code>useUpdate</code>, then renders dirty components, commits structure and draws.</li>
   </ol>
 
@@ -169,7 +169,7 @@ export function Player() {
   });
 
   return (
-    <Entity transform={{ x: s.x, y: 40 }}>
+    <Entity x={s.x} y={40}>
       <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
       <Collider width={16} height={24} tag="player" />
       {s.health < 25 && <WarningIcon />}
@@ -187,7 +187,7 @@ export function Player() {
     <tr><th>React</th><th>Here</th></tr>
     <tr><td>Function components, props, a props type</td><td>The same. The props type is written in the parameter (<code>({ hp }: { hp: number })</code>) or declared in the same file.</td></tr>
     <tr><td>An early <code>if (!hero) return null;</code></td><td>The same, at the top of the body: each <code>if (…) return …;</code> becomes a condition of the last <code>return</code>, and what follows it is worked out only when it did not return.</td></tr>
-    <tr><td><code>useState</code>, updaters, batching</td><td><code>useMutable</code>: state you write directly (<code>s.n += 1</code>), with no setters or updaters. A handler reads its own writes at once, so <code>s.n += 1</code> twice adds 2; render sees what the frame committed, and any number of writes cause one render per frame. A <code>useState</code> is an error whose message writes out the conversion, and the editor's quick fix converts the file. Why: <a href="https://github.com/nengler/tse/blob/main/docs/DESIGN.md#state-usemutable-2026-11-14">DESIGN.md, "State"</a>.</td></tr>
+    <tr><td><code>useState</code>, updaters, batching</td><td><code>useMutable</code>: state you write directly (<code>s.n += 1</code>), with no setters or updaters. A handler reads its own writes at once, so <code>s.n += 1</code> twice adds 2; render sees what the frame committed, and any number of writes cause one render per frame. A <code>useState</code> is an error whose message writes out the conversion in your names. Why: <a href="https://github.com/nengler/tse/blob/main/docs/DESIGN.md#state-usemutable-2026-11-14">DESIGN.md, "State"</a>.</td></tr>
     <tr><td><code>useMemo</code>, <code>useCallback</code>, <code>React.memo</code></td><td>Not needed. The compiler knows what every value reads and does their job itself. A derived <code>const</code> that calls a function is worked out again only when what it reads changes. A render writes an element's values, or sends a child its props, only when a state or prop they read has a different value than at the last render. The component's functions are made once, so passing one down never re-renders anyone. See <a href="language.html#render-scope">what a render does</a>.</td></tr>
     <tr><td><code>{cond &amp;&amp; &lt;X /&gt;}</code>, <code>{a ? &lt;X /&gt; : &lt;Y /&gt;}</code>, fragments</td><td>The same. A condition turning off unmounts.</td></tr>
     <tr><td><code>{items.map((i) =&gt; &lt;X key={i.id} /&gt;)}</code></td><td>The same, with one inline arrow. Instances follow keys. <code>key</code> on a single element starts it over when it changes.</td></tr>
@@ -201,7 +201,7 @@ export function Player() {
     <tr><th>You would reach for</th><th>Write</th></tr>
     <tr><td><code>useEffect</code></td><td>There is none, on purpose. Do the work where the change happens (an action, a handler), derive values, and use <code>useMount</code>, which may return a cleanup. See <a href="language.html#no-useeffect">No useEffect</a>.</td></tr>
     <tr><td><code>onKeyDown</code>, <code>onClick</code></td><td>Keys are polled: <code>useInput((input) =&gt; input.pressed("jump"))</code> every frame, and <code>useUpdate((dt) =&gt; …)</code> for the step. Clicks are <code>onPress</code> on a <code>&lt;Pointer&gt;</code> or <code>&lt;Flex&gt;</code>. <code>inert</code> and <code>modal</code> decide which subtrees hear the keys. See <a href="effects.html#who-hears">Who hears the keys</a>.</td></tr>
-    <tr><td><code>style</code>, CSS positioning</td><td><code>x</code>, <code>y</code>, <code>rotation</code>, <code>z</code> and <code>opacity</code> props (or <code>transform={{ … }}</code> for the place), relative to the parent; <code>&lt;Flex&gt;</code> lays out UI.</td></tr>
+    <tr><td><code>style</code>, CSS positioning</td><td><code>x</code>, <code>y</code>, <code>rotation</code>, <code>z</code> and <code>opacity</code> props, relative to the parent; <code>&lt;Flex&gt;</code> lays out UI.</td></tr>
     <tr><td><code>useContext</code></td><td>The same: <code>createContext</code> in a <code>.ts</code> file, <code>&lt;Theme.Provider value&gt;</code>, <code>useContext(Theme)</code>. What the whole game shares goes in <code>useGame</code>.</td></tr>
     <tr><td><code>ref={…}</code> on an element</td><td>None: what is on screen follows state and props. A value to keep is a <code>useMutable</code> field.</td></tr>
     <tr><td>Text in JSX: <code>&lt;p&gt;Score {n}&lt;/p&gt;</code></td><td>Inside <code>&lt;Text&gt;</code>, as its children: <code>&lt;Text&gt;Score {n}&lt;/Text&gt;</code>, or a component of your own that takes text (<code>&lt;Label&gt;Score {n}&lt;/Label&gt;</code>, see <a href="language.html#text-children">Text wrappers</a>). There is no <code>text</code> attribute.</td></tr>
@@ -306,7 +306,7 @@ tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
     <tr><th>I want to…</th><th>Use</th></tr>
     <tr><td>Keep a value that changes and shows on screen</td><td><a href="language.html#hook-usemutable"><code>useMutable</code></a> (per component) or <a href="language.html#gamestate"><code>useGame</code></a> (shared by the game)</td></tr>
     <tr><td>Keep a value that must <em>not</em> re-render (timers, held direction)</td><td>a <a href="language.html#never-renders"><code>useMutable</code> field</a> the JSX does not read (<code>s.timer -= dt</code>)</td></tr>
-    <tr><td>Move something</td><td><code>transform={{ x, y }}</code> driven by state, changed in <a href="language.html#hook-useupdate"><code>useUpdate</code></a></td></tr>
+    <tr><td>Move something</td><td><code>x={s.x} y={s.y}</code> driven by state, changed in <a href="language.html#hook-useupdate"><code>useUpdate</code></a></td></tr>
     <tr><td>React to keys or the mouse position</td><td><a href="language.html#hook-useinput"><code>useInput</code></a> with <code>input.down / pressed / released</code></td></tr>
     <tr><td>Do something every frame</td><td><a href="language.html#hook-useupdate"><code>useUpdate((dt) =&gt; …)</code></a></td></tr>
     <tr><td>Do something once when it appears or disappears</td><td><a href="language.html#hook-usemount"><code>useMount</code></a> / <code>useUnmount</code></td></tr>
