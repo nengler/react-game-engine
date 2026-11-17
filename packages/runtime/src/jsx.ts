@@ -475,17 +475,29 @@ export function Route(_props: RouteProps & { children?: Child }): JSX.Element {
 }
 
 /**
- * Call `fn` once, `seconds` of game time from now: `after(0.15, () => setFlash(false))`, as a statement in a handler. The timer is
- * this component's: it counts the fixed step's time in the update phase (so it stops during `freeze` and `<Game paused>`, and
- * replays), and it is cancelled when the component unmounts, so it never sets state on a component that is gone.
+ * Call `fn` once, `seconds` of game time from now: `after(0.15, () => { s.flash = false; })` in a handler. The timer is this
+ * component's: it counts the fixed step's time in the update phase (so it stops during `freeze` and `<Game paused>`, and replays),
+ * and it is cancelled when the component unmounts, so it never sets state on a component that is gone. Returns the timer's id (1,
+ * 2, 3… for this component, never 0), which `cancelTimer` takes: keep it in state to restart one timer and leave the others.
+ *
+ *     cancelTimer(s.flashTimer);
+ *     s.flashTimer = after(0.08, () => { s.flash = false; });
  */
-export function after(_seconds: number, _fn: () => void): void {
+export function after(_seconds: number, _fn: () => void): number {
   return compileTimeOnly("after");
 }
 
-/** Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimers()` or the component unmounts. */
-export function every(_seconds: number, _fn: () => void): void {
+/**
+ * Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimer(id)` with the id it returns,
+ * `cancelTimers()`, or the component unmounts.
+ */
+export function every(_seconds: number, _fn: () => void): number {
   return compileTimeOnly("every");
+}
+
+/** Cancel one timer: the one whose id `after` or `every` returned. Its other timers keep running. An id that is done, or 0, is ignored. */
+export function cancelTimer(_id: number): void {
+  return compileTimeOnly("cancelTimer");
 }
 
 /** Cancel every timer this component has set. */

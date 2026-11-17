@@ -1807,7 +1807,7 @@ only. Building Bramble's cutscene found two things about writing one in a compon
 called (only an object a function made for the component, a "handle", can), so the cutscene field starts from `noCutscene()`; and
 `import type { Sequence } from "@tsengine/runtime"` is refused in a component, so `@tsengine/runtime/jsx` re-exports the type.
 
-## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
+## Timers: `after`, `every`, `cancelTimer`, `cancelTimers` (2026-11-13)
 
 React code writes `setTimeout` in a handler; before timers, each delay here was a countdown kept as state.
 
@@ -1815,7 +1815,13 @@ React code writes `setTimeout` in a handler; before timers, each delay here was 
   `World` keeps the objects that have any and calls `stepTimers(dt)` on each after the step's updates, in the update phase, so timers
   stop during `freeze` and `<Game paused>`, follow the fixed step and replay. A repeating timer runs at most once a step. Leaving the
   world clears an object's timers: a timer never calls back into a component that has gone (React's classic `setTimeout` bug).
-- **Compiler.** `after`, `every` and `cancelTimers` are imported from the authoring module and are statements in handlers only
+- **One timer at a time** (2026-11-17). `after` and `every` return an id, and `cancelTimer(id)` stops that timer alone: restarting
+  a hit flash with `cancelTimers()` also stopped the component's other timers. The id is a number (1, 2, 3… per object, never
+  reused, never 0) rather than a handle object, because a component keeps it in `useMutable` state, which holds plain data and is
+  saved and hot-reloaded. A timer cancelled by an earlier callback in the same step is skipped. Hot reload and tree saves carry the
+  object's next id with its state (`$$nextTimerId`), so the object that takes the state over never hands out an id its state already
+  names.
+- **Compiler.** `after`, `every`, `cancelTimer` and `cancelTimers` are imported from the authoring module and are statements in handlers only
   (`TIMER_FUNCTIONS`); a call is the component's own method, `this.after(…)`, and the function passed is lowered as a handler (a
   callback, as one handed to `settings.subscribe`). Their names are reserved members, so a state called `after` takes `$after`.
 - **Hot reload drops pending timers**, with a note in the log: a timer's function closes over the instance that set it, which the
@@ -2913,7 +2919,9 @@ lists reflow with no extra work, and in steady state it allocates nothing. `back
 behind the children, at the box's size. Each child's offset is rounded to a whole pixel (sizes stay exact), so centred
 text is not blurred. A `Flex` with an `onPress` is pressable over its laid-out box, in the same draw-order list as
 `Pointer`s (both are a `Pressable`). A `<Text width={80} align="center">` is laid out as an 80-wide box and drawn
-centred in it. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
+centred in it. Without `width` or `maxWidth`, outside a `Flex`, `align` aligns each line on the text's x (a damage number centred
+on a point, 2026-11-17): the line widths count from a box of 0 (`textAlignBox`), and a parent's extent counts the text where it
+is drawn. A `Flex` child without a width is still laid out at its own size and not moved. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
 minimums; a leaf's minimum is its size unless the measurer reports a smaller one (`minWidth` / `minHeight`, for
 wrapping text), so in a real game nothing shrinks yet and overflow is visible. Not built yet: floating boxes (U5), text wrapping.
 
