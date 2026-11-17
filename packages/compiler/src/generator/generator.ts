@@ -442,16 +442,10 @@ class ComponentGenerator extends ElementEmitter {
         ]);
       }
       const mutableObjectsAt = w.mark();
-      // Its value props as a handler reads them (`this.$live.hp`): what its parent has now (see `GameObject.liveProp`). A property, not a
-      // call, so TypeScript narrows it (`tower !== null && …`) as it does `this.props.tower`.
-      const valueProps = c.props.filter((p) => p.role === "value");
-      if (valueProps.length > 0 && runtimeProps) {
-        const type = `Pick<${runtimeProps}, ${valueProps.map((p) => JSON.stringify(p.name)).join(" | ")}>`;
-        w.line(`#liveView: ${type} | undefined;`);
-        w.line(
-          `get $live(): ${type} { const self = this; return (this.#liveView ??= { ${valueProps.map((p) => `get ${propertyKey(p.name)}() { return self.liveProp(${JSON.stringify(p.name)}); }`).join(", ")} }); }`
-        );
-      }
+      // Its value props as a handler reads them (`this.$live_hp`): what its parent has now (see `GameObject.liveProp`). A property, not a
+      // call, so TypeScript narrows it (`tower !== null && …`) as it does `this.props.tower`; and a getter of the class for each prop, not
+      // one object of getters, which cost a crowd about as much again as the read itself (games/swarm/DESIGN.md).
+      if (runtimeProps) for (const p of c.props) if (p.role === "value") w.line(liveGetter(p.name, runtimeProps));
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);
       if (globals.length > 0) {
@@ -665,6 +659,17 @@ class ComponentGenerator extends ElementEmitter {
       );
     });
   }
+}
+
+/**
+ * A prop as a handler reads it (`this.$live_hp`): what `GameObject.liveProp` does, with the parent's getter read by its name.
+ * `liveProp` takes the name as a value and is one function for every component and every prop, so its read of `getters[name]` and
+ * its call are of whatever came last; here each is of one prop of one component, which the engine under it can settle on. A parent
+ * that gave no getter for this prop (none at all, or only `$all` for a spread) is left to `liveProp`.
+ */
+function liveGetter(name: string, props: string): string {
+  const key = JSON.stringify(name);
+  return `get $live_${name}(): ${props}[${key}] { const $own = this.propGetters?.[${key}]; if ($own === undefined) return this.liveProp(${key}); const $value = $own(); return ($value !== undefined ? $value : this.props[${key}]) as ${props}[${key}]; }`;
 }
 
 /**

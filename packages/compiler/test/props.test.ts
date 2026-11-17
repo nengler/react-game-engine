@@ -189,7 +189,7 @@ function Spinner({ rate = 2, label }: SpinProps) {
   useUpdate((dt) => { s.angle += dt * rate; });
   return <Entity name="spinner" rotation={s.angle * rate} x={label ? 1 : 0} />;
 }`);
-    assert.match(compiled.code, /dt \* this\.\$live\.rate!/);
+    assert.match(compiled.code, /dt \* this\.\$live_rate!/);
     assert.match(compiled.code, /this\.props\.label\b(?!!)/, "an optional prop without a default really can be undefined");
     assert.deepEqual(typeCheck(compiled), []);
   });

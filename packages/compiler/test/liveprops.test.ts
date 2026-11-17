@@ -122,6 +122,32 @@ export function Parent() {
     assert.equal(find("w1"), null, "item 1 left");
   });
 
+  it("an item read every step remembers where it was, and is found again when that place holds another item, or none", async () => {
+    // Each getter first looks where its item was at the last read (`$at`). Step 1: every item is read where it is. Step 2: item 1
+    // goes, so item 2's place holds item 3 and item 3's place is past the end. Step 3: both are read where step 2 found them.
+    const source = `${ITEMS}
+export function Parent() {
+  const s = useMutable({ step: 0, foes: [{ id: 1, hp: 10 }, { id: 2, hp: 10 }, { id: 3, hp: 10 }] as Foe[] });
+  const hit = (n: number) => {
+    s.step += 1;
+    const left = s.step === 2 ? s.foes.filter((f) => f.id !== 1) : s.foes;
+    s.foes = left.map((f) => (f.id === 3 ? { id: 3, hp: f.hp - n } : f));
+  };
+  return <Entity><Hurt onHit={hit} />{s.foes.map((f) => <Watch key={f.id} id={f.id} hp={f.hp} />)}</Entity>;
+}`;
+    assert.match(compile(source).code, /let \$i = \$at;/, "the getter looks where the item was");
+    for (const [steps, saw3] of [
+      [1, -10],
+      [2, -30],
+      [3, -50],
+    ] as const) {
+      const { find } = await run(source, steps);
+      assert.equal(find("w3").s.saw, saw3, `item 3 after ${steps} steps`);
+      assert.equal(find("w2").s.saw, 10, `item 2 after ${steps} steps`);
+      assert.equal(find("w1") === null, steps >= 2, "item 1 leaves in step 2");
+    }
+  });
+
   it("a prop written after a spread is read live on its own, and the spread's members still are", async () => {
     const compiled = compile(`${HURT}
 interface Foe { id: number; hp: number }

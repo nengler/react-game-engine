@@ -408,6 +408,10 @@ Script time only, on the recording backend:
   parent's list with `findIndex` on every read, so a thousand enemies each reading the player's position was a million comparisons a
   step. The generated module keeps a map of each list array's keys (`$indexOfKey`, made the first time the array is asked about),
   and a prop written after a spread has a getter of its own instead of building every prop. 25 % of a step of 2,000 enemies.
+- **A prop read in a handler is a getter of the component's own** (2026-11-17). `this.$live_px` reads the parent's getter for `px`
+  by name; before, every component read every prop through one function (`GameObject.liveProp`) and an object of getters, which
+  V8 could not specialise. A list item's getters remember where the item was at the last read and look there first, before the
+  map of keys. Swarm with 1,500 enemies from 7.9 to 6.9 ms, armed from 12.6 to 11.2 (A/B, same VM).
 - **`nearby` in one pass, with no garbage** (2026-11-17). A result carries its collider in a private field for `send`
   (`NearbyResult`): registering each in a `WeakMap` cost about 200 times making it, and kept every result alive past the young
   generation. `ColliderIndex.within` walks the cells once into reused arrays, sorted by insertion, with no object per candidate.

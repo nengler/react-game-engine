@@ -224,7 +224,7 @@ it, since `setA(b); setB(a)` and `setX(x + 1)` twice would mean something React 
    out from the committed values.
 3. **Props are read-only, and read live in handlers.** A child changes its parent's state through a callback prop; a write to a
    prop or to anything inside one is an error that names the callback form. A child's handler reads a prop as the parent has it
-   now, through a getter the parent hands it (`GameObject.propGetters`, read as `this.$live.health`), so two towers firing at an
+   now, through a getter the parent hands it (`GameObject.propGetters`, read as `this.$live_health`), so two towers firing at an
    enemy with 1 hp in the same step do not both fire: the second sees it dead. This holds for a plain child, a conditional one, a
    keyed list's items (found again by key in the live list), what is below a list item, an item that switches between two
    elements, and a context value. A callback prop is never live: it is created once. A getter whose condition no longer holds, or

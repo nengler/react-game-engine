@@ -275,7 +275,7 @@ export class ExpressionEmitter {
         // A prop with a default is never undefined (the runtime applies the default at construction and on update),
         // but its declared type is optional; `!` says what the runtime guarantees.
         const guaranteed = this.c.props.find((p) => p.name === e.name)?.defaultValue != null;
-        return `${e.live ? `this.$live.${e.name}` : `this.props.${e.name}`}${guaranteed ? "!" : ""}`;
+        return `${e.live ? `this.$live_${e.name}` : `this.props.${e.name}`}${guaranteed ? "!" : ""}`;
       }
       case "MemberRead":
         return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
@@ -372,7 +372,7 @@ export class ExpressionEmitter {
               : `this.${this.state(d.state).name}`
             : d.kind === "Prop"
               ? liveProps.has(d.name)
-                ? `this.$live.${d.name}`
+                ? `this.$live_${d.name}`
                 : `this.props.${d.name}`
               : null
         );
