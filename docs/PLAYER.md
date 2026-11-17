@@ -142,7 +142,9 @@ tests stay byte-identical): `SPRITE_REGION` sits beside `SPRITE`, a `<Flex>` wit
   add and multiply use `(ONE, ONE)` and `(DST_COLOR, ZERO)` there when nothing is translucent. A translucent sprite in an add layer
   is therefore added at full strength by the software renderer. A translucent layer (opacity below 1) is added with `(SRC_ALPHA, ONE)`,
   so it still only brightens; for screen and multiply, whose factors do not scale the layer's colour by its alpha, `end_layer`
-  premultiplies the opacity into the tint on both renderers. rlsw has no shaders: `tse_load_shader` returns
+  premultiplies the opacity into the tint on both renderers. rlsw stores a blended channel past 1 without clamping it, so it
+  wrapped (an add past white went dark, and an add layer at an opacity turned a canvas's pixels transparent, showing the border
+  through as black discs): `native/cmake/patch-rlsw.cmake`, raylib's `PATCH_COMMAND`, clamps it as the GPU does. rlsw has no shaders: `tse_load_shader` returns
   `TSE_SHADER_UNSUPPORTED` (-2) and the layer is laid over without one, with a warning.
 - **Render targets.** raylib 6.0's `LoadRenderTexture` is refused by Mesa 25.x's llvmpipe and softpipe (an empty upload and an unsized
   depth buffer), so the GPU build makes its own targets (`load_target` in `tse.c`): a colour texture uploaded from zeroed pixels and

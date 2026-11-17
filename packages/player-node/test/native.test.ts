@@ -413,13 +413,14 @@ describe("libtse through koffi", { skip }, () => {
   });
 
   it("lays a translucent add or screen layer of lights over a coloured background without darkening a pixel of it", () => {
-    // A game's report: `<Layer blend="add" childBlend="add" opacity={0.5}>` of lights drew dark discs on the software renderer.
+    // A game's report: in a <Screen>, `<Layer blend="add" childBlend="add" opacity={0.5}>` of lights drew black discs on the software
+    // renderer. rlsw wrapped the canvas's alpha past 1 (0.25 + 1 stored as 0.25), so the border showed through each light.
     const below = [0x40, 0x60, 0x80];
     for (const blend of ["add", "screen"] as BlendMode[]) {
       for (const clear of ["transparent", "black"]) {
         const frame = render(
           () => {
-            const root = new Entity();
+            const root = new Screen({ width: 64, height: 48, border: "black" });
             const layer = new Layer({ blend, childBlend: "add", clear, opacity: 0.5 });
             for (const [x, color] of [
               [20, "#ff8040"],
