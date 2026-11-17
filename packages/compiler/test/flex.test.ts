@@ -692,3 +692,36 @@ function Tile() {
     assert.ok(check(`<Flex hoverWidth={4} />`).length > 0, "and a made-up prop is not accepted");
   });
 });
+
+describe("Flex: a size worked out as a percentage", () => {
+  // The generated render() works a value out into a temporary before writing it; the temporary is typed as the field, so a
+  // template literal checks as `${number}%` (as it does written in place in the editor), not as a plain string.
+  it("typechecks a width or height made from a template literal, on the root and on a child", () => {
+    const compiled = compile(`
+export function Bar({ pct, fill }: { pct: number; fill: number }) {
+  return (
+    <Flex width={\`\${pct}%\`} height={4} direction="row">
+      <Flex width={\`\${fill}%\`} height={\`\${pct / 2}%\`} background="#fff" />
+    </Flex>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /const \$\d+: Bar\["width"\] = `\$\{this\.props\.pct\}%`;/);
+  });
+
+  it("still refuses a string that is not a size, on the root and on a child", () => {
+    const compiled = compile(`
+export function Bar({ pct }: { pct: number }) {
+  return (
+    <Flex width={\`\${pct}px\`} height={4}>
+      <Flex height={\`\${pct}em\`} />
+    </Flex>
+  );
+}`);
+    const errors = typeCheck(compiled);
+    // The child's value is checked where it is made and where render() updates it.
+    assert.ok(errors.some((error) => /`\$\{number\}px`' is not assignable to type 'FlexSizing'/.test(error.message)));
+    assert.ok(errors.some((error) => /`\$\{number\}em`' is not assignable to type 'FlexSizing/.test(error.message)));
+    for (const error of errors) assert.match(error.message, /is not assignable to type 'FlexSizing/);
+  });
+});

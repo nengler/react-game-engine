@@ -236,20 +236,20 @@ describe("<Text>: generated code", () => {
 
   it("builds the element with its text and updates the field in place", () => {
     assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{textOf\(this\.\$s_score\)\}` \}\);/);
-    assert.match(code, /const (\$\d+) = `Score: \$\{textOf\(this\.\$s_score\)\}`;[^]*?this\.text\.text = \1;/);
+    assert.match(code, /const (\$\d+)(?:: [^=]+)? = `Score: \$\{textOf\(this\.\$s_score\)\}`;[^]*?this\.text\.text = \1;/);
     assert.match(
       code,
-      /const (\$\d+) = `\$\{textOf\(this\.props\.label \+ ":"\)\}`;[^]*?this\.text2\.text = \1;/,
+      /const (\$\d+)(?:: [^=]+)? = `\$\{textOf\(this\.props\.label \+ ":"\)\}`;[^]*?this\.text2\.text = \1;/,
       "an expression child is a dynamic text, as a template literal (always a string), null and booleans drawn as nothing"
     );
-    assert.match(code, /const (\$\d+) = \(this\.\$s_score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
+    assert.match(code, /const (\$\d+)(?:: [^=]+)? = \(this\.\$s_score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
     assert.match(code, /readonly text4: Text = new Text\(\{ text: "Fixed" \}\);/);
   });
 
   it("makes a Text-rooted component a Text, with the content as its required prop", () => {
     assert.match(code, /export class Badge extends Text<BadgeProps> \{/);
     assert.match(code, /super\(\{ color: "gold", text: undefined as never \}, props\);/);
-    assert.match(code, /const (\$\d+) = `\+\$\{textOf\(this\.props\.points\)\}`;[^]*?this\.text = \1;/);
+    assert.match(code, /const (\$\d+)(?:: [^=]+)? = `\+\$\{textOf\(this\.props\.points\)\}`;[^]*?this\.text = \1;/);
   });
 
   it("type-checks the generated module", () => {
