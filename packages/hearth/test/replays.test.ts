@@ -9,10 +9,15 @@ import { MAP } from "../src/rules/map.ts";
 import { battleOf, findPlay } from "./battle-state.ts";
 import { REPLAYS } from "./replays.ts";
 
-function play(script: string) {
+/**
+ * `checked`: the player builds every frame a second time from nothing and lays out every layout it kept, and throws on a difference
+ * (`retain: "check"`). Hearth's side panel is the largest HUD of the games here, so this is where a layout kept when it should not
+ * have been, or a change a generated `render()` did not report, would show.
+ */
+function play(script: string, checked = false) {
   const frames = parseInputScript(script, { bindings, screen });
   return runScript(
-    gameConfig,
+    checked ? { ...gameConfig, retain: "check" } : gameConfig,
     frames,
     () => {
       const s = useGame.getState();
@@ -49,8 +54,8 @@ describe("wave replays (the game itself, played by clicks and keys)", () => {
     assert.ok(states[end - 1]!.towers >= 10, `towers ${states[end - 1]!.towers} in the battle's last step`);
   });
 
-  it("a thin build is lost", () => {
-    const last = play(REPLAYS.thin).states.find((s) => s.screen === "won" || s.screen === "lost")!;
+  it("a thin build is lost; every frame of it is what a rebuild from nothing draws, and every kept layout what a fresh one gives", () => {
+    const last = play(REPLAYS.thin, true).states.find((s) => s.screen === "won" || s.screen === "lost")!;
     assert.equal(last.screen, "lost");
     assert.equal(last.lives, 0);
   });
