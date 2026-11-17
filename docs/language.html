@@ -130,15 +130,15 @@ mark { background: var(--accent-soft); color: inherit; }
 <main>
 <section id="components" data-group="Language" data-title="Components">
   <h2>Components</h2>
-  <p>A component is a top-level <code>function</code> or <code>const</code> arrow with a <strong>capitalised name</strong>, optionally exported (one per module may be the default, and it needs a name). Its body, in order:</p>
+  <p>A component is a top-level <code>function</code> or <code>const</code> arrow with a capitalised name, optionally exported (one per module may be the default, and it needs a name). Its body, in order:</p>
   <ol>
     <li>Hooks: <code>useMutable</code>, <code>useSound</code>, <code>useGame(...)</code>, and the handler hooks.</li>
     <li>Derived values: <code>const hurt = health &lt; 25;</code>, and destructured ones, <code>const { x, y } = heroOf(run);</code> or <code>const [a, , c] = trio;</code> (plain names: no defaults, rests or nesting). One that calls a function or a method is worked out once and again only when the state or props it reads change, as with <code>useMemo</code>; one that only combines values is written where it is used.</li>
     <li id="render-scope">What a render does: it compares each state field, prop and game-state value the component's elements read with what it was at the last render (<code>===</code>), and works out and writes only the values of the elements that read one that changed. An enemy that moves every step rewrites its position, not its sprite's tint or its health bar's props. So there is no <code>useMemo</code>, <code>useCallback</code> or <code>React.memo</code> to write: the compiler sees what each value reads. A value changes when it is a different value: change state and props by making new objects (<code>setItems([...items, item])</code>), never by changing one in place, as in React. What is under a condition or in a list is worked out on every render, and so is a value that calls one of the component's own functions or a callback prop, whose reads the compiler does not follow.</li>
     <li>One <code>return</code> of JSX, a condition of it (<code>on ? &lt;Spark /&gt; : null</code>, <code>open &amp;&amp; &lt;Menu /&gt;</code>) or <code>null</code>.</li>
   </ol>
-  <p>An arrow with an expression body is just its return: <code>const Dot = () =&gt; &lt;Sprite image="dot.png" /&gt;</code>.</p>
-  <p>Beside the components, a file may hold <strong>constants and helper functions</strong>, as a React file does: <code>const ROW = { bolt: 0, frost: 2 } as const;</code>, <code>function labelOf(kind: Kind) { … }</code>. Render expressions may index them (<code>ROW[kind] * 3</code>) and use <code>Math.PI</code>. A top-level <code>let</code>, or a constant holding JSX or reading the game state, is <code>TSE1001</code>.</p>
+  <p>An arrow with an expression body returns that expression: <code>const Dot = () =&gt; &lt;Sprite image="dot.png" /&gt;</code>.</p>
+  <p>Beside the components, a file may hold constants and helper functions, as a React file does: <code>const ROW = { bolt: 0, frost: 2 } as const;</code>, <code>function labelOf(kind: Kind) { … }</code>. Render expressions may index them (<code>ROW[kind] * 3</code>) and use <code>Math.PI</code>. A top-level <code>let</code>, or a constant holding JSX or reading the game state, is <code>TSE1001</code>.</p>
 
   <h3>The root</h3>
   <p>The root (or a fragment <code>&lt;&gt;…&lt;/&gt;</code>, an implicit <code>Entity</code>) is usually a built-in. The class extends it, so the root's props apply to the component itself. The root may also be another component (<code>return &lt;Panel title="BUILD"&gt;…&lt;/Panel&gt;</code>), a condition or <code>null</code>: the component is then a bare container that <code>&lt;Flex&gt;</code> layout sees through, so a panel it returns still grows to the column it sits in.</p>
@@ -170,7 +170,7 @@ const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : 
       <li>Non-mutating array methods (<code>map</code>, <code>filter</code>, <code>some</code>, <code>flatMap</code>, <code>join</code>, <code>at</code>…), and <code>reduce</code>, and the copying forms <code>toSorted</code>, <code>toReversed</code>, <code>toSpliced</code>, <code>with</code>, <code>findLast</code>. <code>sort</code> and <code>reverse</code> on an array made right there (<code>[...list].sort(byX)</code>, <code>list.filter(f).reverse()</code>) sort a copy, so they are written as <code>toSorted</code> and <code>toReversed</code></li>
       <li>Methods of strings and numbers that change nothing (<code>padStart</code>, <code>startsWith</code>, <code>slice</code>, <code>toUpperCase</code>, <code>split</code>, <code>replace</code>, <code>toFixed</code>…), and <code>String(n)</code>, <code>Number(s)</code>, <code>Boolean(x)</code></li>
       <li>Calling a function from a relative <code>.ts</code> file or the same file (<code>spotsOf(run)</code>): assumed pure</li>
-      <li><strong>Statements that compute</strong>: <code>let</code>, loops, <code>if</code>, a list built up with <code>push</code>, <code>new Map()</code>, as a handler may. A run of them is worked out together, and again only when what it reads changes; the names it declares (<code>const</code> or <code>let</code>, one name each) are values after it:
+      <li>Statements that compute: <code>let</code>, loops, <code>if</code>, a list built up with <code>push</code>, <code>new Map()</code>, as a handler may. A run of them is worked out together, and again only when what it reads changes; the names it declares (<code>const</code> or <code>let</code>, one name each) are values after it:
 <pre class="code" data-lang="tsx"><script type="text/plain">
 const rows: Row[] = [];
 let total = 0;
@@ -182,7 +182,7 @@ for (const item of items) {
 return <Panel title={`Bag (${total})`}>{rows.map((row) => <Label key={row.id}>{row.label}</Label>)}</Panel>;
 </script></pre>
       They run during render, so they cannot set state, play a sound, call an action, read a ref or <code>return</code> early.</li>
-      <li><strong>Functions</strong>, as React code declares its handlers: <code>const add = (n: number) =&gt; { setPoints((p) =&gt; p + n); };</code>. One is a handler of the component's own: call it in a handler or a callback (<code>useUpdate(() =&gt; add(1))</code>), pass it to an element (<code>onPress={press}</code>), to a child or to a hook. It is not called while rendering, since it may set state.</li>
+      <li>Functions, declared as React code declares its handlers: <code>const add = (n: number) =&gt; { setPoints((p) =&gt; p + n); };</code>. Such a function is one of the component's handlers: call it in a handler or a callback (<code>useUpdate(() =&gt; add(1))</code>), pass it to an element (<code>onPress={press}</code>), to a child or to a hook. It is not called while rendering, since it may set state.</li>
     </ul></div>
     <div class="no"><h5>Not allowed</h5><ul>
       <li>Anywhere: <code>var</code>, <code>await</code>, <code>this</code></li>
@@ -234,11 +234,11 @@ return <Text>{s.name}: {s.health}</Text>;    // render reads the committed value
   <ul>
     <li>Form: <code>const s = useMutable({ a: 0, b: false })</code>, one object literal of plain <code>name: value</code> fields (<code>TSE1103</code>). A literal of numbers, strings and booleans (and objects and non-empty arrays of them) gets the type TypeScript would infer; an empty array, or a value whose type cannot be read from it, takes its type with <code>as</code> (<code>spawns: [] as Spawn[]</code>, the type declared in the same file), else <code>TSE1104</code>.</li>
     <li>The initial values are taken when the component is made: a constant, a prop, a value of the game state, or a field of a <code>useMutable</code> declared above it, as in React's first render. A per-instance object with methods may be a field (<code>body: createBody(options)</code>), its methods called through it (<code>s.body.move(1, 0)</code>).</li>
-    <li><strong>Two views of one value.</strong> A handler (<code>useUpdate</code>, <code>useInput</code>, a callback prop, a function in the body) sees a field as it was last written, this step included, and so do later handlers in the same step. Render, and the elements and props it makes, see what the step committed. A derived <code>const</code> that reads a field follows the same rule: in a handler it is worked out from the fields as they are now. So does a prop: a handler reads <code>health</code> as the parent has it now, which includes what a component before it in the tree wrote this step (parents first, then siblings in order). Children made in a list (found again by key), the components below a list item, an item that switches between two elements, and one made with a <code>key</code> read their props live the same way, and so does a value passed by context. Only a callback prop is not live: it is a function, made once.</li>
+    <li>A handler and render see a field at different moments. A handler (<code>useUpdate</code>, <code>useInput</code>, a callback prop, a function in the body) sees a field as it was last written, this step included, and so do later handlers in the same step. Render, and the elements and props it makes, see what the step committed. A derived <code>const</code> that reads a field follows the same rule: in a handler it is worked out from the fields as they are now. So does a prop: a handler reads <code>health</code> as the parent has it now, which includes what a component before it in the tree wrote this step (parents first, then siblings in order). Children made in a list (found again by key), the components below a list item, an item that switches between two elements, and one made with a <code>key</code> read their props live the same way, and so does a value passed by context. Only a callback prop is not live: it is a function, made once.</li>
     <li>Fields are written in handlers only: <code>=</code>, <code>+=</code>, <code>-=</code>, <code>*=</code>, <code>/=</code>, <code>%=</code>, <code>||=</code>, <code>&amp;&amp;=</code>, <code>??=</code>, <code>++</code>, <code>--</code>. Not in the component body (<code>TSE1402</code>) or in <code>useUnmount</code>. A write of the same value (<code>===</code>) renders nothing.</li>
-    <li><strong>Changing a list or an object in place.</strong> <code>s.list.push(x)</code>, <code>pop</code>, <code>shift</code>, <code>unshift</code>, <code>splice</code>, <code>sort</code>, <code>reverse</code> (each a statement of its own), <code>s.list[i].hp -= 1</code>, <code>s.pos.x = 3</code> and <code>s.list[i].tags.push(t)</code> are written for you as the new value the field would be given (<code>s.list = [...s.list, x]</code>, <code>s.list.with(i, { ...s.list[i], hp: … })</code>), so only what the path passes through is copied, and render and other components compare values as before. A handler reads the change back at once. Not supported, with a message that says what to write: a result used as a value (<code>const n = s.list.push(x)</code>), an index that is not a plain value (<code>s.list[next()]</code>), <code>?.</code>, and a change through another name (<code>const e = s.list[0]; e.hp = 0</code>, or a loop over a copy, <code>for (const e of s.list.filter(…)) e.hp = 0</code>): write <code>s.list = s.list.map(…)</code> there. A loop over the field itself may write through its item: <code>for (const e of s.list) { e.hp -= 1; }</code> is written as a loop over the index, each write <code>s.list[i].hp -= 1</code>, and a read of <code>e</code> after it sees the change. Such a loop cannot also change the list itself (<code>push</code>, <code>splice</code>, a new <code>s.list</code>): change the items in the loop and the list after it. Each write copies the list, so for hundreds of items, build the new list with <code>map</code> and assign it once. An index write needs an array; a record is replaced with a spread.</li>
+    <li>A list or object field can be changed in place. <code>s.list.push(x)</code>, <code>pop</code>, <code>shift</code>, <code>unshift</code>, <code>splice</code>, <code>sort</code>, <code>reverse</code> (each a statement of its own), <code>s.list[i].hp -= 1</code>, <code>s.pos.x = 3</code> and <code>s.list[i].tags.push(t)</code> are written for you as the new value the field would be given (<code>s.list = [...s.list, x]</code>, <code>s.list.with(i, { ...s.list[i], hp: … })</code>), so only what the path passes through is copied, and render and other components compare values as before. A handler reads the change back at once. Not supported, with a message that says what to write: a result used as a value (<code>const n = s.list.push(x)</code>), an index that is not a plain value (<code>s.list[next()]</code>), <code>?.</code>, and a change through another name (<code>const e = s.list[0]; e.hp = 0</code>, or a loop over a copy, <code>for (const e of s.list.filter(…)) e.hp = 0</code>): write <code>s.list = s.list.map(…)</code> there. A loop over the field itself may write through its item: <code>for (const e of s.list) { e.hp -= 1; }</code> is written as a loop over the index, each write <code>s.list[i].hp -= 1</code>, and a read of <code>e</code> after it sees the change. Such a loop cannot also change the list itself (<code>push</code>, <code>splice</code>, a new <code>s.list</code>): change the items in the loop and the list after it. Each write copies the list, so for hundreds of items, build the new list with <code>map</code> and assign it once. An index write needs an array; a record is replaced with a spread.</li>
     <li>A list field is a <code>MutableList&lt;T&gt;</code>: the forms above type-check, but it is not assignable to <code>T[]</code>, so a helper that takes <code>Foe[]</code> and changes it in place is an error. Take <code>readonly Foe[]</code> to read a list, or return the new one.</li>
-    <li><strong>Read whole.</strong> In a handler, <code>s</code> passed whole is the component's own object for that <code>useMutable</code>, made the first time a handler passes it and kept for the component's life: a helper that writes it changes the component's fields, and the handler reads them back at once, as if it had written <code>s.hp -= 3</code> itself.
+    <li>In a handler, <code>s</code> passed whole is the component's own object for that <code>useMutable</code>, made the first time a handler passes it and kept for the component's life: a helper that writes it changes the component's fields, and the handler reads them back at once, as if it had written <code>s.hp -= 3</code> itself.
 <pre><code>function takeHit(target: { hp: number; hits: number }, damage: number) {
   target.hp -= damage;   // writes the Enemy's field: it renders
   target.hits++;
@@ -254,7 +254,7 @@ useUpdate(() =&gt; {
   </ul>
 
   <h3 id="never-renders">A value that never renders</h3>
-  <p>There is no <code>useRef</code> (it was removed with <code>useState</code>: <code>useRef</code> is <code>TSE1102</code>, and its message writes out the conversion). A timer, an accumulator or a previous value is a <code>useMutable</code> field that the JSX does not read. A write marks the component, but a render only redoes the parts that read a changed field, so a field nothing reads changes nothing that is drawn.</p>
+  <p>There is no <code>useRef</code>: like <code>useState</code>, it is <code>TSE1102</code>, and its message writes out the conversion. A timer, an accumulator or a previous value is a <code>useMutable</code> field that the JSX does not read. A write marks the component, but a render only redoes the parts that read a changed field, so a field nothing reads changes nothing that is drawn.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 const s = useMutable({ seconds: 0, timer: 0 });   // timer changes every frame; nothing reads it
 
@@ -269,7 +269,7 @@ useUpdate((dt) => {
   <p>A field cannot be written in <code>useUnmount</code>: the component is going away. Tell the parent with a callback prop. <code>node tools/codemod-mutable.ts &lt;file&gt;</code> and the editor's quick fix move a file's <code>useRef</code> and <code>useState</code> to <code>useMutable</code>.</p>
 
   <h3 id="hook-useinput"><code>useInput</code> and <code>InputState</code></h3>
-  <p>Input is <strong>polled</strong> each frame. There are no key-event props.</p>
+  <p>Input is polled each frame. There are no key-event props.</p>
   <div class="tablewrap"><table>
     <tr><th>Member</th><th>Type</th><th>Meaning</th></tr>
     <tr><td><code>input.pressed(key)</code></td><td class="type">boolean</td><td>True only on the frame the key went down</td></tr>
@@ -281,7 +281,7 @@ useUpdate((dt) => {
   <div id="keys"></div>
 
   <h3 id="hook-useupdate"><code>useUpdate</code></h3>
-  <p><code>dt</code> is the time in <strong>seconds</strong> (frame time clamped to 0–0.1, or the fixed step under <code>fixedStep</code>). Multiply speeds by it. A second argument is the same <code>input</code> that <code>useInput</code> gets: <code>useUpdate((dt, input) =&gt; step(input, dt))</code>.</p>
+  <p><code>dt</code> is the time in <strong>seconds</strong> (frame time clamped to between 0 and 0.1, or the fixed step under <code>fixedStep</code>). Multiply speeds by it. A second argument is the same <code>input</code> that <code>useInput</code> gets: <code>useUpdate((dt, input) =&gt; step(input, dt))</code>.</p>
   <div class="callout"><p><strong><code>useInput</code> or <code>useUpdate</code>?</strong> Something that happens <em>once, on a press</em> (open the menu, pause, fire) goes in <code>useInput</code>. Something that happens <em>over time</em> (move while a key is held, step the rules) goes in <code>useUpdate((dt, input) =&gt; …)</code>, which reads the keys itself. Both get the same input in the same step, so do not copy keys into a <code>useRef</code> to carry them from one hook to the other.</p></div>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 useUpdate((dt) => {
@@ -301,8 +301,8 @@ function Banner({ text, onDone }: BannerProps) {
 </script></pre>
   <ul>
     <li>Mounts when attached to the world (a condition turns on, a list item is added); unmounts when detached.</li>
-    <li>Takes one arrow function with <strong>no parameters</strong>.</li>
-    <li>No <code>useEffect</code> (see <a href="#no-useeffect">below</a>), but <code>useMount</code> may return a <strong>cleanup</strong>, as an effect does in React.</li>
+    <li>Each takes one arrow function with no parameters.</li>
+    <li>No <code>useEffect</code> (see <a href="#no-useeffect">below</a>), but <code>useMount</code> may return a cleanup, as an effect does in React.</li>
   </ul>
   <h3 id="mount-cleanup">A cleanup from <code>useMount</code></h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
@@ -318,13 +318,13 @@ useMount(() => {
 });
 </script></pre>
   <ul>
-    <li>A function returned from <code>useMount</code> runs <strong>once, when the component leaves</strong> the world, after its <code>useUnmount</code> handlers. Anything else returned is ignored. An expression body's call is returned, as in React (<code>() =&gt; listen(…)</code>).</li>
+    <li>A function returned from <code>useMount</code> runs once, when the component leaves the world, after its <code>useUnmount</code> handlers. Anything else returned is ignored. An expression body's call is returned, as in React (<code>() =&gt; listen(…)</code>).</li>
     <li>In any handler, an arrow may be handed to a plain function, a method of an imported object, a callback prop or a local (<code>settings.subscribe(() =&gt; …)</code>). It is a handler of its own: it may set state and call actions. Not in a state updater, and not outside handlers.</li>
     <li>A hot reload removes the old tree, so its cleanups run and the new tree subscribes again.</li>
   </ul>
 
   <h3 id="no-useeffect">No <code>useEffect</code>: what to write instead</h3>
-  <p>There is no <code>useEffect</code>, on purpose. Here an effect would run a frame after the change it answers (and a frame more for each effect it sets off), and it would pull game logic out of the rules, which are plain functions you can test and replay without a window. Each thing an effect is used for has its own answer:</p>
+  <p>There is no <code>useEffect</code>, on purpose. Here an effect would run a frame after the change it answers (and a frame more for each effect it sets off), and it would pull game logic out of the rules, which are plain functions you can test and replay without a window. Each job an effect does in React is done another way here:</p>
   <div class="tablewrap"><table>
     <tr><th>You want</th><th>Write</th></tr>
     <tr><td>A sound, a burst or a shake when something happens</td><td>Do it where it happens: the rules return events, a game-state action answers them through effect stores (<code>sfx.play("hit")</code>, <code>fx.burst(…)</code>). See <a href="effects.html">Effects</a>.</td></tr>
@@ -344,7 +344,7 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
   <p>Call it as a statement in a handler (elsewhere is <code>TSE1305</code>); <code>playHit(0.5)</code> plays at half volume. A sound played again while sounding overlaps itself, up to four at once. Paths are relative to <code>&lt;Game assets&gt;</code>. Sounds preload.</p>
 
   <h3>What handler code may contain</h3>
-  <p>Handlers (hook bodies and callback props) use a small, deliberately narrow subset:</p>
+  <p>Handlers (hook bodies and callback props) use a narrow subset of TypeScript:</p>
   <div class="pair">
     <div class="yes"><h5>Statements</h5><ul>
       <li>Writing a field: <code>s.x = 5</code>, <code>s.x += 1</code>, <code>s.x++</code></li>
@@ -368,10 +368,10 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
       <li><code>clamp(value, min, max)</code> (3 args)</li>
       <li><code>freeze(steps)</code>: skip every <code>useUpdate</code> for that many steps</li>
       <li><code>input.pressed / down / released</code>, <code>input.pointerX / pointerY</code></li>
-      <li><strong>A value the handler made itself</strong> (an array or object literal, <code>new</code>, or what a call returns): any method (<code>list.push(e)</code>, <code>seen.add(id)</code>, <code>best.sort((a, b) =&gt; a.hp - b.hp)</code>) and assignment into it (<code>tally.hits++</code>, <code>grid[y]![x] = 1</code>). A local that only reads state or a prop (<code>const list = enemies</code>, <code>enemies.find(…)</code>) is not the handler's: state is changed with its setter.</li>
+      <li>A value the handler made itself (an array or object literal, <code>new</code>, or what a call returns): any method (<code>list.push(e)</code>, <code>seen.add(id)</code>, <code>best.sort((a, b) =&gt; a.hp - b.hp)</code>) and assignment into it (<code>tally.hits++</code>, <code>grid[y]![x] = 1</code>). A local that only reads state or a prop (<code>const list = enemies</code>, <code>enemies.find(…)</code>) is not the handler's: state is changed with its setter.</li>
       <li><code>new</code> of <code>Map</code>, <code>Set</code>, <code>WeakMap</code>, <code>WeakSet</code>, <code>Array</code>, the <code>Error</code> types, or a class imported from a <code>.ts</code> file (not <code>Date</code>: it reads the clock)</li>
       <li>The standard library as written: <code>Object.*</code>, <code>JSON.*</code>, <code>Number.*</code>, <code>Array.*</code>, <code>String.*</code>, any <code>Math</code> function, <code>console.*</code>, <code>parseInt</code>, <code>parseFloat</code>, <code>isNaN</code>, <code>isFinite</code>. <code>Math.random()</code> warns: replays and tests will not repeat it.</li>
-      <li><code>typeof</code>, <code>instanceof</code> and <code>in</code> (<code>typeof</code>, <code>instanceof</code> and <code>in</code> work in a component body too)</li>
+      <li><code>typeof</code>, <code>instanceof</code> and <code>in</code>, which also work in a component body</li>
       <li><code>other.tag</code>, <code>other.owner</code> in collision callbacks</li>
       <li>Template literals</li>
     </ul></div>
@@ -396,12 +396,12 @@ export function Player() {
 }
 </script></pre>
   <ul>
-    <li><strong>Each call gets its own state</strong>: two calls make two separate states.</li>
-    <li><strong>Arguments:</strong> a literal or an import is written into the hook (so it can be a <code>useSound</code> path, or a store the hook subscribes to); anything else is bound to a <code>const</code>, so it is worked out once. Defaults work, and so does a destructured parameter, <code>function useMover({ speed, limit }: Options)</code>.</li>
-    <li><strong>Callbacks:</strong> a hook may take a function and call it in a handler: <code>useEvery(1, () =&gt; setTicks((t) =&gt; t + 1))</code>. The arrow becomes a function of the component (see below).</li>
-    <li><strong>Returns:</strong> <code>const v = useX()</code>, <code>const {a, b} = useX()</code> (object literal), <code>const [a, b] = useX()</code> (array literal). A name the hook returns as it is takes the caller's name, so a hook can return a state's setter or a ref (<code>return count;</code>).</li>
-    <li><strong>How:</strong> a hook is inlined, not called: each call's statements are written into the component. That is why each call has its own state, and why a hook cannot be called in a condition or a loop (the same rule as React, for another reason), nor call itself.</li>
-    <li><strong>Where:</strong> in the same file, or imported from a relative <code>.tsx</code>. Hooks may call hooks, up to six deep.</li>
+    <li>Each call gets its own state, so two calls make two separate states.</li>
+    <li>An argument that is a literal or an import is written into the hook (so it can be a <code>useSound</code> path, or a store the hook subscribes to); any other argument is bound to a <code>const</code>, so it is worked out once. Defaults work, and so does a destructured parameter, <code>function useMover({ speed, limit }: Options)</code>.</li>
+    <li>A hook may take a function and call it in a handler: <code>useEvery(1, () =&gt; setTicks((t) =&gt; t + 1))</code>. The arrow becomes a function of the component (see below).</li>
+    <li>A caller takes what a hook returns as <code>const v = useX()</code>, <code>const {a, b} = useX()</code> (object literal), <code>const [a, b] = useX()</code> (array literal). A name the hook returns as it is takes the caller's name, so a hook can return a state's setter or a ref (<code>return count;</code>).</li>
+    <li>A hook is inlined, not called: each call's statements are written into the component. That is why each call has its own state, and why a hook cannot be called in a condition or a loop (the same rule as React, for another reason), nor call itself.</li>
+    <li>A hook is declared in the same file or imported from a relative <code>.tsx</code>. Hooks may call hooks, up to six deep.</li>
     <li>A call anywhere but a statement of the component body is <code>TSE1101</code>.</li>
   </ul>
 
@@ -445,12 +445,12 @@ export function Player() {
 
 {ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} map={r.map} image="tiles.png" />)}
 </script></pre>
-  <p>This is how <strong>Kite</strong>, the platformer in <code>packages/kite</code>, is built, and why: a solver proves each room can be finished by stepping the character thousands of times from copied states, which plain functions make cheap. For anything else, keep the game in components (Hearth's enemies and towers), which <a href="effects.html#testing"><code>@tsengine/testing</code></a> tests as easily as a function.</p>
+  <p>This is how Kite, the platformer in <code>packages/kite</code>, is built, and why: a solver proves each room can be finished by stepping the character thousands of times from copied states, which plain functions make cheap. For anything else, keep the game in components (Hearth's enemies and towers), which <a href="effects.html#testing"><code>@tsengine/testing</code></a> tests as easily as a function.</p>
   <ul>
     <li>The name must not start with <code>use</code>.</li>
     <li>A dynamic prop that calls a function re-evaluates when the state in its arguments changes.</li>
     <li>A handler may keep the result of a plain function or a <code>useGame</code> action in a <code>const</code> and use it. In JSX or a derived value, a call would run on every render.</li>
-    <li><strong>Imported constants are constants</strong>: nothing re-renders when code changes them. Right for data and effect stores; wrong for game state (use <code>useGame</code>).</li>
+    <li>Nothing re-renders when code changes an imported constant. That suits data and effect stores, not game state (use <code>useGame</code>).</li>
     <li>You can call methods of imported objects (<code>fx.burst(…)</code>) in handlers and expressions. An array method on an imported array (<code>ROOMS.filter</code>) is still lowered, so its callback may read state.</li>
   </ul>
 </section>
@@ -466,21 +466,21 @@ export function Player() {
     <tr><td><code>x</code>, <code>y</code></td><td class="type">0</td><td>Pixels, relative to the parent. <strong>y points down.</strong></td></tr>
     <tr><td><code>rotation</code></td><td class="type">0</td><td>Radians. Positive turns clockwise.</td></tr>
     <tr><td><code>scaleX</code>, <code>scaleY</code></td><td class="type">1</td><td>Per-axis scale. Negative flips.</td></tr>
-    <tr><td><code>z</code></td><td class="type">0</td><td>Draw order: higher is drawn later, so on top. Negative is behind. <strong>Adds to the parent's</strong>, so raising a component raises everything in it.</td></tr>
+    <tr><td><code>z</code></td><td class="type">0</td><td>Draw order: higher is drawn later, so on top. Negative is behind. It adds to the parent's, so raising a component raises everything in it.</td></tr>
     <tr><td><code>global</code></td><td class="type">false</td><td>True: the transform is in world space and ignores the parent.</td></tr>
       </table></div>
-  <p><strong>Opacity is a prop on every element</strong>, not part of <code>transform</code>: <code>&lt;Entity opacity={fade}&gt;</code>, <code>&lt;Shape opacity={0.5} … /&gt;</code>, <code>&lt;Sprite opacity={…} … /&gt;</code>. It is 0 to 1 and fades the element and everything inside it, so an <code>&lt;Entity&gt;</code> fades a whole popup or card at once. It <strong>multiplies down the tree</strong> (0.5 inside 0.5 is 0.25), and each thing is drawn at it on its own, so where two overlap the one below shows through. <code>transform={{ opacity }}</code> is an error that says so (TSE1207). To fade a component, wrap it: <code>&lt;Entity opacity={…}&gt;&lt;Card /&gt;&lt;/Entity&gt;</code>; on the component itself <code>opacity</code> is whatever its own props say.</p>
+  <p>Opacity is a prop on every element, not part of <code>transform</code>: <code>&lt;Entity opacity={fade}&gt;</code>, <code>&lt;Shape opacity={0.5} … /&gt;</code>, <code>&lt;Sprite opacity={…} … /&gt;</code>. It is 0 to 1 and fades the element and everything inside it, so an <code>&lt;Entity&gt;</code> fades a whole popup or card at once. It multiplies down the tree (0.5 inside 0.5 is 0.25), and each thing is drawn at it on its own, so where two overlap the one below shows through. <code>transform={{ opacity }}</code> is an error that says so (TSE1207). To fade a component, wrap it: <code>&lt;Entity opacity={…}&gt;&lt;Card /&gt;&lt;/Entity&gt;</code>; on the component itself <code>opacity</code> is whatever its own props say.</p>
   <ul>
-    <li><strong>Origin is the top-left corner</strong> of a <code>Sprite</code>, <code>AnimatedSprite</code>, <code>Shape</code>, <code>Text</code>, <code>Collider</code>, <code>Pointer</code>; rotation and scale are about it.</li>
+    <li>The origin is the top-left corner of a <code>Sprite</code>, <code>AnimatedSprite</code>, <code>Shape</code>, <code>Text</code>, <code>Collider</code>, <code>Pointer</code>; rotation and scale are about it.</li>
     <li>Children are relative: <code>x: 10</code> inside a parent at <code>x: 100</code> is at 110, and turns and scales with the parent.</li>
     <li>Equal <code>z</code> keeps tree order, globally across the tree.</li>
-    <li>On a <strong>component</strong>, <code>transform</code> places the whole component; do not declare it in the props type.</li>
+    <li>On a component, <code>transform</code> places the whole component; do not declare it in the props type.</li>
     <li>A malformed <code>transform</code> is <code>TSE1207</code>.</li>
   </ul>
 </section>
 <section id="props" data-group="Language" data-title="Props, callbacks and children">
   <h2>Props, callbacks and children</h2>
-  <p>Props come through a destructured parameter typed with a props type written in the parameter (<code>({ hp }: { hp: number })</code>, which is then called <code>HeartProps</code> for a <code>Heart</code>) or <strong>declared in the same file</strong> (<code>({ hp }: HeartProps)</code>). A changed value updates the child <strong>in place</strong>; it is never recreated.</p>
+  <p>Props come through a destructured parameter typed with a props type written in the parameter (<code>({ hp }: { hp: number })</code>, which is then called <code>HeartProps</code> for a <code>Heart</code>) or declared in the same file (<code>({ hp }: HeartProps)</code>). A changed value updates the child in place; it is never recreated.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 interface EnemyProps {
   speed: number;
@@ -499,7 +499,7 @@ export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
   <ul>
     <li><code>props: EnemyProps</code> also works (<code>props.speed</code>), but <code>props</code> cannot be passed on or spread. Defaults go in the destructuring.</li>
     <li>A prop may be read under another name, as in React: <code>({ seed: firstSeed, speed: rate = 2 }: EnemyProps)</code>, so a prop and the state it seeds can both be called what they are.</li>
-    <li>Callback props carry child → parent messages. Call optional ones with <code>?.()</code>.</li>
+    <li>Callback props carry messages from child to parent. Call optional ones with <code>?.()</code>.</li>
     <li>A bad props form is <code>TSE1208</code>.</li>
   </ul>
 
@@ -576,7 +576,7 @@ export function Label({ color = "#fff1d6", children }: LabelProps) {
 {open ? <Menu /> : <Button />}          // either branch may be null
 {gate !== undefined && <Sprite image="gate.png" frame={gate.frame} />}
 </script></pre>
-  <p>A condition turning off <strong>unmounts</strong> the child; turning on mounts it. To switch several siblings on one condition, wrap them in a fragment: <code>{gems === 0 &amp;&amp; (&lt;&gt;&lt;Shape … /&gt;&lt;Collider … /&gt;&lt;/&gt;)}</code>.</p>
+  <p>A condition turning off unmounts the child; turning on mounts it. To switch several siblings on one condition, wrap them in a fragment: <code>{gems === 0 &amp;&amp; (&lt;&gt;&lt;Shape … /&gt;&lt;Collider … /&gt;&lt;/&gt;)}</code>.</p>
 
   <h3 id="lists">Keyed lists</h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
@@ -605,8 +605,8 @@ export function Label({ color = "#fff1d6", children }: LabelProps) {
   <div class="tablewrap"><table>
     <tr><th>Rule (otherwise <code>TSE1209</code>)</th></tr>
     <tr><td>The items are any array the component can compute: state or a prop, a member of one (<code>world.enemies</code>), an array method's result (<code>.filter</code>, <code>.map</code>, <code>.slice</code>), an imported constant, or what a plain function returns (<code>spotsOf(run)</code>). The list follows the state and props the expression reads. Not through <code>?.</code>.</td></tr>
-    <tr><td><code>map</code> takes one inline arrow (item, optionally index) returning <strong>one element</strong>, <code>cond &amp;&amp; &lt;El key … /&gt;</code> or <code>cond ? &lt;A key … /&gt; : &lt;B key … /&gt;</code>: an expression body, or a block with only <code>return</code>. No fragments.</td></tr>
-    <tr><td>The element may have children, nested and conditional (<code>{slot.filled &amp;&amp; &lt;Text … /&gt;}</code>), that read the item, and lists of its own (<code>{row.cells.map(…)}</code>), nested as deep as needed. Not yet among them: <code>{children}</code> or a <code>&lt;Route&gt;</code>; for those, make the item a component.</td></tr>
+    <tr><td><code>map</code> takes one inline arrow (item, optionally index) returning one element, <code>cond &amp;&amp; &lt;El key … /&gt;</code> or <code>cond ? &lt;A key … /&gt; : &lt;B key … /&gt;</code>: an expression body, or a block with only <code>return</code>. No fragments.</td></tr>
+    <tr><td>The element may have children, nested and conditional (<code>{slot.filled &amp;&amp; &lt;Text … /&gt;}</code>), that read the item, and lists of its own (<code>{row.cells.map(…)}</code>), nested as deep as needed. They cannot include <code>{children}</code> or a <code>&lt;Route&gt;</code>; for those, make the item a component.</td></tr>
     <tr><td>The element has a <code>key</code> that reads the item (<code>key={e.id}</code>). A key reading only the index compiles with a warning; one reading neither is an error.</td></tr>
     <tr><td>A callback on the item may read the item but not the index; one in a nested list may read the items around it too.</td></tr>
   </table></div>
@@ -621,12 +621,12 @@ export function Label({ color = "#fff1d6", children }: LabelProps) {
   <ul>
     <li>The key is any value that identifies what the element shows (a string or a number), and may read state and props.</li>
     <li>The new instance is added before the old one is removed, as with list items, so its <code>useMount</code> runs before the old one's <code>useUnmount</code>.</li>
-    <li>Not on a component's root (<code>TSE1203</code>): put the key where the component is used. Not yet inside a list item's children (<code>TSE1209</code>): make the item a component. Beside other children passed to a component it is fine.</li>
+    <li>Not on a component's root (<code>TSE1203</code>): put the key where the component is used. Not inside a list item's children (<code>TSE1209</code>): make the item a component. Beside other children passed to a component it is fine.</li>
   </ul>
 </section>
 <section id="gamestate" data-group="Language" data-title="Game state (useGame)">
   <h2>Game state: <code>createGameState</code></h2>
-  <p>The <strong>game state</strong> is shared by every component (score, hit points): its <strong>data</strong>, and the <strong>actions</strong> that change it. A component reads with a selector and calls actions; only actions change it.</p>
+  <p>The <strong>game state</strong> is what every component shares (score, hit points): its data and the actions that change it. A component reads with a selector and calls actions; only actions change it.</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // GameState.ts, in the source directory
 import { createGameState } from "@tsengine/runtime";
@@ -654,23 +654,23 @@ function Player() {
 </script></pre>
   <h3>Rules</h3>
   <ul>
-    <li><strong>A selector is a path</strong> (<code>s.stats.coins</code>) to a leaf, an object or an array, or <strong>any expression of paths</strong> (<code>(s) =&gt; s.cursor === id</code>, <code>(s) =&gt; focusOf(s.battle, s.cursor)</code>): each path it reads is subscribed to, and the value is worked out again when one changes. A typo is <code>TSE1108</code>. Call <code>useGame(...)</code> at the top level, bound to a <code>const</code>, or destructured: <code>const { room, deaths } = useGame((s) =&gt; s.run)</code>.</li>
-    <li><strong>Actions</strong> come from <code>const { collect, hurt } = useGame.actions()</code>. They never change, so this subscribes to nothing. A name there that is a value of the state, or a typo, is <code>TSE1108</code>; taking actions from the whole state (<code>useGame((s) =&gt; s)</code>) still works but warns. In plain code, <code>useGame.actions().collect()</code>.</li>
+    <li>A selector is a path (<code>s.stats.coins</code>) to a leaf, an object or an array, or any expression of paths (<code>(s) =&gt; s.cursor === id</code>, <code>(s) =&gt; focusOf(s.battle, s.cursor)</code>): each path it reads is subscribed to, and the value is worked out again when one changes. A typo is <code>TSE1108</code>. Call <code>useGame(...)</code> at the top level, bound to a <code>const</code>, or destructured: <code>const { room, deaths } = useGame((s) =&gt; s.run)</code>.</li>
+    <li>Actions come from <code>const { collect, hurt } = useGame.actions()</code>. They never change, so this subscribes to nothing. A name there that is a value of the state, or a typo, is <code>TSE1108</code>; taking actions from the whole state (<code>useGame((s) =&gt; s)</code>) still works but warns. In plain code, <code>useGame.actions().collect()</code>.</li>
     <li>An action may be passed whole: <code>onPress={resume}</code>.</li>
-    <li>Call an action as a <strong>statement in a handler</strong>, not in JSX or a derived value.</li>
-    <li>An action <strong>writes the state directly</strong>, nested objects and lists too (<code>s.run.time += dt</code>, <code>s.gems.push(id)</code>). It writes a draft; when it returns, only the values that changed are committed, and only their readers hear of it. An action called from another shares its draft. One that throws changes nothing.</li>
+    <li>Call an action as a statement in a handler, not in JSX or a derived value.</li>
+    <li>An action writes the state directly, nested objects and lists too (<code>s.run.time += dt</code>, <code>s.gems.push(id)</code>). It writes a draft; when it returns, only the values that changed are committed, and only their readers hear of it. An action called from another shares its draft. One that throws changes nothing.</li>
     <li>Only components reading something that <em>changed</em> re-render. Every game starts from the initial state automatically.</li>
     <li>The data must be an object literal: number, string and boolean literals, nested objects, and other values (arrays, <code>newRun()</code>) kept as values; no functions. The actions are an object literal of functions. Spreads, computed keys and a name in both are <code>TSE1109</code>.</li>
-    <li><strong>What a selector returns is read-only</strong>, deep: <code>run.time = 0</code> or <code>items.push(x)</code> in a component is <code>TSE1402</code> / <code>TSE1301</code>, whose message names the action to add, and a helper that takes a mutable <code>Item[]</code> is a type error for a selected list (take <code>readonly Item[]</code>).</li>
+    <li>What a selector returns is read-only, deep: <code>run.time = 0</code> or <code>items.push(x)</code> in a component is <code>TSE1402</code> / <code>TSE1301</code>, whose message names the action to add, and a helper that takes a mutable <code>Item[]</code> is a type error for a selected list (take <code>readonly Item[]</code>).</li>
     <li>An action may call another (<code>useGame.actions().begin()</code>), and plain code it calls (a save's <code>pick</code>) reads what it has written so far through <code>useGame.getState()</code>.</li>
     <li><code>useGame.getState()</code> reads the state outside components. <code>useGame.setState({ … })</code> replaces part of it (shallow-merged) for tests, a story's <code>setup</code> and tools; game code uses actions, and <code>setState</code> while an action runs is an error.</li>
-    <li>The Zustand form, <code>createGameState&lt;State&gt;()((set) =&gt; ({ … }))</code>, was removed (2026-11-15): <code>TSE1109</code> says what to write instead.</li>
+    <li>The Zustand form, <code>createGameState&lt;State&gt;()((set) =&gt; ({ … }))</code>, is not supported (it was removed on 2026-11-15): <code>TSE1109</code> says what to write instead.</li>
   </ul>
   <p>Kite keeps <code>screen: "title" | "play" | "end"</code> in the game state and gives it to <code>&lt;Router route={screen}&gt;</code>, so any action (<code>begin</code>, <code>finished</code>) changes screens. Actions are plain TypeScript: they can call a sound store (<code>sfx.play("start")</code>) as well as write the state.</p>
   <div class="callout"><p><strong>useMutable, context or useGame?</strong> <code>useMutable</code> for what one component owns; context for what a component shares with everything below it; <code>useGame</code> for what the whole game shares.</p></div>
 
   <h3 id="sharing">Sharing state between components</h3>
-  <p>As in React, what two components need lives in their nearest common parent: <strong>lift it up</strong>. The parent keeps it in <code>useMutable</code>, a child reports to it through a callback prop, and the parent hands it down as a prop, or through context to a deep subtree. The game state is the top of that ladder, for what the whole game shares (the screen, the score).</p>
+  <p>As in React, what two components need lives in their nearest common parent, so you lift it up. The parent keeps it in <code>useMutable</code>, a child reports to it through a callback prop, and the parent hands it down as a prop, or through context to a deep subtree. The game state is the top of that ladder, for what the whole game shares (the screen, the score).</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 export function Level() {
   const s = useMutable({ playerX: 0 });
@@ -688,7 +688,7 @@ export function Level() {
   <p>A handler reads a prop or a context value as the parent has it now: an enemy after the player in the tree sees where the player moved <em>this</em> step, one before it sees where it was when the step began. The order is the tree's, parents first, the same on every run (see <a href="systems.html#frame">How a frame works</a>). Render shows what the step committed.</p>
 
   <h3>Context</h3>
-  <p>As in React: a value a component provides to everything below it, read where it is needed instead of passed down through every level.</p>
+  <p>Context works as in React: a component provides a value to everything below it, and a component reads it where it is needed instead of having it passed down through every level.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // theme.ts
 import { createContext } from "@tsengine/runtime";

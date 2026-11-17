@@ -1,18 +1,17 @@
 # The native player
 
 How a compiled game is drawn, heard and played: the pure-TypeScript player, the hosts that run it, `libtse` (C over raylib) and the
-ABI between them. It describes the player as it is; [DESIGN.md](DESIGN.md), "Player", covers what the game sees of it (startup,
-errors in the window, hot reload, reusing draw records). The exact record layouts, key table and current ABI version are in
-[`native/include/tse.h`](../native/include/tse.h), which is the source of truth: this document says why it is shaped that way, not
-every field.
+ABI between them. [DESIGN.md](DESIGN.md), "Player", covers what the game sees of the player (startup, errors in the window, hot
+reload, reusing draw records). The exact record layouts, key table and current ABI version are in
+[`native/include/tse.h`](../native/include/tse.h), which is the source of truth; this note explains why they are shaped that way.
 
 ## Goals
 
-1. **One body of game code runs in three places**: the Node tests (no window), the Node dev player (a window, hot reload) and a
+1. One body of game code runs in three places: the Node tests (no window), the Node dev player (a window, hot reload) and a
    packaged game (V8 or QuickJS-ng). Nothing in the compiler knows which.
-2. **Testable without a GPU.** Almost all player logic is TypeScript and is tested against a recording backend. Native drawing is
+2. The player is testable without a GPU. Almost all player logic is TypeScript and is tested against a recording backend. Native drawing is
    tested by pixel checks on raylib's software renderer, and on a GPU renderer under a virtual display (`tse screenshot --gpu`).
-3. **Pieces that can be swapped.** Drawing code lives in one place, `libtse`. The boundary between script and native is one call per
+3. The pieces can be swapped. Drawing code lives in one place, `libtse`. The boundary between script and native is one call per
    frame with plain arrays, so a host is a thin adapter.
 
 ## Architecture
@@ -42,7 +41,7 @@ every field.
                  ABI: native/include/tse.h
 ```
 
-**Why this split.** The tree walk, colour parsing, camera maths, layout, pointer hit testing and collision rules are where the bugs
+The tree walk, colour parsing, camera maths, layout, pointer hit testing and collision rules are where the bugs
 are, so they live in TypeScript, where tests run them without a window. The native side executes a list of draw records and reports
 input. Because the boundary is one call per frame with plain arrays, it costs the same in every host, and each host's adapter is
 small.
@@ -85,25 +84,25 @@ These sit beside the compiler's ([DESIGN.md](DESIGN.md#ground-rules-and-settled-
 
 ## Decisions
 
-| Decision | Choice | Why |
-| --- | --- | --- |
-| Graphics library | **raylib 6.0**, pinned to the `6.0` tag | Each built-in maps to one or two raylib calls; one C library with no extra libraries for images, fonts or audio; a CPU-only software renderer makes headless tests possible. raylib can run on SDL as its platform layer, so moving to SDL later does not change our code |
-| Not SDL3 | Rejected for now | Better platform reach, but it needs SDL_image, SDL_ttf and SDL_mixer and our own batching for the same features. Revisit if consoles become a goal |
-| Where drawing lives | **C, in `libtse`**, once | Both hosts link the same library: Node loads it as a shared library, the Rust host links it statically |
-| Native boundary | **One call per frame**: a `Float64Array` of records, plus an array of strings | The FFI cost does not grow with the number of sprites. `Float64Array`, not `Float32Array`: a packed `0xRRGGBBAA` colour and every handle fit exactly. Records refer to text by index, so they are byte-identical in every host |
-| Dev host | **Node + koffi** (`@tsengine/player-node`) | `node:ffi` is still experimental. The koffi calls stay in `ffi.ts`, so moving later is a one-file change |
-| Engine of a packaged game | **V8 by default** (a Node single executable application), **QuickJS-ng** (`--engine quickjs`, the Rust host) as the fallback | V8 is 10 to 30 times faster on a busy frame (see "Performance"). QuickJS-ng is a few MB, has no JIT and can go where a JIT is banned |
-| Bundling | **esbuild**, one ESM file (`--format=esm --target=es2022`) | It resolves workspace packages and `.ts` imports; the Rust host loads one file and needs no module resolver |
-| Draw order | **Tree order, depth first**, parent before children, later on top; `z` overrides it | It matches how JSX reads (DESIGN.md, "What is drawn") |
-| Origin | **Top-left** for every drawn element and `Collider`; rotation and scale are about it | Consistency across built-ins |
-| Active camera | **The first `Camera` in draw order** (more than one: warn once). None: identity view, world origin at the top-left | With a camera the followed point is centred; without one, top-left is what a 2D API is expected to do |
-| `input.pointerX/Y` | **World space**, through the active camera; `screenX/Y` in screen pixels | Components only know world space |
-| Coordinates | Logical pixels everywhere in the protocol; a visible window draws at the display's density (`TSE_OPEN_HIGHDPI`, 2026-11-16) | A game never sees the display's scale, and shapes, text and a smooth canvas are sharp on a Retina screen. A `<Screen>` canvas gives a fixed resolution |
-| Key names | `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`, `"Alt"`, the arrows, `"F1"`–`"F12"`, mouse buttons as keys (`"MouseLeft"`, …) and the first gamepad (`"PadA"`…`"PadStart"`, `"PadLeft"`…`"PadDown"`) | Mouse and pad buttons as keys mean `input.pressed("MouseLeft")` needs no new API. The table is `TSE_KEYS` in `tse.h`, append only |
-| Asset paths | Relative to the `assets` option (default `"assets"`), joined with `/` in TypeScript | `@tsengine/player` must run in QuickJS, with no `node:path` |
-| A missing asset or a bad colour | Never throw: warn once per value, draw a 16 × 16 magenta rect for a missing texture, magenta for a colour that does not parse | A typo should not stop a game during development, and magenta is easy to spot |
-| Sound | A module-level **sound sink** in the runtime: a `Sound` asks it to load when it is made and to play from `play()` | `Sound` instances are fields on components, which the player cannot find from the tree |
-| Saved data | **One implementation, in `libtse`**, for both hosts; `Backend.storage` is where a web build's `localStorage` would go | The same files whichever engine runs the game |
+| Decision                        | Choice                                                                                                                                                                                                                                                           | Why                                                                                                                                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Graphics library                | raylib 6.0, pinned to the `6.0` tag                                                                                                                                                                                                                              | Each built-in maps to one or two raylib calls; one C library with no extra libraries for images, fonts or audio; a CPU-only software renderer makes headless tests possible. raylib can run on SDL as its platform layer, so moving to SDL later does not change our code |
+| Not SDL3                        | Rejected for now                                                                                                                                                                                                                                                 | Better platform reach, but it needs SDL_image, SDL_ttf and SDL_mixer and our own batching for the same features. Revisit if consoles become a goal                                                                                                                        |
+| Where drawing lives             | C, in `libtse`, once                                                                                                                                                                                                                                             | Both hosts link the same library: Node loads it as a shared library, the Rust host links it statically                                                                                                                                                                    |
+| Native boundary                 | One call per frame: a `Float64Array` of records, plus an array of strings                                                                                                                                                                                        | The FFI cost does not grow with the number of sprites. `Float64Array`, not `Float32Array`: a packed `0xRRGGBBAA` colour and every handle fit exactly. Records refer to text by index, so they are byte-identical in every host                                            |
+| Dev host                        | Node + koffi (`@tsengine/player-node`)                                                                                                                                                                                                                           | `node:ffi` is still experimental. The koffi calls stay in `ffi.ts`, so moving later is a one-file change                                                                                                                                                                  |
+| Engine of a packaged game       | V8 by default (a Node single executable application), QuickJS-ng (`--engine quickjs`, the Rust host) as the fallback                                                                                                                                             | V8 is 10 to 30 times faster on a busy frame (see "Performance"). QuickJS-ng is a few MB, has no JIT and can go where a JIT is banned                                                                                                                                      |
+| Bundling                        | esbuild, one ESM file (`--format=esm --target=es2022`)                                                                                                                                                                                                           | It resolves workspace packages and `.ts` imports; the Rust host loads one file and needs no module resolver                                                                                                                                                               |
+| Draw order                      | Tree order, depth first, parent before children, later on top; `z` overrides it                                                                                                                                                                                  | It matches how JSX reads (DESIGN.md, "What is drawn")                                                                                                                                                                                                                     |
+| Origin                          | Top-left for every drawn element and `Collider`; rotation and scale are about it                                                                                                                                                                                 | Consistency across built-ins                                                                                                                                                                                                                                              |
+| Active camera                   | The first `Camera` in draw order (more than one: warn once). None: identity view, world origin at the top-left                                                                                                                                                   | With a camera the followed point is centred; without one, top-left is what a 2D API is expected to do                                                                                                                                                                     |
+| `input.pointerX/Y`              | World space, through the active camera; `screenX/Y` in screen pixels                                                                                                                                                                                             | Components only know world space                                                                                                                                                                                                                                          |
+| Coordinates                     | Logical pixels everywhere in the protocol; a visible window draws at the display's density (`TSE_OPEN_HIGHDPI`, 2026-11-16)                                                                                                                                      | A game never sees the display's scale, and shapes, text and a smooth canvas are sharp on a Retina screen. A `<Screen>` canvas gives a fixed resolution                                                                                                                    |
+| Key names                       | `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`, `"Alt"`, the arrows, `"F1"`–`"F12"`, mouse buttons as keys (`"MouseLeft"`, …) and the first gamepad (`"PadA"`…`"PadStart"`, `"PadLeft"`…`"PadDown"`) | Mouse and pad buttons as keys mean `input.pressed("MouseLeft")` needs no new API. The table is `TSE_KEYS` in `tse.h`, append only                                                                                                                                         |
+| Asset paths                     | Relative to the `assets` option (default `"assets"`), joined with `/` in TypeScript                                                                                                                                                                              | `@tsengine/player` must run in QuickJS, with no `node:path`                                                                                                                                                                                                               |
+| A missing asset or a bad colour | Never throw: warn once per value, draw a 16 × 16 magenta rect for a missing texture, magenta for a colour that does not parse                                                                                                                                    | A typo should not stop a game during development, and magenta is easy to spot                                                                                                                                                                                             |
+| Sound                           | A module-level sound sink in the runtime: a `Sound` asks it to load when it is made and to play from `play()`                                                                                                                                                    | `Sound` instances are fields on components, which the player cannot find from the tree                                                                                                                                                                                    |
+| Saved data                      | One implementation, in `libtse`, for both hosts; `Backend.storage` is where a web build's `localStorage` would go                                                                                                                                                | The same files whichever engine runs the game                                                                                                                                                                                                                             |
 
 ## The ABI
 
@@ -135,14 +134,14 @@ tests stay byte-identical): `SPRITE_REGION` sits beside `SPRITE`, a `<Flex>` wit
   batching, so batching survives. Backface culling is off: a negative scale (a flipped sprite) reverses the winding.
 - **Malformed input stops the frame.** An unknown op, a short buffer or a layer nested too deep is logged once and the frame stops
   drawing; a bad index draws nothing; a bad colour is magenta. Doubles are checked before they are cast to integers (a cast of NaN
-  is undefined behaviour in C). It never reads past `recordsLength`.
+  is undefined behaviour in C). libtse never reads past `recordsLength`.
 - **Handles** index into growable arrays; TypeScript caches by path, so C never sees a path twice.
 - **Opening** sets `SetExitKey(KEY_NULL)`, so Escape reaches the game instead of closing the window.
 - **The software renderer** (`TSE_PLATFORM=Memory`, raylib's rlsw) reads the framebuffer back top row first and as BGRA, so the capture
   swaps red and blue there and sets every alpha to 255, as the GPU capture does. `rlSetBlendMode` does nothing in rlsw, so libtse
   sets rlsw's blend function itself; and since rlsw switches blending off for an opaque primitive when the function reads alpha,
   add and multiply use `(ONE, ONE)` and `(DST_COLOR, ZERO)` there when nothing is translucent. A translucent sprite in an add layer
-  is therefore added at full strength by the software renderer. It has no shaders: `tse_load_shader` returns
+  is therefore added at full strength by the software renderer. rlsw has no shaders: `tse_load_shader` returns
   `TSE_SHADER_UNSUPPORTED` (-2) and the layer is laid over without one, with a warning.
 - **Render targets.** raylib 6.0's `LoadRenderTexture` is refused by Mesa 25.x's llvmpipe and softpipe (an empty upload and an unsized
   depth buffer), so the GPU build makes its own targets (`load_target` in `tse.c`): a colour texture uploaded from zeroed pixels and
@@ -266,7 +265,7 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
 
 - **Fixed timestep** (`<Game fixedStep={60}>`). An accumulator runs whole steps of `1 / rate`, at most `MAX_STEPS_PER_FRAME` (8) a
   frame; the leftover after that is dropped, so a stall is not followed by a burst. It compares with a 1e-9 epsilon, so sixty sums
-  of 1/60 s give sixty steps. **No input is lost**: key edges accumulate across polls and go to the next step only, and a tap that
+  of 1/60 s give sixty steps. No input is lost: key edges accumulate across polls and go to the next step only, and a tap that
   began and ended between two steps reaches the next one as down, pressed and released at once. A frame that ran no step settles
   pending renders.
 - **Interpolation** (`<Game interpolate>`, 2026-11-16; on by default in a visible window with a fixed step). After each step
@@ -294,7 +293,7 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
 - **Flash** (ABI v13). A sprite's `flash` writes its region a second time with `TSE_SPRITE_SILHOUETTE`: libtse draws the region's
   shape (white, the image's alpha) in the tint, which is `flashColor` at `flash` times the opacity, so opaque pixels end up mixed that
   far toward the colour and transparent ones stay. No shader, so the software renderer draws it too. The silhouette texture is made
-  the first time a texture is flashed, from its file read again (reading a texture back is not something every renderer does), and
+  the first time a texture is flashed, from its file read again (not every renderer can read a texture back), and
   freed with the textures. On a pixel with partial alpha the mix is approximate (it lays the colour over, rather than mixing inside).
 - **`<Tilemap>`** writes one region record per filled cell, no game object per tile, and the same `TilemapData` is the solid grid
   movement code reads (`getTilemap(name)`), so what is drawn and what blocks cannot disagree. In the world it writes only the cells
@@ -324,26 +323,32 @@ What each prop means is in the guide's reference (`docs/reference.html`); these 
 
 ## Performance
 
-**How it is measured.** `packages/player/bench/frame.ts` times `player.step()` on scenes of up to 5,000 objects, against a backend
+### How it is measured
+
+`packages/player/bench/frame.ts` times `player.step()` on scenes of up to 5,000 objects, against a backend
 that draws nothing: engine script time, not the GPU. `npm run bench:check` runs it under Node and fails when a scene is over its
 budget in `packages/player/bench/budget.json` (about 2.5 to 3 times a 4-core 2.1 GHz cloud VM's numbers on 2026-11-10), or when a
 scene with four times the objects takes much more than four times as long (which catches quadratic growth on any machine). There are
 no QuickJS budgets; the bench can be bundled and run under the Rust host by hand. Each game has a `tools/frame-time.ts` that replays
 it and times every step. The inspector's profiler gives each component's time per frame (DESIGN.md, "Seeing inside a running game").
 
-**V8 against QuickJS** (2026-11-10, the same VM, the packaged Node build against the Rust host):
+### V8 against QuickJS
 
-| Scene | QuickJS-ng | V8 |
-| --- | --- | --- |
-| 2,000 moved by state, each with a collider | 9.5 ms | 0.65 ms |
-| 5,000 moving rects | 12.6 ms | 0.73 ms |
-| 300 colliders in one pile (44,850 touching pairs) | 11.3 ms | 0.39 ms |
-| mount 20,000 objects | 310 ms | 41 ms |
+Measured on 2026-11-10 on the same VM, the packaged Node build against the Rust host:
+
+| Scene                                             | QuickJS-ng | V8      |
+| ------------------------------------------------- | ---------- | ------- |
+| 2,000 moved by state, each with a collider        | 9.5 ms     | 0.65 ms |
+| 5,000 moving rects                                | 12.6 ms    | 0.73 ms |
+| 300 colliders in one pile (44,850 touching pairs) | 11.3 ms    | 0.39 ms |
+| mount 20,000 objects                              | 310 ms     | 41 ms   |
 
 What is left in a busy frame under QuickJS is mostly the interpreter's price per statement, about 1 µs per object per phase; that is
 why V8 is the default.
 
-**The games** (script only, recording backend):
+### The games
+
+Script time only, on the recording backend:
 
 - Kite, the whole game under Node (2026-11-16): mean 0.25 ms, 99th percentile 1.2 ms. The slowest steps after start-up (about 2 ms)
   are collisions on a room's first step; the room-change spike of about 25 ms measured earlier is gone.
@@ -355,7 +360,7 @@ why V8 is the default.
 - 200 styled animated sprites, re-rendered every step: 0.2 ms under Node, 2.2 ms under QuickJS (about 11 µs each, three times a plain
   rect), comfortable for games of this size.
 
-**What is in place, and why.**
+### What is in place, and why
 
 - **Collisions.** The tracker sorts boxes by left edge with an insertion sort over last frame's order and sweeps; when the sweep tests
   more than 8 pairs a box it switches to horizontal bands twice the mean box height, and goes back when bands save little. When at
@@ -381,13 +386,13 @@ why V8 is the default.
 - **`findPath`** (2026-11-16) keeps its heap in typed arrays and asks `blocked` once per cell (it was asked up to three times a
   cell with diagonals). It returns the same paths, checked against the old search on 3,000 random maps; the bench's 100 searches
   went from about 146 to 78 ms.
-- **Remaining spikes under V8 are full garbage collections** (10 to 20 ms, a few times a minute in Hearth's tenth wave under the
+- The remaining spikes under V8 are full garbage collections (10 to 20 ms, a few times a minute in Hearth's tenth wave under the
   recording backend, which decodes every frame and allocates much more than a real one). A larger young generation
   (`--max-semi-space-size`) halved the scavenges but not the full collections.
-- **Small things that matter under an interpreter**: no default parameters on recursive calls, indexed loops instead of `for…of`
+- **Small savings under an interpreter**: no default parameters on recursive calls, indexed loops instead of `for…of`
   (QuickJS allocates an iterator), a class's draw kind cached on the object.
 
-**Tried and rejected.**
+### Tried and rejected
 
 - **A hashed grid as the collision broad phase** (2026-11-10): under QuickJS it cost as much as the sweep for 2,000 colliders and four
   times as much for a pile, because the interpreter pays for each bookkeeping step. The bands are the cheap half of it.

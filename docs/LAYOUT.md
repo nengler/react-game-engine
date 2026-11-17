@@ -152,11 +152,11 @@ minimums (a leaf's minimum is its size). Both are clamped to `min…` / `max…`
 children and gaps:
 
 - **Positive, with growing children:** it goes to the smallest growing child until it matches the next smallest, then to both,
-  and so on, each stopping at its maximum; what a capped child cannot take goes to the others. Grow is **not weighted**: equal
+  and so on, each stopping at its maximum; what a capped child cannot take goes to the others. Grow is not weighted: equal
   growing siblings end up equal, which is what a row of buttons wants. (Clay's author calls this a taste decision; a `growWeight`
   can come if a game asks.)
 - **Negative:** the largest shrinkable child (a `Flex` that is `"fit"` or `"grow"`) gives way first, down to the next largest,
-  each stopping at its minimum, and one at its minimum drops out. It is the grow loop reversed. A scroll box's children never
+  each stopping at its minimum, and one at its minimum drops out (the grow loop reversed). A scroll box's children never
   shrink. Leaves never shrink, so in practice nothing shrinks until a leaf can report a minimum smaller than its size
   (`MeasuredSize.minWidth` / `minHeight` exist for that; the frame builder sets none yet). What still does not fit overflows.
 
@@ -185,8 +185,8 @@ draws each box's background as it reaches it and continues into the children. A 
 
 ### Why a port, not a library
 
-**Yoga** (React Native's flexbox) is C++ or WebAssembly: QuickJS-ng has no WebAssembly, and C++ in libtse breaks its "C over
-raylib, the C side does no maths" rule. **Clay** is one C header that would link into libtse, but it would put layout maths on
+Yoga (React Native's flexbox) is C++ or WebAssembly: QuickJS-ng has no WebAssembly, and C++ in libtse breaks its "C over
+raylib, the C side does no maths" rule. Clay is one C header that would link into libtse, but it would put layout maths on
 the C side, it lays out its own element tree rather than the engine's objects, and a second, native layout engine would be one
 more thing to keep byte-identical between Node and QuickJS. So the engine ports Clay's algorithm to TypeScript for the subset a
 game UI needs, and keeps Clay as the reference: when an edge case comes up, Clay's answer is the default one.
@@ -198,8 +198,8 @@ fitted and sized like any other (a `"grow"` or percentage size is of the parent'
 flow in every step: no space, no gap, no effect on `justifyContent`. After the parent has placed its flow, the box's `anchor`
 point is attached to the parent's `to` point (one of `"top-left"`, `"top-center"` … `"bottom-right"`), against the parent's
 whole box, not inside its padding, plus the offset. A floating layout root hangs off the game's area. Draw it above its
-neighbours with `z`; its pointers are then pressed before what it covers. Props, not a `<Float>` built-in, so a floating box
-keeps all of `Flex`'s sizing.
+neighbours with `z`; its pointers are then pressed before what it covers. Floating is a set of props rather than a `<Float>`
+built-in, so a floating box keeps all of `Flex`'s sizing.
 
 `<Tooltip>` is a floating `Flex` with a look of its own, attached above its parent at `z` 100, drawn only while its parent is
 hovered or focused (or as `show` says).
@@ -243,9 +243,9 @@ pixels, ignores the view and does not nest, so the player does the rest:
 `backgroundImage` with `slice` needs nothing native: it is nine `TSE_OP_SPRITE_REGION` records of one texture, each placed at its
 part of the box (through the box's rotation and scale) and scaled by destination ÷ source size. Corners keep their size, edges
 stretch along one axis, the middle along both. Slices come from `sliceTop` … `sliceLeft`, else `slice`; a box smaller than its
-corners shrinks all of them by one factor (CSS's `border-image` rule). Drawn after the colour and border, before the children.
-State images follow the colours' precedence and change at once. A missing image is a magenta box (a compile error for a
-literal); a backend that cannot report texture sizes draws nothing, with one warning.
+corners shrinks all of them by one factor (CSS's `border-image` rule). The slices are drawn after the colour and border,
+before the children. State images follow the colours' precedence and change at once. A missing image is a magenta box (a
+compile error for a literal); a backend that cannot report texture sizes draws nothing, with one warning.
 
 ## Opacity
 
@@ -260,7 +260,7 @@ draw the box into an off-screen layer; `<Layer opacity>` (DESIGN.md, "Layers") d
 ## `<Hud>`
 
 A `<Hud>` is a layer drawn after the world through its own view that ignores the camera, in game pixels. A growing `Flex`
-directly under it takes the game's area: that, a full-HUD column with `space-between` and spacers, pins things to edges, and a
+directly under it takes the game's area, so a full-HUD column with `space-between` and spacers pins things to its edges, and a
 floating box pins one thing to a corner. Pointers inside it are hit-tested in game coordinates through `worldTransform()`, which
 includes the layout offset. `<Fade>` is a full-screen cover drawn on the HUD layer. The rest of what a HUD does with cameras,
 colliders and nesting is in DESIGN.md, "The HUD".

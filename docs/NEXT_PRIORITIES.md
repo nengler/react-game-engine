@@ -1,6 +1,6 @@
 # What is next
 
-As of 2026-11-15. This file holds what is being worked on, what is open, and what waits. When something is built it leaves this
+As of 2026-11-15: what is being worked on, what is open, and what waits. When something is built it leaves this
 file; how it works and why goes into [DESIGN.md](DESIGN.md), [PLAYER.md](PLAYER.md) or [LAYOUT.md](LAYOUT.md), and the plans
 that led there are in git history. What still trips a new author is in [PAIN_POINTS.md](PAIN_POINTS.md).
 
@@ -99,7 +99,7 @@ bars, nine-slice options, sliders, a sharp `<Hud>` over a pixel-art world, sever
 
 ## Held, or decided against
 
-- **`useEffect`** stays out; DESIGN.md, "Why there is no `useEffect`", says what replaces each use. **`useChange(value, prev => …)`**,
+- **`useEffect`** stays out; DESIGN.md, "Why there is no `useEffect`", says what replaces each use. `useChange(value, prev => …)`,
   the one use with no answer yet, is held for a separate discussion.
 - **Collision shapes** are circles and convex polygons only, for now (2026-11-15): no solid shapes or slopes.
 - **No macOS or Windows CI** until a build works there (2026-11-09; the macOS step above would change it).
