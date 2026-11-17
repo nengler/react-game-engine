@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { WorldTransform } from "../Transform.ts";
 import type { World } from "../World.ts";
 
 /**
@@ -14,6 +15,11 @@ export interface Pressable {
   onPointerLeave?: (() => void) | undefined;
   /** Whether the world-space point (the HUD's, for one inside a `<Hud>`) is on it as it is drawn. */
   contains(x: number, y: number): boolean;
+  /**
+   * `contains`, for a caller that already holds the `childSpace()` of its parent: the player asks every pressable under the mouse each
+   * frame, and neighbours with one parent (the tiles of a grid) then share one walk up the tree.
+   */
+  containsIn?(parentSpace: WorldTransform, x: number, y: number): boolean;
   /** A key or an action (`"wave"`) whose press calls `onPress`, like the DOM's `accessKey` (see `World.tick`). */
   pressKey?: string | undefined;
   /** It takes the focus: the arrow keys move between focusable things, and the confirm key presses the focused one. */
@@ -122,15 +128,11 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
    * negative or not a number), or a zero scale, is never hit.
    */
   contains(x: number, y: number): boolean {
-    const t = this.worldTransform();
-    if (!(this.width > 0 && this.height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
-    const dx = x - t.x;
-    const dy = y - t.y;
-    const cos = Math.cos(t.rotation);
-    const sin = Math.sin(t.rotation);
-    const localX = (dx * cos + dy * sin) / t.scaleX + this.originX;
-    const localY = (dy * cos - dx * sin) / t.scaleY + this.originY;
-    return localX >= 0 && localX <= this.width && localY >= 0 && localY <= this.height;
+    return pointerContains(this, this.worldTransform(), x, y);
+  }
+
+  containsIn(parentSpace: WorldTransform, x: number, y: number): boolean {
+    return pointerContains(this, this.worldTransformIn(parentSpace), x, y);
   }
 
   /** The middle of the area, in its layer's coordinates (scale and rotation ignored). */
@@ -138,4 +140,19 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
     const t = this.worldTransform();
     return { x: t.x + this.width / 2 - this.originX, y: t.y + this.height / 2 - this.originY };
   }
+}
+
+/**
+ * Whether the point is in `pointer`'s area, with the pointer at `t` in the world. (A function, not a private method: QuickJS makes a
+ * private-method call slow, and hover asks every pointer each frame.)
+ */
+function pointerContains(pointer: Pointer, t: WorldTransform, x: number, y: number): boolean {
+  if (!(pointer.width > 0 && pointer.height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
+  const dx = x - t.x;
+  const dy = y - t.y;
+  const cos = Math.cos(t.rotation);
+  const sin = Math.sin(t.rotation);
+  const localX = (dx * cos + dy * sin) / t.scaleX + pointer.originX;
+  const localY = (dy * cos - dx * sin) / t.scaleY + pointer.originY;
+  return localX >= 0 && localX <= pointer.width && localY >= 0 && localY <= pointer.height;
 }

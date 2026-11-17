@@ -309,6 +309,7 @@ export const runtimeManifest: RuntimeManifest = {
       "onFocus",
       "onBlur",
       "contains",
+      "containsIn",
       "focusPoint",
     ],
     Text: [
@@ -415,7 +416,7 @@ export const runtimeManifest: RuntimeManifest = {
     Layer: ["name", "blend", "childBlend", "clear", "opacity", "shader", "params"],
     Light: ["radius", "color", "intensity"],
     Lighting: ["name", "blend", "childBlend", "clear", "opacity", "shader", "params", "ambient"],
-    Flex: [...FLEX_FIELDS, "contains", "boxPoint", "focusPoint", "onNavigate"],
+    Flex: [...FLEX_FIELDS, "contains", "containsIn", "boxPoint", "focusPoint", "onNavigate"],
     // A widget is a Flex with more: its members are Flex's fields, and what it adds (the methods Flex has are its prototype's, not its own).
     Slider: [
       ...FLEX_FIELDS,
@@ -654,6 +655,7 @@ export const runtimeManifest: RuntimeManifest = {
     "layoutX",
     "layoutY",
     "worldTransform",
+    "worldTransformIn",
     "parent",
     "children",
     "world",
