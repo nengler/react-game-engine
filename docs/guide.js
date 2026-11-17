@@ -31,7 +31,7 @@
         ["gamepadDeadzone", "number", "0.35", "How far the left stick must go before <code>PadLeft/Right/Up/Down</code> count as held."],
         ["showFps", "boolean", "false", "Show frame rate and script time, top-left."],
         ["fpsKey", "string | false", '"F3"', "Key that toggles the counter."],
-        ["font", "string", "–", "The bitmap font of every <code>&lt;Text&gt;</code> without its own <code>font</code>: an image, or the built-in <code>\"tse:small\"</code>."],
+        ["font", "string", "–", "The bitmap font of every <code>&lt;Text&gt;</code> without its own <code>font</code>: an image, or a built-in such as <code>\"tse:m5x7\"</code> (see Built-in fonts)."],
         ["name", "string", '""', "As on <code>Entity</code>."]
       ] },
     { name: "Screen", kind: "container, root only", sum: "A fixed game resolution, scaled to the window. The only child of <code>&lt;Game&gt;</code>.",
@@ -83,7 +83,7 @@
         ["maxWidth", "number", "none", "Wrap to lines no wider than this: breaks at spaces, inside a word only when the word alone is too wide; <code>\\n</code> always breaks. One text record (or run of glyphs) per line."],
         ["lineGap", "number", "0", "Extra pixels between wrapped lines."],
         ["reveal", "number", "all", "Draw only the first <em>n</em> characters but lay out the whole text, so a box does not grow or rewrap as a page types out. Your game's code counts it up."],
-        ["font", "string", "default", "A bitmap font image: ASCII 32–127 in 16 × 6 cells. <code>size</code> is then the cell height. <code>\"tse:small\"</code> is built in: 3 × 5 glyphs in 4 × 6 cells, 6 px a line, for small screens; no file needed."],
+        ["font", "string", "default", "A bitmap font image: ASCII 32–127 in 16 × 6 cells. <code>size</code> is then the cell height. A <code>tse:</code> name is a font built in, no file needed: <code>\"tse:small\"</code> (6 px a line, for 320 × 180), <code>\"tse:m5x7\"</code> (480 × 270), <code>\"tse:unscii\"</code> (640 × 360) and more (see Built-in fonts)."],
         ["shadow", "CSS colour", "none", "Draw the text again under itself in this colour, <code>shadowX</code> and <code>shadowY</code> pixels away. Takes no room in a layout, so leave padding for it."],
         ["shadowX / shadowY", "number", "1 / 1", "Where the shadow falls, in pixels right and down from the text (negative goes left and up). In the text's own axes, so it turns and scales with it."],
         ["outline", "CSS colour", "none", "Draw the text under itself in this colour at every pixel within <code>outlineWidth</code>, so each letter has an edge. Use an opaque colour. A shadow falls from the outlined shape. Takes no room."],

@@ -51,3 +51,13 @@ export function nativeHost(flavor: NativeFlavor): string | null {
   const path = hostPathIn(NATIVE_ROOT, flavor);
   return existsSync(path) ? path : null;
 }
+
+/**
+ * The licenses of the fonts built into libtse (`FONTS.md`), which go with libtse wherever it goes: in a pack, this package's
+ * copy; in the repository, `native/FONTS.md`.
+ */
+export function fontLicenses(): string | null {
+  for (const path of [join(NATIVE_ROOT, "FONTS.md"), join(NATIVE_ROOT, "..", "..", "native", "FONTS.md")])
+    if (existsSync(path)) return path;
+  return null;
+}

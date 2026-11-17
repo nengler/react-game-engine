@@ -119,7 +119,7 @@ Layout asks each child for a box. Every drawable built-in has its top-left corne
 | Child | Box |
 | --- | --- |
 | `Shape`, `Pointer`, `Collider` | `width` × `height` |
-| `Text` | Its `width` if it has one (else the measured width) × its lines' height, measured by libtse (`tse_measure_text`, raylib's `MeasureTextEx`); a `maxWidth` wraps it first. A bitmap `font` measures by its glyph cell |
+| `Text` | Its `width` if it has one (else the measured width) × its lines' height, measured by libtse (`tse_measure_text`, raylib's `MeasureTextEx`); a `maxWidth` wraps it first. A bitmap `font` measures by its glyph cell, a built-in one by each character's advance |
 | `Sprite` | The texture's size (`tse_texture_size`); a missing texture is its 16 × 16 magenta square |
 | `AnimatedSprite` | Its first frame, so the layout does not jitter |
 | `Flex` | Its sizing, worked out by the passes below |
