@@ -1,3 +1,4 @@
+import type { MessageOf, Nearby, SendTarget } from "./components/Collider.ts";
 import { developmentWarning } from "./develop.ts";
 import type { GameStore } from "./GameState.ts";
 import type { InputState } from "./input.ts";
@@ -668,6 +669,22 @@ export class GameObject<P extends object = {}> {
   /** Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimers` or the object leaves the world. */
   every(seconds: number, fn: () => void): void {
     this.#addTimer(seconds, seconds > 0 ? seconds : 0, fn);
+  }
+
+  /**
+   * The colliders with `tag` whose boxes come within `radius` of (`x`, `y`) in world space, nearest first, not counting the
+   * colliders this component draws itself (those of components inside it count): `nearby("enemy", x, y, 60)` in a component (see `World.nearby`). None while it is not in a world.
+   */
+  nearby<Tag extends string>(tag: Tag, x: number, y: number, radius: number): Nearby<Tag>[] {
+    return this.world?.nearby(tag, x, y, radius, this) ?? [];
+  }
+
+  /**
+   * Send `value` to the `onReceive` of the colliders with `tag` that `where` names (a circle, or one `nearby` result), at the end of
+   * this step's update phase: `send("enemy", { x, y, radius: 20 }, blast)` in a component (see `World.send`).
+   */
+  send<Tag extends string>(tag: Tag, where: SendTarget<Tag>, value: MessageOf<Tag>): void {
+    this.world?.send(tag, where, value);
   }
 
   /** Cancel every timer of this object. */

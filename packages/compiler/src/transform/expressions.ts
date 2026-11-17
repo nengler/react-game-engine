@@ -68,7 +68,7 @@ const HANDLER_CONSTRUCTORS: ReadonlySet<string> = new Set([
 const HANDLER_NAMESPACES: ReadonlySet<string> = new Set(["Object", "JSON", "Number", "Array", "String", "Math", "console"]);
 /** Global functions a handler may call as written. */
 const HANDLER_GLOBALS: ReadonlySet<string> = new Set(["parseInt", "parseFloat", "isNaN", "isFinite"]);
-import { TIMER_FUNCTIONS, BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
+import { TIMER_FUNCTIONS, WORLD_FUNCTIONS, BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./statements.ts";
 
@@ -699,6 +699,39 @@ export class ExpressionLowering extends LoweringBase {
         return null;
       }
       // The function it calls is a handler of its own, run later: setters, actions and sounds, as in any handler.
+      const args = this.lowerPlainArgs(node.arguments);
+      if (!args) return null;
+      return { kind: "Call", callee: { kind: "Own", name: callee.text }, args };
+    }
+    // `nearby(tag, x, y, radius)` and `send(tag, where, value)`: the component's own, so they reach its world and skip its colliders.
+    if (
+      isIdentifier(callee) &&
+      Object.hasOwn(WORLD_FUNCTIONS, callee.text) &&
+      !this.scope.has(callee.text) &&
+      !this.plainImports.has(callee.text)
+    ) {
+      this.requireImport(callee.text, callee);
+      if (!this.mode.inHandler) {
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          callee.text === "send"
+            ? "'send()' delivers to colliders, so it is only valid in a handler (`useUpdate`, `useInput`, a callback prop), not while rendering."
+            : "'nearby()' asks where colliders are this step, so it is only valid in a handler (`useUpdate`, `useInput`, a callback prop), not while rendering: keep what it found in a `useMutable` field to draw it.",
+          node
+        );
+        return null;
+      }
+      const expected = WORLD_FUNCTIONS[callee.text]!;
+      if (node.arguments.length !== expected) {
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          callee.text === "send"
+            ? "send expects 3 arguments: the tag, where (`{ x, y, radius }` or a `nearby` result), and the value."
+            : "nearby expects 4 arguments: the tag, x, y and the radius.",
+          node
+        );
+        return null;
+      }
       const args = this.lowerPlainArgs(node.arguments);
       if (!args) return null;
       return { kind: "Call", callee: { kind: "Own", name: callee.text }, args };

@@ -1,5 +1,5 @@
 import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
-import { Collider, type Contact } from "./components/Collider.ts";
+import { Collider, type Contact, type Nearby, type SendTarget } from "./components/Collider.ts";
 import { Menu } from "./components/Menu.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { Tilemap } from "./components/Tilemap.ts";
@@ -151,6 +151,9 @@ export class World implements BodySpace {
         }
       }
     }
+    // What was sent this step (`send`), now that every update and timer has run: before the step renders, so what a receiver
+    // changes is drawn this step. Run even while frozen or paused, as collisions are: a send from `useInput` still lands.
+    if (this.#sends.length > 0) this.#deliver();
     // A freeze asked for during this tick starts with the next.
     if (freezeRequest > this.#frozen) this.#frozen = freezeRequest;
     freezeRequest = 0;
@@ -396,6 +399,78 @@ export class World implements BodySpace {
   #indexes: Map<string, ColliderIndex> | null = null;
   readonly #tilemaps = new Set<Tilemap>();
 
+  /**
+   * The colliders with `tag` whose boxes come within `radius` of (`x`, `y`) in world space, nearest first (by the distance from the
+   * point to the box, 0 inside it; ties in the order the colliders joined the world). The colliders `ignore` draws itself (the
+   * asking component's own, not those of components inside it) do not count. Each is its contact (`tag`, `owner`, `data`) with where its box's middle is and that distance; it can
+   * be handed to `send` to reach that one collider. Boxes are where they were when the step's updates began, as for bodies.
+   */
+  nearby<Tag extends string>(tag: Tag, x: number, y: number, radius: number, ignore: GameObject | null = null): Nearby<Tag>[] {
+    if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
+    const found: { collider: Collider; distance: number; order: number }[] = [];
+    // The circle's bounds, a pixel wider so a box that just touches the circle is looked at.
+    const bounds = { x: x - radius - 1, y: y - radius - 1, width: radius * 2 + 2, height: radius * 2 + 2 };
+    for (const entry of this.#indexOf(tag).query(bounds)) {
+      if (ignore !== null && componentOf(entry.collider) === ignore) continue;
+      const distance = distanceToBox(x, y, entry.box);
+      if (distance <= radius) found.push({ collider: entry.collider, distance, order: entry.order });
+    }
+    found.sort((a, b) => a.distance - b.distance || a.order - b.order);
+    return found.map(({ collider, distance }) => {
+      const box = this.#boxOf(collider);
+      const result = {
+        tag: collider.tag,
+        owner: collider.owner,
+        data: collider.data,
+        x: box.x + box.width / 2,
+        y: box.y + box.height / 2,
+        distance,
+      };
+      FOUND.set(result, collider);
+      return result as unknown as Nearby<Tag>;
+    });
+  }
+
+  /**
+   * Send `value` to the colliders with `tag` that `where` names: every one whose box comes within a circle (`{ x, y, radius }`), or the
+   * one collider a `nearby` result is. Delivered to their `onReceive` at the end of this step's update phase (after every
+   * `useUpdate` and timer), in the order sent, each send's receivers nearest first; a send made while delivering (from an
+   * `onReceive`) is delivered after the ones before it, in the same step. A send from outside a tick (a collision callback) is
+   * delivered at the end of the next step's update phase. A receiver that left the world by then hears nothing.
+   */
+  send<Tag extends string>(tag: Tag, where: SendTarget<Tag>, value: unknown): void {
+    this.#sends.push({ tag, where, value });
+  }
+
+  /** What `send` has queued for the end of the update phase. */
+  readonly #sends: { readonly tag: string; readonly where: SendTarget; readonly value: unknown }[] = [];
+
+  #deliver(): void {
+    let delivered = 0;
+    // Sends made by receivers join the end of the queue, so every one is delivered in order, in this step.
+    for (let i = 0; i < this.#sends.length; i++) {
+      const { tag, where, value } = this.#sends[i]!;
+      const one = FOUND.get(where);
+      const receivers: Collider[] =
+        one !== undefined
+          ? one.tag === tag && one.world === this
+            ? [one]
+            : []
+          : "radius" in where
+            ? this.nearby(tag, where.x, where.y, where.radius).map((found) => FOUND.get(found) as Collider)
+            : [];
+      for (const receiver of receivers) {
+        if (receiver.world !== this) continue;
+        (receiver.onReceive as ((value: unknown) => void) | undefined)?.(value);
+        if (++delivered > MAX_DELIVERIES)
+          throw new Error(
+            `More than ${MAX_DELIVERIES} values were delivered in one step: receivers are sending to each other without end (an onReceive that sends to its own tag?).`
+          );
+      }
+    }
+    this.#sends.length = 0;
+  }
+
   /** `BodySpace`: the tag of something solid in `box` (`"tile"` for a solid tile), or null. */
   solidIn(box: Box, ignore: GameObject): string | null {
     for (const map of this.#tilemaps) {
@@ -623,6 +698,29 @@ function colliderBox(collider: Collider): Box {
   const at = collider.worldTransform();
   return { x: at.x, y: at.y, width: collider.width, height: collider.height };
 }
+
+/**
+ * The component a collider belongs to: the nearest object above it that is not a built-in (a compiled component's class has no
+ * `intrinsic` of its own), or null.
+ */
+function componentOf(collider: Collider): GameObject | null {
+  // Starting at the collider: a component whose root is the `<Collider>` is that collider.
+  for (let at: GameObject | null = collider; at !== null; at = at.parent) if (!Object.hasOwn(at.constructor, "intrinsic")) return at;
+  return null;
+}
+
+/** The distance from a point to a box (0 inside it). */
+function distanceToBox(x: number, y: number, box: Box): number {
+  const dx = Math.max(box.x - x, 0, x - (box.x + box.width));
+  const dy = Math.max(box.y - y, 0, y - (box.y + box.height));
+  return Math.hypot(dx, dy);
+}
+
+/** The collider each `nearby` result is, so `send` can reach that one: results stay plain objects, and a result kept past its world reaches nothing. */
+const FOUND = new WeakMap<object, Collider>();
+
+/** More deliveries than this in one step is a loop of receivers sending to each other. */
+const MAX_DELIVERIES = 100_000;
 
 /** The key of the index of the solid colliders, whatever their tags (`solidIn`): not a tag a game can write. */
 const SOLID = "\u0000solid";

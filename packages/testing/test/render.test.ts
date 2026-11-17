@@ -30,7 +30,7 @@ const fields = (t: { state(): Record<string, unknown> }) => t.state().s as Recor
 let counter = 0;
 /** Compile a component file and import the generated module. */
 async function build<T>(source: string): Promise<T> {
-  const imports = `import { Collider, Entity, Pointer, Text, Tilemap, useBody, useMutable, useUpdate, useInput } from "@tsengine/runtime/jsx";\n`;
+  const imports = `import { Collider, Entity, Pointer, Text, Tilemap, nearby, send, useBody, useMutable, useUpdate, useInput } from "@tsengine/runtime/jsx";\n`;
   const result = compiler.compile("Test.tsx", imports + source);
   if (!result.ok) throw new Error(result.diagnostics.map(formatDiagnostic).join("\n"));
   const file = join(OUT, String(++counter), "Test.ts");
@@ -180,5 +180,43 @@ export function Counter() {
       5
     );
     assert.equal(fields(t).n, 15);
+  });
+});
+
+describe("nearby and send in a rendered component", () => {
+  const FIELD = `
+interface FoeProps { id: number; x: number; onHurt: (id: number, damage: number) => void }
+function Foe({ id, x, onHurt }: FoeProps) {
+  return <Collider x={x} y={0} width={10} height={10} tag="foe" data={{ id }} onReceive={(blast) => onHurt(id, blast.damage)} />;
+}
+export function Field() {
+  const s = useMutable({ log: [] as string[], aimed: -1, step: 0 });
+  useUpdate(() => {
+    s.step += 1;
+    if (s.step !== 2) return;
+    const foes = nearby("foe", 0, 5, 100);
+    s.aimed = foes.length > 0 ? foes[0]!.data.id : -1;
+    if (foes.length > 0) send("foe", foes[0]!, { from: 0, damage: 7 });
+    send("foe", { x: 200, y: 5, radius: 50 }, { from: 0, damage: 1 });
+  });
+  return (
+    <Entity>
+      <Foe id={1} x={60} onHurt={(id, damage) => (s.log = [...s.log, \`\${s.step}:\${id}:\${damage}\`])} />
+      <Foe id={2} x={20} onHurt={(id, damage) => (s.log = [...s.log, \`\${s.step}:\${id}:\${damage}\`])} />
+      <Foe id={3} x={190} onHurt={(id, damage) => (s.log = [...s.log, \`\${s.step}:\${id}:\${damage}\`])} />
+    </Entity>
+  );
+}`;
+
+  it("finds the nearest, and delivers to it and to a circle in the step they were sent", async () => {
+    const { Field } = await build<{ Field: new () => GameObject }>(FIELD);
+    const t = render(Field, {}, { collisions: true });
+    t.step();
+    assert.deepEqual(fields(t).log, []);
+    t.step();
+    assert.equal(fields(t).aimed, 2, "the foe at 20 is nearer than the one at 60");
+    assert.deepEqual(fields(t).log, ["2:2:7", "2:3:1"], "both delivered in step 2, in the order sent");
+    t.step(3);
+    assert.equal((fields(t).log as string[]).length, 2);
   });
 });
