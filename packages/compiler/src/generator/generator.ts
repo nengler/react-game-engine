@@ -531,7 +531,7 @@ class ComponentGenerator extends ElementEmitter {
 
       for (const hook of c.hooks) {
         switch (hook.kind) {
-          case "UseState": {
+          case "StateSlot": {
             if (hook.setterName === null) break;
             const s = this.state(hook.state);
             const type = typeText(s.type);

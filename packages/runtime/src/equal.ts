@@ -19,9 +19,9 @@ export function sameData(a: unknown, b: unknown): boolean {
 }
 
 /**
- * `previous` when `next` holds the same data, else `next`: an updater that renders only on a real change,
- * `setView((previous) => keepIfEqual(previous, readView()))`. A setter renders when it gets a different object, and a read
- * from a store usually builds a new one each time.
+ * `previous` when `next` holds the same data, else `next`: a write that renders only on a real change,
+ * `s.view = keepIfEqual(s.view, readView())`. A field renders when it gets a different object, and a read from a store
+ * usually builds a new one each time.
  */
 export function keepIfEqual<T>(previous: T, next: T): T {
   return sameData(previous, next) ? previous : next;

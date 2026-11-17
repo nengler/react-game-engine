@@ -347,7 +347,7 @@ export class ExpressionLowering extends LoweringBase {
     if (!this.computes()) {
       this.report(
         DiagnosticCode.UnsupportedExpression,
-        "`new` is only valid in a handler or in statements of the component body (which are worked out again only when what they read changes), not in a single expression: it would run on every render. Make the value once with `useState(() => new …)`, or in a `.ts` file.",
+        "`new` is only valid in a handler or in statements of the component body (which are worked out again only when what they read changes), not in a single expression: it would run on every render. Make it once as a `useMutable` field from a function that returns it (`useMutable({ seen: makeSeen() })`, with `function makeSeen() { return new Set<string>(); }`), or in a `.ts` file.",
         node
       );
       return null;

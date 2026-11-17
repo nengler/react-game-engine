@@ -131,7 +131,7 @@ export class LoweringBase {
   protected readonly storeImports: ReadonlySet<string>;
   /** Names of functions imported from relative `.ts` files, which a component may call and pass. */
   protected readonly plainImports: ReadonlySet<string>;
-  /** State made once per instance by a factory (`useState(() => createSquash())`), whose methods handlers may call. */
+  /** State made once per instance by a factory (`useMutable({ body: createBody(…) })`), whose methods handlers may call. */
   protected readonly handleStates = new Set<string>();
   /** The handles a runtime factory made (`createBody()`): only called, never written through. */
   protected readonly runtimeHandleStates = new Set<string>();
@@ -206,7 +206,7 @@ export class LoweringBase {
    * The type of an initial value, as TypeScript would infer it: literals, a
    * primitive prop (from its declaration in the props type), and operators
    * over those (`props.speed * 10` is a number, `n > 0` a boolean). Null
-   * when it cannot be told, and the author writes `useState<number>(…)`.
+   * when it cannot be told, and the author writes the type with `as`.
    */
   protected inferType(expr: ExprIR): ValueType | null {
     switch (expr.kind) {
@@ -500,7 +500,7 @@ export class LoweringBase {
     );
   }
 
-  protected claimName(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseState): boolean {
+  protected claimName(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseMutable): boolean {
     if (this.usedNames.has(name)) {
       this.report(code, `'${name}' is already declared or is reserved by the runtime.`, at);
       return false;
@@ -514,7 +514,7 @@ export class LoweringBase {
    * already has (`name` of an `<Entity>` root, `image` of a `<Sprite>`, `parent`), `$name`, so the author's name never clashes
    * with the root built-in. `$` names are the compiler's own. Null (after reporting) when this component already declared it.
    */
-  protected claimField(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseState): string | null {
+  protected claimField(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseMutable): string | null {
     if (!this.usedNames.has(name)) return this.claimName(name, at, code) ? name : null;
     if (!this.isRuntimeMember(name)) {
       this.report(code, `'${name}' is already declared in this component.`, at);
@@ -608,7 +608,7 @@ export class LoweringBase {
 
   /**
    * Whether a name the scope does not know is one the author did declare: after an error, the declaration that failed (a `const`
-   * whose value was refused, a `useState` without its type) left it out of the scope, and every read of it would be reported
+   * whose value was refused, a `useMutable` field without its type) left it out of the scope, and every read of it would be reported
    * again as unknown. Those reads are not: one mistake, one error.
    */
   protected declaredAfterError(name: string): boolean {

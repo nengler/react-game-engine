@@ -11,7 +11,7 @@ export const DiagnosticCode = {
   MissingImport: "TSE1005",
   HookNotAtTopLevel: "TSE1101",
   UnknownHook: "TSE1102",
-  InvalidUseState: "TSE1103",
+  InvalidUseMutable: "TSE1103",
   UnsupportedStateType: "TSE1104",
   /** Retired: `useTransform` was replaced by state written as `x` and `y` props. */
   InvalidUseTransform: "TSE1105",

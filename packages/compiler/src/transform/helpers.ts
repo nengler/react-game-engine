@@ -158,7 +158,7 @@ export const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
  * way on a built-in without an `opacity` of its own (`<Sprite>`, `<Flex>`, `<Tilemap>` and `<Layer>` have one): see
  * `isTransformShorthand`. Never on a component, where `x` is whatever the component's props say.
  */
-export const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", "rotation", "scaleX", "scaleY", "global"]);
+const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", "rotation", "scaleX", "scaleY", "global"]);
 
 /**
  * Whether `name` on the built-in `tag` is transform shorthand: one of `TRANSFORM_SHORTHAND`, or `opacity` on a built-in whose
@@ -170,7 +170,7 @@ export function isTransformShorthand(name: string, tag: string, members: Readonl
   return name === "opacity" && !(members[tag] ?? []).includes("opacity");
 }
 
-/** A declared prop's type as a state type (`useState(items)` takes the prop's type). */
+/** A declared prop's type as a state type (`useMutable({ items })` takes the prop's type). */
 export function propTypeToType(type: PropTypeIR): TypeIR | null {
   switch (type.kind) {
     case "Primitive":

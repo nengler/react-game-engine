@@ -491,7 +491,7 @@ function Pickup() {
 }`).map((d) => d.code);
     assert.deepEqual(codes("const a = 1; const a = 2;"), [DiagnosticCode.InvalidComponentBody]);
     assert.deepEqual(codes("const s = 1;"), [DiagnosticCode.InvalidComponentBody]);
-    assert.deepEqual(codes("const a = 1; const a = useMutable({ n: 0 });"), [DiagnosticCode.InvalidUseState]);
+    assert.deepEqual(codes("const a = 1; const a = useMutable({ n: 0 });"), [DiagnosticCode.InvalidUseMutable]);
     assert.deepEqual(codes("const a = b; const b = 1;"), [DiagnosticCode.UnknownIdentifier]);
     // An arrow in the body is a function of the component since 2026-11-13 (hooks-as-functions.test.ts).
     assert.ok(compile(`function C() { const f = () => 1; return <Entity />; }`).code.includes("readonly f = () =>"));

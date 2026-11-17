@@ -18,7 +18,7 @@ type StructureOp =
 export type ChildOrder = number | readonly number[];
 
 /** Negative, zero or positive as `a` sorts before, with or after `b`: numbers as they are, paths in turn, a number as a path of one. */
-export function compareOrder(a: ChildOrder, b: ChildOrder): number {
+function compareOrder(a: ChildOrder, b: ChildOrder): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
   const x = typeof a === "number" ? [a] : a;
   const y = typeof b === "number" ? [b] : b;

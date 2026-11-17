@@ -85,7 +85,7 @@ export function collectDependencies(expr: ExprIR): DependencyIR[] {
   return out;
 }
 
-export function sameDependency(a: DependencyIR, b: DependencyIR): boolean {
+function sameDependency(a: DependencyIR, b: DependencyIR): boolean {
   switch (a.kind) {
     case "State":
       return b.kind === "State" && a.state === b.state;
@@ -197,7 +197,7 @@ export function functionReadsParam(fn: FunctionIR, param: LocalId): boolean {
   return found;
 }
 
-/** Only the state slots an expression reads (what a `useState` initial value may not touch). */
+/** Only the state slots an expression reads (what a `useMutable` initial value may not touch). */
 export function stateReads(expr: ExprIR): StateId[] {
   return collectDependencies(expr).flatMap((d) => (d.kind === "State" ? [d.state] : []));
 }

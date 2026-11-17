@@ -1,12 +1,12 @@
 /**
  * Custom hooks, inlined at compile time. A hook is an ordinary function whose name starts with `use`, whose body is what a
- * component body may hold (`useState`, `useRef`, `useSound`, `useInput`, `useUpdate`, `useMount`, `useUnmount`, a selector on the
+ * component body may hold (`useMutable`, `useSound`, `useInput`, `useUpdate`, `useMount`, `useUnmount`, a selector on the
  * game state, derived constants, other custom hooks) and that ends in an optional `return`:
  *
  *     function usePlatformerBody(speed: number) {
- *       const [x, setX] = useState(0);
- *       useUpdate((dt) => { setX((x) => x + speed * dt); });
- *       return { x };
+ *       const s = useMutable({ x: 0 });
+ *       useUpdate((dt) => { s.x += speed * dt; });
+ *       return { x: s.x };
  *     }
  *     function Player() {
  *       const { x } = usePlatformerBody(90);
@@ -151,7 +151,7 @@ export function expandCustomHooks(
   let current = text;
   let counter = 0;
   let split = false;
-  // What a hook from another file imports from the authoring module (`useState`, `useUpdate`): its expansion needs those here.
+  // What a hook from another file imports from the authoring module (`useMutable`, `useUpdate`): its expansion needs those here.
   const needed = new Map<string, Set<string>>();
   // Diagnostics found in a pass point into that pass's text: move them back to the original.
   const remap = (from: number, passes: number): void => {
@@ -818,8 +818,8 @@ function expandCall(
       }
     }
   }
-  // A name the hook returns as it is (`return [squash, setSquash]`) takes the caller's name instead of a copy, so a hook can
-  // return a setter, as in React, and its value is the caller's own state.
+  // A name the hook returns as it is (`return s`, `return [squash, shake]`) takes the caller's name instead of a copy, so a hook
+  // can hand back its own `useMutable`, and the caller reads and writes it as its own state.
   const aliases = new Map<string, string>();
   const returned = returnStatement !== null && isReturnStatement(returnStatement) ? returnStatement.expression : undefined;
   if (

@@ -101,7 +101,7 @@ export interface ComponentIR {
 // ---------------------------------------------------------------------------
 
 /** Hook declarations. */
-export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
+export type HookIR = StateSlotHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
 
 /**
  * The fields of a transform (runtime `Entity.transform`), each written as a prop of a built-in (`<Entity x={…} global />`).
@@ -125,8 +125,9 @@ export interface SoundIR {
   readonly span: SourceSpan;
 }
 
-export interface UseStateHookIR {
-  readonly kind: "UseState";
+/** One state slot the component declares: a `useMutable` field, a value of the game state (`useGame`) or of a context. */
+export interface StateSlotHookIR {
+  readonly kind: "StateSlot";
   readonly state: StateId;
   /** Name of the generated setter method, or null if the setter was not bound. */
   readonly setterName: string | null;
@@ -167,18 +168,18 @@ export interface StateIR {
   readonly id: StateId;
   /** Field name on the generated class. */
   readonly name: string;
-  /** A primitive, an array (`useState<EnemyData[]>([])`) or a source type. */
+  /** A primitive, an array (`enemies: [] as EnemyData[]`) or a source type. */
   readonly type: TypeIR;
   /** Must not depend on any state. For a game-state leaf, the value it starts with. */
   readonly initialValue: ExprIR;
   /**
    * Set for `const hp = useGame((s) => s.player.hp)`: the dotted path (`"player.hp"`) of the game-state leaf this state
    * mirrors. The generated field is a snapshot of it, refreshed on render; it has no setter (actions change it).
-   * Absent for `useState`.
+   * Absent for a `useMutable` field.
    */
   readonly globalKey?: string;
   /**
-   * A per-instance object a factory made (`useState(() => createBody(…))`): its methods may be called, and it is told when the
+   * A per-instance object a factory made (`useMutable({ body: createBody(…) })`): its methods may be called, and it is told when the
    * component joins and leaves a world (`ownedHandles`), if it wants to know.
    */
   readonly handle?: true;

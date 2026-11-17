@@ -57,10 +57,10 @@ export const TOWER_LIST: readonly TowerDef[] = [TOWERS.bolt, TOWERS.mortar, TOWE
 
 export const MAX_LEVEL = 2;
 /** Each level adds this much damage and range. */
-export const DAMAGE_PER_LEVEL = 0.4;
-export const RANGE_PER_LEVEL = 0.1;
+const DAMAGE_PER_LEVEL = 0.4;
+const RANGE_PER_LEVEL = 0.1;
 /** What the upgrade to level 1 and to level 2 cost, as a share of the base cost. */
-export const UPGRADE_COST_SHARE: readonly [number, number] = [0.6, 1];
+const UPGRADE_COST_SHARE: readonly [number, number] = [0.6, 1];
 
 /** What a tower of this kind at this level does. */
 export interface TowerStats {

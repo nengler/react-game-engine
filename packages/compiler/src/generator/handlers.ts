@@ -111,12 +111,12 @@ export class HandlerEmitter extends ExpressionEmitter {
   }
 
   protected hasSetter(state: StateId): boolean {
-    return this.c.hooks.some((h) => h.kind === "UseState" && h.state === state && h.setterName !== null);
+    return this.c.hooks.some((h) => h.kind === "StateSlot" && h.state === state && h.setterName !== null);
   }
 
   protected setter(state: StateId): string {
     for (const hook of this.c.hooks) {
-      if (hook.kind === "UseState" && hook.state === state && hook.setterName !== null) return hook.setterName;
+      if (hook.kind === "StateSlot" && hook.state === state && hook.setterName !== null) return hook.setterName;
     }
     throw new Error(`State ${state} has no setter in component ${this.c.name}`);
   }

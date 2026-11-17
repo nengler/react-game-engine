@@ -211,7 +211,7 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
  * build folder), and the engine's by package (`@tsengine/runtime/src/World.ts`), with no `sourceRoot`: Node resolves them against the
  * script's place, beside the executable.
  */
-export function relativeSources(script: string, buildDir: string, gameDir: string): string {
+function relativeSources(script: string, buildDir: string, gameDir: string): string {
   const marker = "//# sourceMappingURL=data:application/json;base64,";
   const at = script.lastIndexOf(marker);
   if (at < 0) return script;

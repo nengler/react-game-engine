@@ -425,12 +425,14 @@ export function Swarm() {
     ]) {
       const found = errors(`function A() { const select = null; const c = ${call}; return <Entity />; }`);
       assert.ok(
-        found.some((d) => d.code === DiagnosticCode.InvalidUseState),
+        found.some((d) => d.code === DiagnosticCode.InvalidUseMutable),
         `${call}: ${JSON.stringify(found)}`
       );
     }
     assert.ok(
-      errors(`function A() { let c = useGame((s) => s.coins); return <Entity />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState)
+      errors(`function A() { let c = useGame((s) => s.coins); return <Entity />; }`).some(
+        (d) => d.code === DiagnosticCode.InvalidUseMutable
+      )
     );
     assert.ok(
       errors(`function A() { if (true) { const c = useGame((s) => s.coins); } return <Entity />; }`).some(

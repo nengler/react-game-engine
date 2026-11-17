@@ -44,7 +44,7 @@ interface TiledLayer {
 }
 
 /** Whether a layer is marked as data for the rules (the bool property `data`), not prefabs. */
-export function isDataLayer(layer: { readonly properties?: unknown }): boolean {
+function isDataLayer(layer: { readonly properties?: unknown }): boolean {
   return (
     Array.isArray(layer.properties) &&
     (layer.properties as TiledProperty[]).some((p) => p.name === "data" && (p as { value?: unknown }).value === true)
