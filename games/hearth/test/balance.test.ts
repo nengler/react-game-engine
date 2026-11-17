@@ -14,7 +14,7 @@ const expected = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.
 describe("balance", () => {
   const now = table();
 
-  it("matches the checked-in table (a change to a number in the rules is a change in difficulty: run `node packages/hearth/tools/balance.ts --write` if you meant it)", () => {
+  it("matches the checked-in table (a change to a number in the rules is a change in difficulty: run `node games/hearth/tools/balance.ts --write` if you meant it)", () => {
     assert.deepEqual(now, expected);
   });
 

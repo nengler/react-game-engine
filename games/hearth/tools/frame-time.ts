@@ -3,8 +3,8 @@
  * and the slowest frame (two steps: the replay plays at 2×) while wave 10 is on (the most enemies on the path), and with how many enemies, towers and shots that is.
  * Drawing in libtse is not in it. Runs under Node and, bundled, under the Rust host (QuickJS), where it reports the same way:
  *
- *   node packages/hearth/tools/frame-time.ts
- *   npm run bundle -- packages/hearth/tools/frame-time.ts host/dist/hearth-frames.js && host/target/release/tse-host host/dist/hearth-frames.js
+ *   node games/hearth/tools/frame-time.ts
+ *   npm run bundle -- games/hearth/tools/frame-time.ts host/dist/hearth-frames.js && host/target/release/tse-host host/dist/hearth-frames.js
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 

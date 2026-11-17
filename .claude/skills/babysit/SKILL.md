@@ -30,10 +30,10 @@ Run what the change touches, and for a CI fix show the failing check passing loc
 | --- | --- |
 | Anything | `npm run generate`, `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check` |
 | The guide (`docs/*.html`, `docs/guide.js`) | `npm run docs:index` (rebuilds `docs/search-index.js`, which every page loads; a test fails if it is stale) |
-| A game (`packages/kite`, `packages/hearth`, `packages/demo`, `games/swarm`) or the engine it uses | `npm run check:<game>` |
+| A game (`games/kite`, `games/hearth`, `games/demo`, `games/swarm`) or the engine it uses | `npm run check:<game>` |
 | `games/bramble`, packaging, `packages/cli`, or a package's exports | `npm run native:build:headless`, then `npm run check:outside` |
 | The player, runtime, compiler output, or anything on the frame path | `npm run bench:check` |
-| The Rust host or the parity between hosts | `npm run host:build:headless`, then `TSE_HOST_BIN=host/target/release/tse-host TSE_REQUIRE_HOST=1 node --test packages/demo/test/parity.test.ts` |
+| The Rust host or the parity between hosts | `npm run host:build:headless`, then `TSE_HOST_BIN=host/target/release/tse-host TSE_REQUIRE_HOST=1 node --test games/demo/test/parity.test.ts` |
 
 `check:<game>` compares against the Rust host only when `host/target/release/tse-host` exists; say so when it was not
 built. Bramble is not a workspace: after an engine change, `npm run bramble:install` repacks the engine into it.
@@ -78,5 +78,5 @@ is a failure: fix it before merging.
 ## Commits
 
 Engine changes (`packages/runtime`, `compiler`, `player`, `player-node`, `cli`, `native`, and `native/`, `host/`) and
-game changes (`packages/kite`, `packages/hearth`, `packages/demo`, `games/bramble`) go in separate commits. The design notes (`docs/DESIGN.md`, `docs/PLAYER.md`, `docs/LAYOUT.md`, a game's
+game changes (`games/kite`, `games/hearth`, `games/demo`, `games/bramble`) go in separate commits. The design notes (`docs/DESIGN.md`, `docs/PLAYER.md`, `docs/LAYOUT.md`, a game's
 `DESIGN.md`) and the guide (`docs/*.html`) change in the same PR as the behaviour they describe.

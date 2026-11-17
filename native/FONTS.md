@@ -13,7 +13,7 @@ build of libtse, and every game packaged with it, carries these fonts, so this f
 | `tse:micro5` | Micro 5, Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-micro) | SIL OFL 1.1 |
 | `tse:m5x7` | m5x7, by Daniel Linssen (https://managore.itch.io/m5x7) | CC0 1.0 |
 | `tse:silkscreen` | Silkscreen, Copyright 2001 The Silkscreen Project Authors (https://github.com/googlefonts/silkscreen) | SIL OFL 1.1 |
-| `tse:caps` | Kite's 5 × 7 capitals, from this repository (`packages/kite/assets/font.png`) | MIT, as the engine |
+| `tse:caps` | Kite's 5 × 7 capitals, from this repository (`games/kite/assets/font.png`) | MIT, as the engine |
 | `tse:arcade` | Press Start 2P, Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P" | SIL OFL 1.1 |
 | `tse:unscii` | unscii-8, by Viznut (http://viznut.fi/unscii/) | Public domain |
 | `tse:unscii-thin` | unscii-8-thin, by Viznut | Public domain |

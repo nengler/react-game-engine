@@ -1213,7 +1213,7 @@ keeps to the same names as `BUILTIN_FONTS`. Each is named for the font it comes 
 license reserves its name for the original. The OFL asks for its text to go with the fonts, so `native/FONTS.md` goes wherever
 libtse does. The digits share one advance in every font (a narrow `1` is centred in it), so a score or timer does not shift as
 it counts. Not done: advances for a font file. A sheet gives no widths, and reading them from its pixels would need the image
-on the TypeScript side, so a game's own font still moves a cell at a time. `tse preview packages/demo` shows every built-in on a
+on the TypeScript side, so a game's own font still moves a cell at a time. `tse preview games/demo` shows every built-in on a
 game screen at each resolution (`FontSampler` and its stories).
 
 ## Shape
@@ -1902,7 +1902,7 @@ and without it neither exists.
 
 ## Kite's movement with `useBody`, compared (2026-11-13)
 
-`packages/kite/src/Runner.tsx`, `packages/kite/test/runner.test.ts`.
+`games/kite/src/Runner.tsx`, `games/kite/test/runner.test.ts`.
 
 - **Same pixels.** The component and `stepBody` use the same mover (`moveActorX` / `moveActorY`) and the same numbers; the body
   finds solid tiles through `<Tilemap solid>` (`World.solidIn`) where the rules call `solidAt`. Six scripts, two rooms, walls and

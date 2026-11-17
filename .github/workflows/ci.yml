@@ -81,7 +81,7 @@ jobs:
       - name: C smoke test
         run: ctest --test-dir native/build-headless --output-on-failure
       - name: Node host against the real library
-        run: node --test --test-concurrency=1 "packages/player-node/test/*.test.ts" "packages/demo/test/*.test.ts"
+        run: node --test --test-concurrency=1 "packages/player-node/test/*.test.ts" "games/demo/test/*.test.ts"
         env:
           TSE_REQUIRE_NATIVE: "1"
       # The V8 build of a game: a Node single executable application. The parity run, packaged the same way, must print
@@ -90,11 +90,11 @@ jobs:
         run: |
           npm run package -- --engine node --headless
           npm run package -- --entry parity.ts --name parity --engine node --headless
-          node packages/demo/parity.ts > /tmp/parity-node.json
+          node games/demo/parity.ts > /tmp/parity-node.json
           cd /tmp
-          "$GITHUB_WORKSPACE/packages/demo/dist/parity/parity" > /tmp/parity-packaged.json
+          "$GITHUB_WORKSPACE/games/demo/dist/parity/parity" > /tmp/parity-packaged.json
           cmp /tmp/parity-node.json /tmp/parity-packaged.json
-          timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
+          timeout 5 "$GITHUB_WORKSPACE/games/demo/dist/demo/demo" || test $? -eq 124
 
   # The engine as an author outside this repository gets it: packed tarballs installed into a copy of games/bramble in a
   # temporary folder, then `tse check`, `tse package --headless` and a run of the packaged game (tools/check-outside.ts). A
@@ -159,7 +159,7 @@ jobs:
       - name: Build the host (software renderer)
         run: npm run host:build:headless
       - name: Parity with Node, and host behaviour
-        run: node --test --test-concurrency=1 packages/demo/test/parity.test.ts
+        run: node --test --test-concurrency=1 games/demo/test/parity.test.ts
         env:
           TSE_HOST_BIN: ${{ github.workspace }}/host/target/release/tse-host
           TSE_REQUIRE_HOST: "1"
@@ -167,7 +167,7 @@ jobs:
         run: |
           npm run package -- --engine quickjs --headless
           cd /tmp
-          timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
+          timeout 5 "$GITHUB_WORKSPACE/games/demo/dist/demo/demo" || test $? -eq 124
 
   # Last: ci-local runs every job in one checkout, and this job builds the windowed libtse and tse-host there, which the host
   # job's headless package would then pick up. On GitHub each job has its own machine, so the order only matters locally.
@@ -219,7 +219,7 @@ jobs:
       # One test file at a time: they all open windows on the same virtual display, and one run saw
       # GLFW fail once to connect to it ("X11: Failed to open display") while two files were opening windows.
       - name: Node host against the real library
-        run: xvfb-run -a node --test --test-concurrency=1 "packages/player-node/test/*.test.ts" "packages/demo/test/*.test.ts"
+        run: xvfb-run -a node --test --test-concurrency=1 "packages/player-node/test/*.test.ts" "games/demo/test/*.test.ts"
         env:
           TSE_REQUIRE_NATIVE: "1"
           TSE_NATIVE_LIB: ${{ github.workspace }}/native/build/libtse.so
@@ -234,9 +234,9 @@ jobs:
           npm run package -- --engine quickjs
           cd /tmp
           # The game runs until its window closes, so stopping it after five seconds (status 124) is the pass.
-          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
+          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/games/demo/dist/demo/demo" || test $? -eq 124
       - name: Package the demo with Node (V8) and run it under a virtual display
         run: |
           npm run package -- --engine node
           cd /tmp
-          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
+          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/games/demo/dist/demo/demo" || test $? -eq 124

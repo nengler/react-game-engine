@@ -3,8 +3,8 @@
  * room's start to its exit. The replays in `test/replays.ts` came from this and are checked by the tests; run it again
  * after changing a room or the movement constants.
  *
- *   node packages/kite/tools/solve.ts 3        (room number, 1-based)
- *   node packages/kite/tools/solve.ts all
+ *   node games/kite/tools/solve.ts 3        (room number, 1-based)
+ *   node games/kite/tools/solve.ts all
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

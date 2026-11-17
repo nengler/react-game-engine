@@ -4,7 +4,7 @@
  * 99th-percentile script time of a frame during wave 10 for each, the time a snapshot takes, and how long going back a few
  * seconds takes.
  *
- *   node packages/hearth/tools/rewind-cost.ts
+ *   node games/hearth/tools/rewind-cost.ts
  */
 import { createPlayer, parseInputScript, RecordingBackend, Rewind, type Backend, type Player } from "@tsengine/player";
 

@@ -369,7 +369,7 @@ export default function Main() {
 </script></pre>
 
   <h3>Built-in fonts</h3>
-  <p>The engine has pixel fonts built in, so a game at a small resolution needs no font file: give <code>font</code> a <code>tse:</code> name on a <code>&lt;Text&gt;</code>, or on <code>&lt;Game&gt;</code> for every text. Each is drawn at its own height unless the text has a <code>size</code> (use a whole multiple of the line to keep pixels square). Their letters keep their own widths, and their digits share one width, so a score does not shift as it counts. Try several: <code>tse preview packages/demo</code> shows each one on a game screen at 320 × 180, 480 × 270 and 640 × 360.</p>
+  <p>The engine has pixel fonts built in, so a game at a small resolution needs no font file: give <code>font</code> a <code>tse:</code> name on a <code>&lt;Text&gt;</code>, or on <code>&lt;Game&gt;</code> for every text. Each is drawn at its own height unless the text has a <code>size</code> (use a whole multiple of the line to keep pixels square). Their letters keep their own widths, and their digits share one width, so a score does not shift as it counts. Try several: <code>tse preview games/demo</code> shows each one on a game screen at 320 × 180, 480 × 270 and 640 × 360.</p>
   <div class="tablewrap"><table>
     <tr><th>Screen</th><th>Font</th><th>Line (px)</th><th>Look</th></tr>
     <tr><td rowspan="3">320 × 180</td><td><code>tse:small</code></td><td>6</td><td>Tom Thumb: 3 × 5, the smallest that reads</td></tr>
@@ -470,7 +470,7 @@ export function Hero() {
     <li>Bodies move in the order their components update, each against the world as it is at that moment. Others see a body through a <code>&lt;Collider&gt;</code> the component draws at its position.</li>
   </ul>
   <h3>Moving with plain functions</h3>
-  <p>A <code>useBody</code> component and plain functions produce the same movement. Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>packages/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceiling corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement. Use a component when only it does, and plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
+  <p>A <code>useBody</code> component and plain functions produce the same movement. Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>games/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceiling corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement. Use a component when only it does, and plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
   <p>Kite's plain movement functions read the same tile data as a <code>&lt;Tilemap&gt;</code>:</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // rules/rooms.ts: runs once when imported, before the game starts.

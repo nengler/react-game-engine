@@ -19,13 +19,13 @@ It needs Python 3 and Pillow (`pip install pillow`), and a folder holding the or
 | `m5x7.ttf` | the crate `m5x7` (1.0.0), `src/m5x7.ttf` |
 | `tiny5.woff`, `micro-5.woff`, `silkscreen.woff`, `jersey-10.woff`, `press-start-2p.woff` | the npm packages `@fontsource/<name>` (5.3), `files/<name>-latin-400-normal.woff` |
 
-`tse:caps` is read from `packages/kite/assets/font.png`. Then:
+`tse:caps` is read from `games/kite/assets/font.png`. Then:
 
     python3 tools/fonts/make-fonts.py <folder> [<preview folder>]
 
 and rebuild libtse (`npm run native:build`). With a preview folder it also writes each sheet there, enlarged, to look at.
-`tse preview packages/demo` shows every font on a game screen at 320 × 180, 480 × 270 and 640 × 360; after changing a font,
-store those again with `tse preview packages/demo --screenshot`.
+`tse preview games/demo` shows every font on a game screen at 320 × 180, 480 × 270 and 640 × 360; after changing a font,
+store those again with `tse preview games/demo --screenshot`.
 
 ## How a font is made
 

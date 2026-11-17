@@ -16,7 +16,7 @@ rules out of what the game tests), flying enemies, tower abilities, saving, sett
 ```
 npm run play:hearth     play it (a window; needs the native build)
 npm run check:hearth    compile, type-check, test, parity
-node packages/hearth/tools/balance.ts [--write]   the balance table
+node games/hearth/tools/balance.ts [--write]   the balance table
 ```
 
 ## What "finished" means

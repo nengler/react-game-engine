@@ -1,6 +1,6 @@
 # Assets
 
-`packages/kite/tools/make-assets.ts` (`npm run kite:assets`) writes everything here. The art and sound effects are Kenney's
+`games/kite/tools/make-assets.ts` (`npm run kite:assets`) writes everything here. The art and sound effects are Kenney's
 (https://kenney.nl, CC0: free to use, no attribution required); the files used are in `tools/kenney/`, and the script lays
 them out at the sizes the game reads. The font and the music are made in the script, in code. To change an asset, change the
 script (or swap a file in `tools/kenney/`) and run it.

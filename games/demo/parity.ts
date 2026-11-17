@@ -4,7 +4,7 @@
  * show). It runs unchanged under Node and, bundled, under the Rust host (QuickJS-ng): the two outputs must be
  * identical, which is the parity check in `test/parity.test.ts`.
  *
- *   node packages/demo/parity.ts
+ *   node games/demo/parity.ts
  */
 import { createPlayer, RecordingBackend, type InputFrame } from "@tsengine/player";
 

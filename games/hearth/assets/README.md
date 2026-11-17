@@ -1,6 +1,6 @@
 # Assets
 
-`packages/hearth/tools/make-assets.ts` (`npm run hearth:assets`) writes everything here but `font.png`, which is Kite's font
+`games/hearth/tools/make-assets.ts` (`npm run hearth:assets`) writes everything here but `font.png`, which is Kite's font
 copied across. The art and sound effects are Kenney's (https://kenney.nl, CC0: free to use, no attribution required); the
 files used are in `tools/kenney/`, and the script lays them out at the sizes the game reads. The music is made in the script, in
 code. To change an asset, change the script (or swap a file in `tools/kenney/`) and run it.

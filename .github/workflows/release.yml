@@ -94,7 +94,7 @@ jobs:
           TSE_NATIVE_LIB: ${{ github.workspace }}/dist/native/lib/${{ matrix.platform }}/headless/${{ matrix.platform == 'win32-x64' && 'tse.dll' || matrix.platform == 'linux-x64' && 'libtse.so' || 'libtse.dylib' }}
           TSE_REQUIRE_NATIVE: "1"
       - name: Parity of the headless tse-host with Node
-        run: node --test --test-concurrency=1 packages/demo/test/parity.test.ts
+        run: node --test --test-concurrency=1 games/demo/test/parity.test.ts
         env:
           TSE_HOST_BIN: ${{ github.workspace }}/dist/native/bin/${{ matrix.platform }}/headless/tse-host${{ matrix.platform == 'win32-x64' && '.exe' || '' }}
           TSE_REQUIRE_HOST: "1"
