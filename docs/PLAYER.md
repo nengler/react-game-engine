@@ -173,7 +173,10 @@ tests stay byte-identical): `SPRITE_REGION` sits beside `SPRITE`, a `<Flex>` wit
   leaves the old entry or the new one.
 - **Scaling a canvas.** With `TSE_OPEN_SHARP` (`<Game upscale="sharp">`), a canvas shown at a scale that is not a whole number is first
   copied at the next whole scale with nearest filtering, then down to size with bilinear: edges stay crisp and every game pixel is
-  the same size. Every draw of a render texture flips it, so both copies do.
+  the same size. Every draw of a render texture flips it, so both copies do. The canvas is laid over the window with blending off,
+  opaque, as the window's own pixels are: blending a translucent draw into it blends its alpha too (0.5 over 1 leaves 0.75), and
+  laid over with that alpha the border showed through. Blending alpha apart from colour would need separate blend factors, which
+  rlsw does not have.
 - **High-DPI displays** (ABI v14). `TSE_OPEN_HIGHDPI` asks raylib for a framebuffer at the display's density; the player sets it for
   every visible window (`WindowConfig.highDpi`, default true unless hidden, so screenshots and tests are the same size everywhere).
   raylib keeps the screen size and the mouse in logical pixels and draws to the window through a scale; libtse does the same for what

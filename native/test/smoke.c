@@ -327,6 +327,22 @@ static void test_highdpi(void) {
   tse_close();
 }
 
+/* Scenes drawn the same way into the window and into a canvas the window's size, which must then look the same: what is drawn
+ * translucently lowers the canvas's own alpha, and the canvas is still laid over the window as it is. */
+static void canvas_scene(int scene) {
+  view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x406080ffu);
+  switch (scene) {
+    case 0: rect(4, 4, 0, 1, 1, 16, 16, 0x00000080u); rect(10, 10, 0, 1, 1, 16, 16, 0xff000040u); break;
+    case 1: layer_begin(0x000000ffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 16, 16, C_RED); layer_end(TSE_BLEND_NORMAL, 0xffffff80u); break;
+    case 2: layer_begin(0x00000000u, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 16, 16, 0xff000080u); layer_end(TSE_BLEND_NORMAL, 0xffffff80u); break;
+    case 3: layer_begin(0x00000000u, TSE_BLEND_ADD); light(20, 24, 14, 0xff8040ffu); rect(40, 10, 0, 1, 1, 16, 16, 0x40404080u); layer_end(TSE_BLEND_ADD, 0xffffff80u); break;
+    case 4: layer_begin(0xffffffffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 16, 16, 0x00000080u); layer_end(TSE_BLEND_MULTIPLY, 0xffffff80u); break;
+    case 5: layer_begin(0x000000ffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 16, 16, 0x808080ffu); layer_end(TSE_BLEND_SCREEN, 0xffffff80u); break;
+    case 6: layer_begin(0x101010ffu, TSE_BLEND_ADD); rect(0, 0, 0, 1, 1, 16, 16, 0x30303080u); layer_end(TSE_BLEND_ADD, WHITE_RGBA); break;
+  }
+}
+enum { CANVAS_SCENES = 7 };
+
 int main(void) {
   test_overlaps(); /* needs no window */
   CHECK(tse_abi_version() == TSE_ABI_VERSION, "abi version");
@@ -575,6 +591,16 @@ int main(void) {
   expect(5, 5, CLEAR, "a bad canvas size draws nothing but the clear colour");
   reset(); view(1, 0, 0, 1, 0, 0); canvas(16, 9, 0, 6, 64, 36, C_GREEN); frame();
   expect(5, 5, CLEAR, "a canvas that is not first is refused");
+  for (int scene = 0; scene < CANVAS_SCENES; scene++) {
+    static uint8_t in_window[W * H * 4];
+    reset(); canvas_scene(scene); frame();
+    memcpy(in_window, pixels, sizeof(in_window));
+    reset(); canvas(64, 48, 0, 0, 64, 48, C_GREEN); canvas_scene(scene); frame();
+    int differ = 0, at = -1;
+    for (int i = 0; i < W * H * 4; i++) if (abs((int)pixels[i] - (int)in_window[i]) > 2 && differ++ == 0) at = i / 4;
+    CHECK(differ == 0, "scene %d in a canvas looks as it does in the window: %d channels differ, the first at (%d,%d), %02x%02x%02x not %02x%02x%02x", scene,
+          differ, at % W, at / W, pixels[at * 4], pixels[at * 4 + 1], pixels[at * 4 + 2], in_window[at * 4], in_window[at * 4 + 1], in_window[at * 4 + 2]);
+  }
 
   /* Layers: drawn off screen, then laid over what is below with a blend mode. */
   reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 32, 48, 0x808080ffu);
@@ -787,6 +813,8 @@ int main(void) {
   reset(); canvas(16, 9, 0, 0, 40, 22.5, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED); frame();
   expect(15, 10, C_RED, "inside a block at 2.5 times: its own colour, not blended");
   expect(3, 3, CLEAR, "outside it");
+  reset(); canvas(16, 9, 0, 0, 40, 22.5, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 16, 9, 0x406080ffu); rect(4, 2, 0, 1, 1, 4, 4, 0x00000080u); frame();
+  expect_near(15, 10, 0x203040ffu, "a translucent draw in a sharp canvas: blended with what is below it, not with the border");
   reset(); canvas(16, 9, 0, 0, 32, 18, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED); frame();
   expect(12, 6, C_RED, "an integer scale is untouched");
   reset(); canvas(16, 9, 0, 0, 8, 4.5, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED); frame();
