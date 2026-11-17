@@ -409,9 +409,7 @@
       ["TSE1105", "<code>useTransform</code>. Place an element with its <code>x</code> and <code>y</code> props, or <code>transform={{ … }}</code>."],
       ["TSE1204", "Props on a local or imported component. They are allowed."],
       ["TSE1303", "A non-constant initial state. An initial value may read state declared above it."],
-      ["TSE1304", "A <code>ref.current</code> read outside a handler. There are no refs: a value that never renders is a <code>useMutable</code> field."],
-      ["TSE1403", "A duplicate handler. A component may have several of one kind; they run in source order."],
-      ["TSE1404", "Conflicting writes to one ref."]]]
+      ["TSE1403", "A duplicate handler. A component may have several of one kind; they run in source order."]]]
   ];
   var dh = "";
   DIAG.forEach(function (g) {

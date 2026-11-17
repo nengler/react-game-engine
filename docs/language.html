@@ -147,7 +147,7 @@ mark { background: var(--accent-soft); color: inherit; }
 // This class extends Sprite: the component *is* a sprite.
 const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : "coin.png"} />;
 </script></pre>
-  <p>State, refs and props may use any name, including one the root built-in has: a <code>useMutable</code> called <code>name</code> on an <code>Entity</code> root, a <code>width</code> on a <code>Collider</code> root. The compiler keeps such a state in a field of its own (<code>$name</code>), so the entity's own <code>name</code> is untouched.</p>
+  <p>State and props may use any name, including one the root built-in has: a <code>useMutable</code> called <code>name</code> on an <code>Entity</code> root, a <code>width</code> on a <code>Collider</code> root. The compiler keeps such a state in a field of its own (<code>$name</code>), so the entity's own <code>name</code> is untouched.</p>
 
   <h3>Imports</h3>
   <ul>

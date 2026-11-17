@@ -29,7 +29,7 @@ Decisions, each still in force:
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `TSE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | `useMutable` (2026-11-14, replacing `useState` and React's snapshot): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. Every handler sees the latest writes, in the order handlers run (tree order); render sees the frame's committed state. See "State: `useMutable`" |
 | Global state | `createGameState(data, actions)` in `GameState.ts`, real code the game runs: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). Components read it with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (paths the compiler checks and subscribes to), read-only, and update it by calling an action from `useGame.actions()` in a handler. Per process, reset by the player. Decided 2026-11-09 as a Zustand store changed with `set`; that form was removed 2026-11-15. See "Global state" |
-| Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`TSE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
+| Values that never render | A `useMutable` field the JSX does not read (`useRef` is `TSE1102`, 2026-11-14). No `ref={…}` on elements or components (`TSE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Line>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
@@ -176,7 +176,7 @@ ignored):
   `<AnimatedSprite>`, `<Pointer>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. A value that never renders is a `useMutable`
-  field. There is no `ref={…}` on elements. See "Transforms and refs".
+  field. See "Transforms and sounds".
 * Hooks: top-level `useInput((input) => ...)`, `useUpdate((dt) => ...)`,
   `useMount(() => ...)` and `useUnmount(() => ...)` statements; each may
   appear several times and runs in source order.
@@ -262,12 +262,11 @@ after the component is unmounted a write through it does nothing and warns in de
 component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the setter, so tests and tools
 write state as handlers do.
 
-**No `useRef`.** A ref was a field that never renders, readable in handlers only. A `useMutable` field nothing in render reads
-costs no redraw: a write to it does run `render()`, but a render writes only what differs, and its parts that set a built-in's
+**No `useRef`.** A `useMutable` field nothing in render reads costs no redraw: a write to it does run `render()`, but a render writes only what differs, and its parts that set a built-in's
 props are guarded by what they read. (A keyed list is not guarded: every render of its component goes through the list's items
 again, comparing each one's props. With a field written every step, such as a clock, that is a pass over every list each step:
-see NEXT_PRIORITIES.md, "Compiler and language".) So two hooks for one kind of value were not worth keeping. A field cannot be written in `useUnmount` (`TSE1402`), which a ref could; to tell the parent, call a
-callback prop (`onGone?.()`). There is no `ref={…}` on elements either (`TSE1106`).
+see NEXT_PRIORITIES.md, "Compiler and language".) So one hook covers both kinds of value. A field cannot be written in `useUnmount` (`TSE1402`); to tell the parent, call a
+callback prop (`onGone?.()`). `ref={…}` on an element is `TSE1106`.
 
 **Things to know.**
 
@@ -314,8 +313,7 @@ Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
   keys on; the field name is a codegen detail chosen once in the transform.
 * `hooks: HookIR[]` lists hook declarations in source order; `state: StateIR[]`
   lists the persistent storage slots they create. They are separate because
-  hook order matters while storage does not. Refs are not hooks in the IR:
-  they live in `ComponentIR.refs` as typed values with an initial value.
+  hook order matters while storage does not.
 * `transform` is not a prop: elements carry `transform: TransformPropIR[]`,
   the same static/dynamic props, restricted to the transform fields and
   written to the element's runtime `transform`.
@@ -326,7 +324,7 @@ Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
 | --- | --- |
 | ~~`useUpdate`, `useInput`~~ | done: `OnUpdate` / `OnInput` hooks carrying a `FunctionIR` (IR kinds are named after the runtime methods they override); see "Handlers" |
 | ~~event props (`<Collider onCollisionEnter={…}>`)~~ | done: the same `CallbackProp` a component receives, with parameter types from the runtime manifest; see "Roots and component forms" |
-| ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
+| ~~transforms~~ | done: `ElementIR.transform` / `HostElementIR.transform`; see "Transforms and sounds" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | ~~arrays and records in handlers (M5a)~~ | done: `TypeIR` `Array` / `SourceType` for state, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`; see "Arrays and records" |
 | ~~prefabs / scenes (M6)~~ | done: `ComponentIR.isExported`, a generated `prefabs` registry per module, project-level `prefabs.ts` / `prefabs.json`, scene validation (`TSE15xx`), `loadScene` in the runtime, a Tiled importer; see "Prefabs and scenes" |
@@ -334,7 +332,7 @@ Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
 | ~~keyed lists (M5b)~~ | done: `ChildIR` `KeyedListChild { source, item, index, key, element, dependencies }`, `DependencyIR` `Item`; runtime `(slot, order)` and `queueReorder`; see "Keyed lists" |
 | ~~mount and unmount (M9)~~ | done: `OnMount` / `OnUnmount` hooks carrying a `FunctionIR`; see "Mount and unmount" |
 | ~~built-in elements (M10–M14)~~ | none: `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>` and `<Pointer>` are runtime classes plus manifest entries (`textContent`, `intrinsicLiterals`, `intrinsicHooks`, `intrinsicCallbacks`); see their sections |
-| ~~`useSound` (M15)~~ | done: `ComponentIR.sounds: SoundIR[]` and a `PlaySound` statement; see "Transforms and refs" |
+| ~~`useSound` (M15)~~ | done: `ComponentIR.sounds: SoundIR[]` and a `PlaySound` statement; see "Transforms and sounds" |
 
 ## Handlers
 
@@ -470,8 +468,8 @@ not hooks, and not all `const name = …`, is a **render block** (`RenderBlockAn
   Its value is `Memo(Block(fn))`: `this.$memo("$block1", [deps], () => (() => { … })())`, the deps being every state, prop and
   game-state path the block reads, so it runs again only when one of them changes (as a derived `const` that calls something).
   Each declared name is a derived value reading its member of the memo.
-- It runs during render, so a setter, a sound or an action called in it is `TSE1101` ("it runs on every render"), a ref read is
-  refused as anywhere outside a handler, and a `return` in it is refused: a component returns once, at its end.
+- It runs during render, so a setter, a sound or an action called in it is `TSE1101` ("it runs on every render"), and a `return` in it is
+  refused: a component returns once, at its end.
 - Declarations in it are `const` or `let` with one name each, for now; destructuring is refused with a message.
 
 `var` stays out, and a `while (true)` in a block hangs the render as it would in React.
@@ -601,7 +599,7 @@ drops, where the rules' events cannot help because the component does not know t
 **What it would cost, here more than in React.**
 
 - A frame late, per link: an effect runs after the render that saw the change; a setter it calls renders next frame,
-  and an effect that triggers another adds a frame each. Kite's first version, which compared counters with refs to play
+  and an effect that triggers another adds a frame each. Kite's first version, which compared counters to play
   sounds, was "one step late" for exactly this reason.
 - The patterns React's own docs warn against become the easy path: state copied from other state (here a derived
   `const` already does it), chains of effects that set state, and "when X changes, do Y" where Y belongs where X was changed.
@@ -620,7 +618,7 @@ drops, where the rules' events cannot help because the component does not know t
 | Run something when the component comes or goes | `useMount` / `useUnmount`. | Built |
 | Subscribe to something outside the game state, and stop | A cleanup returned from `useMount` (`useMount(() => settings.subscribe(…))`), with a handler able to hand an arrow to a function. See "A cleanup from `useMount`". `useStore(settings, read)` (as React's `useSyncExternalStore`) does both for a value to show; see "`useStore`". | Built (2026-11-12; `useStore` 2026-11-13) |
 | Start a component's state over when what it shows changes | `key` on any element, not only on a list's items (`<Dialogue key={talk.id} />`), React's own answer. See "Keyed elements". | Built (2026-11-12) |
-| A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's own setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
+| A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed only to call effect stores, sounds and `freeze` and to write the component's own state. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
 
 **The diagnostic.** `useEffect` and `useLayoutEffect` are `TSE1102` with a message that names these answers (`REMOVED_HOOKS`
 in `analyzer/model.ts`), not a bare "Unknown hook".
@@ -1184,7 +1182,7 @@ non-string `text`.
 (`const Badge = ({ points }) => <Text>+{points}</Text>`): the class extends
 `Text`, `text` is a required constructor prop that a dynamic root gets a
 placeholder for (as `Sprite.image` does), and `text`, `size` and `color` become
-names a state, ref or prop may not use.
+names a state or prop may not use.
 
 **Text wrappers** (2026-11-13). React shares a text style with a component, `<Label>Coins: {coins}</Label>`;
 here it failed four ways (no `TextChild` type to import, `children` had to be `Child`, `{children}` inside `<Text>` meant nothing,
@@ -1249,7 +1247,7 @@ restricting another built-in's prop is a manifest edit (a test does it to
 (`const Dot = ({ size }) => <Shape kind="circle" width={size} height={size} />`):
 the class extends `Shape`, the required props that vary get the usual
 constructor placeholders, and `kind`, `width`, `height` and `color` become names
-a state, ref or prop may not use.
+a state or prop may not use.
 
 ## Line
 
@@ -1381,8 +1379,7 @@ centres on the middle of their world positions; conditional children and a
 list (`<Camera>{units.map(…)}</Camera>`) work as anywhere, and the view moves as
 they come and go. This replaces what the plan sketched, `<Camera follow={hero} />`:
 that needed a way for a component to name another object, which nothing in the
-language provides (element refs were removed in M3 and state holds data, not
-objects), and wrapping the target says the same thing with nothing new.
+language provides (state holds data, not objects), and wrapping the target says the same thing with nothing new.
 
 **The camera is transparent to its children.** Following a child that the camera
 also moves would be circular (the child's position would depend on a camera that
@@ -1412,7 +1409,7 @@ ordinary transform nesting.
 **As a root.** A component may be a `Camera`
 (`const View = ({ zoom }) => <Camera zoom={zoom} />`): the class extends
 `Camera`, and `zoom`, `viewTransform`, `worldToView`, `viewToWorld` and
-`childSpace` become names a state, ref or prop may not use.
+`childSpace` become names a state or prop may not use.
 
 ## AnimatedSprite
 
@@ -1464,7 +1461,7 @@ the intrinsic classes override, so a new one cannot be forgotten. A component
 rooted at the sprite also cannot name state `frames`, `fps`, `playing`, `frame`,
 `elapsed` or `image`.
 
-## Transforms and refs
+## Transforms and sounds
 
 Components should read like React: what is on screen, position included, is a
 function of state. So there is no transform hook: position is ordinary state,
@@ -1544,10 +1541,6 @@ removed; calling it reports `TSE1102` with a pointer to the attribute
 **Cost**: moving every frame is a state change every frame, so the component
 renders once per tick (one render however many writes there were). `render()`
 re-evaluates only the parts whose inputs changed (see "Dependency-scoped `render()`").
-
-**No `useRef`** (removed 2026-11-14; why is in "State: `useMutable`"). The IR has no `RefIR`, `RefRead` or `RefCurrent`
-assignment target, and `TSE1304` (a `ref.current` read in JSX) is retired. `ref={…}` on any element is still `TSE1106`, and
-`useRef` is `TSE1102`.
 
 **useSound** (M15): `const playHit = useSound("hit.wav")` binds a sound, and
 `playHit()` as a statement in a handler (`useUpdate`, `useInput`, `useMount`,
@@ -1932,7 +1925,7 @@ override render(): void {
   at first, so the first render runs everything). Setters, `updateProps`, the game state's notifications, context and hot reload
   work as before, and a new instance (hot reload, rewind) starts unguarded.
 - Inputs are what `inputsOf` finds: state fields (game-state and context fields are state fields), and props. A part that reads
-  an element's own field (`route.active`), a ref, a handle, or calls the component's own function, a callback prop, an action or a
+  an element's own field (`route.active`), a handle, or calls the component's own function, a callback prop, an action or a
   local function is not guarded: its reads are not followed. Imported functions are pure, as everywhere in the compiler.
 - **What is guarded:** the root's values, and each element that is always there: an intrinsic's values (one test per element, as
   `emitReportedWrites` groups them) and a component's `updateProps`. Under a condition or in a list nothing is: an element made in
@@ -2262,7 +2255,7 @@ one-way platforms or slopes. Kite's `Runner` is written with it beside the rules
 
 ## Finding and hitting colliders: `nearby` and `send` (2026-11-17)
 
-A component has no handle on another (no refs, on purpose), so a tower defense's moves reached enemies through colliders made for
+A component has no handle on another (on purpose), so a tower defense's moves reached enemies through colliders made for
 it: a creature kept a body as big as its reach to see enemies (`overlapping`), handed each landing move up to its parent, which
 drew an effect whose `<Collider>` existed for one step with the blast as its `data`; every enemy it touched checked whether the
 blast was meant for it (a target id, or a distance, the collider being a square) and took the damage, a step after the move
@@ -2473,7 +2466,7 @@ like any component. Details:
   state exists, so when such a root prop is dynamic it gets `undefined as never`
   there and its real value in the first `render()`, which the constructor runs.
 * The class has the root's own fields (the manifest's `intrinsicMembers`) and every object's (`reservedMembers`). A
-  state, ref or sound whose name is one of them is kept in a field named `$name` instead, and its setter in `$setName` when
+  state or sound whose name is one of them is kept in a field named `$name` instead, and its setter in `$setName` when
   that is one (`claimField`, 2026-11-13): the author writes `name`, the generated code reads
   `this.$name`, and the entity's own `name` is untouched. Props cannot clash: they live in `this.props`. Before, such a name
   was `TSE1103`, a rule that followed from code the author never sees. `$` names are the compiler's own. Private fields

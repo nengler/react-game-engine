@@ -513,7 +513,7 @@ const byId = loadScene(world, scene, prefabs);   // Map of scene id → object, 
   </ol>
   <h3>What follows from this order</h3>
   <ul>
-    <li>State set in a handler shows at the next render. Refs are immediate.</li>
+    <li>A field written in a handler shows at the next render; the handler reads it back at once.</li>
     <li>Components see each other's changes a step apart. Every update in a step sees the state as the step began, so a value a child reports to its parent in a step (<code>onMove(x)</code>, then the parent's <code>setPlayerX</code>) reaches its siblings, by props or through context, in the next step. That is one step of lag between independent things, and it repeats exactly. Where it matters, a built-in reads its child directly, as <code>&lt;Camera&gt;</code> follows what it holds.</li>
     <li>Objects attached mid-frame get hooks next frame.</li>
     <li>With <code>fixedStep</code>, steps 2 to 4 above run once per whole step, and drawing runs once per frame. See <a href="effects.html#input">Input and timing</a>.</li>

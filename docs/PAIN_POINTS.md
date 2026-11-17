@@ -20,7 +20,7 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - Imported functions are assumed pure and not checked. A call in JSX runs on every render.
 - `useReducer` does not exist. A reducer is a plain function in a `.ts` file that a handler calls (`s.n = reducer(s.n, action)`).
 
-## 2. Refs on elements are missing on purpose
+## 2. No handle on a node, and no effects
 
 - There is no `ref={…}`, so no handle on a node (`TSE1106`).
 - `useMount` / `useUnmount` stand in for `useEffect(…, [])`, with an unusual order (mount runs children first, unmount runs the
@@ -67,7 +67,7 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 
 ## Different on purpose
 
-Said in the guide: no refs on elements, no spreading props onto a built-in, no render props or function children, no `async`
+Said in the guide: no `ref={…}` on elements, no spreading props onto a built-in, no render props or function children, no `async`
 handlers (the game's clock has timers: `after`, `every`), no `useEffect`. A render compares what it reads by `===`, so a
 value changed in place shows nothing, as in React. Inside `useUpdate`, `useBody`'s `x` and `y` are the step's snapshot even after
 `move`; `blocked` asks the body where it is now.
