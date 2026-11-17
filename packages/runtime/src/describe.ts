@@ -14,6 +14,8 @@
  */
 import { Collider } from "./components/Collider.ts";
 import { Entity } from "./components/Entity.ts";
+import { Flex } from "./components/Flex.ts";
+import { Pointer } from "./components/Pointer.ts";
 import { Text } from "./components/Text.ts";
 import { GameObject } from "./GameObject.ts";
 import { getGameTree } from "./gameTree.ts";
@@ -88,7 +90,7 @@ export interface SceneNode {
   readonly y: number;
   /** A `<Text>`'s words. */
   readonly text?: string;
-  /** A collider's tag and size. */
+  /** A collider's tag and size; the size of a `<Pointer>` or a laid-out `<Flex>`. */
   readonly tag?: string;
   readonly width?: number;
   readonly height?: number;
@@ -220,6 +222,14 @@ export function describeScene(root: GameObject | null = getGameTree()?.root ?? n
       if (object.tag !== "") out.tag = object.tag;
       out.width = round(object.width);
       out.height = round(object.height);
+    }
+    // What can be clicked says how big it is, so a click can find its middle.
+    if (object instanceof Pointer) {
+      out.width = round(object.width);
+      out.height = round(object.height);
+    } else if (object instanceof Flex && (object.onPress !== undefined || object.box.size[0]! > 0)) {
+      out.width = round(object.box.size[0]!);
+      out.height = round(object.box.size[1]!);
     }
     if (withProps) {
       // A component's props are what its parent passed; a built-in keeps what it was given as fields of its own.

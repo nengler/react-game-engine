@@ -132,8 +132,23 @@ export interface Player {
    * new root cannot be built or mounted; the state of the last good tree is kept for the next try. Clears an earlier failure.
    */
   reload(config: PlayerConfig): boolean;
+  /**
+   * What last frame was drawn through, for a tool that clicks or reports what is on screen (`Session.press`): the world → window
+   * view (the camera's, then the screen's placement), the same for the `<Hud>`, the root `<Screen>`'s place in the window (null
+   * without one), and the pressable things in draw order (from `hudPointersFrom` on, those inside a `<Hud>`).
+   */
+  readonly views: PlayerViews;
   /** Close the window and detach from the runtime. Safe to call twice. */
   close(): void;
+}
+
+/** What `Player.views` gives. */
+export interface PlayerViews {
+  readonly view: ViewTransform;
+  readonly hudView: ViewTransform;
+  readonly screen: ScreenPlacement | null;
+  readonly pointers: readonly Pressable[];
+  readonly hudPointersFrom: number;
 }
 
 /** What `Player.snapshotClock` captures. */
@@ -498,6 +513,9 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
 
   return {
     world,
+    get views(): PlayerViews {
+      return { view: input.view, hudView, screen, pointers, hudPointersFrom };
+    },
     get failure() {
       return failure === null ? null : { error: failure.error };
     },

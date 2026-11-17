@@ -43,11 +43,19 @@ export const COMMANDS: Readonly<Record<string, { readonly args: string; readonly
     does: "run steps with nothing pressed: `count` (default 1), or until `until` holds ({text}, {gone}, {component, path?, equals|not|above|below, absent?}, {path, …} on the game state), at most `maxSteps` (default 3600)",
   },
   type: { args: "text", does: "type characters into a text input (2 steps)" },
+  press: {
+    args: "query",
+    does: "click something by name as a player would (2 steps): `Pad[key=7]`, `MenuButton`, `StartButton`; the mouse goes to its middle as last frame drew it",
+  },
   observe: {
     args: "only?, depth?, maxNodes?, format?",
-    does: 'the scene as indented text (or `format: "json"`): each object\'s name, world position, texts, colliders, props and state; plus the game state. `only: "components"` lists only components and texts',
+    does: 'the scene as indented text (or `format: "json"`): each object\'s name, world position, texts, colliders, props and state; the part of the world on screen (`view`); and the game state. `only: "components"` lists only components and texts',
   },
   state: { args: "query?", does: "the game state; with `query` (a component's name), every such component's position and state" },
+  map: {
+    args: "around?, region?, maxColumns?",
+    does: "the level as text: its tilemaps one character a tile (# solid, other tiles by symbol, with a legend) and the game's things marked by letter with their positions; around a component (default: what the camera follows), or a region {x, y, width, height} in pixels",
+  },
   texts: { args: "", does: "the words of every <Text> on screen, in tree order" },
   snapshot: { args: "name", does: "keep the game as it is now under a name" },
   restore: { args: "name", does: "go back to a snapshot (fast; a built-in's own state, timers and particles start afresh)" },
@@ -219,6 +227,8 @@ export class SessionServer {
         });
         return { ...result };
       }
+      case "press":
+        return { at: session.press(text("query")) };
       case "type":
         return { steps: session.type(text("text")) };
       case "observe": {
@@ -232,7 +242,7 @@ export class SessionServer {
           ...(maxNodes !== undefined ? { maxNodes } : {}),
         };
         const scene = request["format"] === "json" ? session.scene(options) : session.sceneText(options);
-        return { scene, gameState: session.gameState() };
+        return { scene, view: session.view(), gameState: session.gameState() };
       }
       case "state":
       case "find": {
@@ -240,6 +250,28 @@ export class SessionServer {
         if (query === undefined) return { gameState: session.gameState() };
         if (typeof query !== "string") throw new RequestError('"query" is a component\'s name.');
         return { matches: session.find(query) };
+      }
+      case "map": {
+        const around = request["around"];
+        if (around !== undefined && typeof around !== "string") throw new RequestError('"around" is a component\'s name.');
+        const region = request["region"];
+        if (
+          region !== undefined &&
+          !(
+            typeof region === "object" &&
+            region !== null &&
+            ["x", "y", "width", "height"].every((k) => typeof (region as Record<string, unknown>)[k] === "number")
+          )
+        )
+          throw new RequestError('"region" is {x, y, width, height}, in pixels.');
+        const maxColumns = number("maxColumns");
+        return {
+          map: session.map({
+            ...(around !== undefined ? { around } : {}),
+            ...(region !== undefined ? { region: region as { x: number; y: number; width: number; height: number } } : {}),
+            ...(maxColumns !== undefined ? { maxColumns } : {}),
+          }),
+        };
       }
       case "texts":
         return { texts: session.texts() };
@@ -350,9 +382,11 @@ const MAIN_ARG: Readonly<Record<string, string>> = {
   type: "text",
   step: "count",
   observe: "only",
+  map: "around",
   state: "query",
   find: "query",
   snapshot: "name",
+  press: "query",
   restore: "name",
   screenshot: "out",
 };

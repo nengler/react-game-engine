@@ -18,9 +18,11 @@ import {
   describeScene,
   findComponents,
   liveGameStores,
+  sceneMap,
   sceneText,
   Text,
   type DescribeOptions,
+  type MapOptions,
   type GameObject,
   type GameStore,
   type HotState,
@@ -30,6 +32,7 @@ import {
 import { createPlayer, type Player, type PlayerClock, type PlayerConfig } from "./loop.ts";
 import { applyInputFrame, RecordingBackend, type InputFrame } from "./recording.ts";
 import { hashState } from "./rewind.ts";
+import { onScreen } from "./screen.ts";
 import { parseInputScript, type InputBindings, type ScriptOptions } from "./script.ts";
 
 export interface SessionOptions {
@@ -245,17 +248,99 @@ export class Session {
     return sceneText(this.scene(options));
   }
 
+  /** The level as text: its tilemaps a character a tile, with the game's things marked by letter (see `sceneMap`). */
+  map(options: MapOptions = {}): string {
+    return sceneMap(this.#root(), options);
+  }
+
   /** The words of every `<Text>` in the tree, in tree order. */
   texts(): string[] {
     const root = this.#root();
     return root === null ? [] : findComponents(Text, root).map((t) => t.text);
   }
 
-  /** Every component (or built-in) matching `query` (a name or class name), with where it is and its state. */
-  find(query: string): { name: string; key?: string | number; x: number; y: number; state: Record<string, unknown> }[] {
+  /** Every object matching `query`: a name or class name, with a list key as `Pad[key=7]`. */
+  #findAll(query: string): GameObject[] {
     const root = this.#root();
     if (root === null) return [];
-    return findComponents(query, root).map((object) => {
+    const keyed = /^(.+)\[key=(.*)\]$/.exec(query);
+    if (keyed === null) return findComponents(query, root);
+    return findComponents(keyed[1] as string, root).filter((object) => String(object.hotKey) === keyed[2]);
+  }
+
+  /**
+   * Click something by name, as a player would: the mouse goes to its middle as last frame drew it (through the camera, or the
+   * HUD's view for something in a `<Hud>`), and the left button is pressed for a step and let go the next. The click is input like
+   * any other, so `history`, `replay` and a screenshot have it. `query` is a name, a class name or `Pad[key=7]`; the thing or the
+   * first pressable inside it (a `<Pointer>`, `<Button>`, a `<Flex onPress>`) takes the click. Returns where the mouse went, in
+   * window pixels.
+   */
+  press(query: string): { readonly x: number; readonly y: number } {
+    const target = this.#findAll(query)[0];
+    if (target === undefined) throw new Error(`press: nothing called '${query}' is in the tree.`);
+    const { view, hudView, screen, pointers, hudPointersFrom } = this.#player.views;
+    const inside = (object: GameObject): boolean => {
+      for (let up: GameObject | null = object; up !== null; up = up.parent) if (up === target) return true;
+      return false;
+    };
+    const index = pointers.findIndex((p) => inside(p as unknown as GameObject));
+    if (index === -1) {
+      const named = [...new Set(pointers.map((p) => nameOf(p as unknown as GameObject)))].slice(0, 20);
+      throw new Error(
+        `press: '${query}' has nothing pressable drawn in it (a <Pointer>, a <Button>, a <Flex onPress>).${named.length > 0 ? ` Pressable now: ${named.join(", ")}.` : ""}`
+      );
+    }
+    const pressable = pointers[index] as unknown as GameObject & { contains(x: number, y: number): boolean };
+    const layer = index >= hudPointersFrom ? hudView : view;
+    const at = middleOf(pressable);
+    const x = layer.a * at.x + layer.c * at.y + layer.e;
+    const y = layer.b * at.x + layer.d * at.y + layer.f;
+    if (screen !== null && !onScreen(screen, x, y))
+      throw new Error(`press: '${query}' is off the screen (at ${Math.round(x)}, ${Math.round(y)} in the window).`);
+    const mouse = { x, y };
+    this.#play({ mouse, pressed: ["MouseLeft"], down: ["MouseLeft"] });
+    this.#play({ mouse, released: ["MouseLeft"] });
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  }
+
+  /** The part of the world on screen as last frame drew it, in world pixels (the camera's view; the whole game without one). */
+  view(): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+    const { view, screen } = this.#player.views;
+    const window =
+      screen === null
+        ? { left: 0, top: 0, width: this.window.width, height: this.window.height }
+        : {
+            left: screen.left,
+            top: screen.top,
+            width: screen.width * screen.scaleX,
+            height: screen.height * screen.scaleY,
+          };
+    const det = view.a * view.d - view.b * view.c;
+    const back = (wx: number, wy: number): { x: number; y: number } => {
+      const dx = wx - view.e;
+      const dy = wy - view.f;
+      return { x: (view.d * dx - view.c * dy) / det, y: (view.a * dy - view.b * dx) / det };
+    };
+    const corners = [
+      back(window.left, window.top),
+      back(window.left + window.width, window.top),
+      back(window.left, window.top + window.height),
+      back(window.left + window.width, window.top + window.height),
+    ];
+    const xs = corners.map((c) => c.x);
+    const ys = corners.map((c) => c.y);
+    const r = (n: number): number => Math.round(n * 10) / 10;
+    return {
+      x: r(Math.min(...xs)),
+      y: r(Math.min(...ys)),
+      width: r(Math.max(...xs) - Math.min(...xs)),
+      height: r(Math.max(...ys) - Math.min(...ys)),
+    };
+  }
+
+  /** Every component (or built-in) matching `query` (a name, a class name or `Pad[key=7]`), with where it is and its state. */
+  find(query: string): { name: string; key?: string | number; x: number; y: number; state: Record<string, unknown> }[] {
+    return this.#findAll(query).map((object) => {
       const at = object.worldTransform();
       return {
         name: object.constructor.name,
@@ -293,7 +378,7 @@ export class Session {
     const compares = until.equals !== undefined || until.not !== undefined || until.above !== undefined || until.below !== undefined;
     if (until.component !== undefined) {
       const root = this.#root();
-      const found = root === null ? undefined : findComponents(until.component, root)[0];
+      const found = root === null ? undefined : this.#findAll(until.component)[0];
       let ok: boolean;
       if (found === undefined) ok = false;
       else if (until.path === undefined) ok = true;
@@ -382,6 +467,37 @@ export class Session {
   close(): void {
     this.#player.close();
   }
+}
+
+/** An object's name for a message: its class's, with its list key. */
+function nameOf(object: GameObject): string {
+  // A built-in is named by what holds it: the nearest component or named <Entity> (a component's name is its own).
+  const nameOfOne = (o: GameObject): string => {
+    const name = (o as { name?: unknown }).name;
+    return typeof name === "string" && name !== "" ? name : "";
+  };
+  let named: GameObject = object;
+  while (named.parent !== null && nameOfOne(named) === "") named = named.parent;
+  const name = nameOfOne(named) || named.constructor.name;
+  return named.hotKey !== undefined ? `${name}[key=${String(named.hotKey)}]` : name;
+}
+
+/** The middle of a pressable as it is drawn, in its layer's coordinates (its world position when its size is not known). */
+function middleOf(object: GameObject & { contains(x: number, y: number): boolean }): { x: number; y: number } {
+  const t = object.worldTransform();
+  const fields = object as unknown as {
+    width?: unknown;
+    height?: unknown;
+    originX?: unknown;
+    originY?: unknown;
+    box?: { size: ArrayLike<number> };
+  };
+  const width = fields.box !== undefined ? (fields.box.size[0] as number) : typeof fields.width === "number" ? fields.width : 0;
+  const height = fields.box !== undefined ? (fields.box.size[1] as number) : typeof fields.height === "number" ? fields.height : 0;
+  const ox = typeof fields.originX === "number" ? fields.originX : 0;
+  const oy = typeof fields.originY === "number" ? fields.originY : 0;
+  const middle = { x: t.x + (width / 2 - ox) * t.scaleX, y: t.y + (height / 2 - oy) * t.scaleY };
+  return object.contains(middle.x, middle.y) ? middle : { x: t.x, y: t.y };
 }
 
 /** The value at a dotted path: `s.hp`, `enemies.length`, `towers.0.level`. */

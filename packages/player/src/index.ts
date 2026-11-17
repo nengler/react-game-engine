@@ -27,6 +27,7 @@ export {
   type Player,
   type PlayerClock,
   type PlayerConfig,
+  type PlayerViews,
 } from "./loop.ts";
 export { hashState, replayMoment, Rewind, type Moment, type RewindOptions } from "./rewind.ts";
 export * from "./protocol.ts";

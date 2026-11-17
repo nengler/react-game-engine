@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `Session`: a game driven a step at a time, read as text, snapshotted and played again. */
 import { describe, it } from "node:test";
 
-import { createGameState, Entity, Text, type InputState } from "@tsengine/runtime";
+import { Camera, createGameState, Entity, Hud, Pointer, Text, type InputState } from "@tsengine/runtime";
 
 import { parseInputScript, runScript, Session, valueAt, type PlayerConfig } from "../src/index.ts";
 
@@ -132,6 +132,71 @@ describe("Session", () => {
     const session = new Session(config, { bindings, storeNames: new Map([[useScore.store, "useScore"]]) });
     assert.deepEqual(Object.keys(session.gameState()), ["useScore"]);
     assert.deepEqual(session.takeWarnings(), []);
+    session.close();
+  });
+});
+
+/** A field with a camera on a hero far to the right, a button in the world near it and one on the HUD, and a list of keyed tiles. */
+class Field extends Entity {
+  static readonly managed = true;
+  presses: string[] = [];
+  constructor() {
+    super({ name: "Field" });
+    const camera = new Camera({});
+    const hero = new Entity({ name: "Hero" });
+    hero.transform.x = 1000;
+    hero.transform.y = 500;
+    camera.addChild(hero);
+    this.addChild(camera);
+    const button = new Pointer({ width: 20, height: 10 });
+    button.onPress = () => this.presses.push("world");
+    const holder = new Entity({ name: "WorldButton" });
+    holder.transform.x = 990;
+    holder.transform.y = 480;
+    holder.addChild(button);
+    this.addChild(holder);
+    const hud = new Hud({});
+    const menu = new Pointer({ width: 40, height: 12 });
+    menu.onPress = () => this.presses.push("hud");
+    const holderHud = new Entity({ name: "MenuButton" });
+    holderHud.transform.x = 4;
+    holderHud.transform.y = 4;
+    holderHud.addChild(menu);
+    hud.addChild(holderHud);
+    this.addChild(hud);
+    for (const key of [1, 2]) {
+      const tile = new Entity({ name: "Tile" });
+      tile.hotKey = key;
+      const p = new Pointer({ width: 10, height: 10 });
+      p.onPress = () => this.presses.push(`tile ${key}`);
+      tile.transform.x = 900 + key * 20;
+      tile.transform.y = 450;
+      tile.addChild(p);
+      this.addChild(tile);
+    }
+    this.addChild(new Entity({ name: "Plain" }));
+  }
+  override saveHotState(): Record<string, unknown> {
+    return { "Field.presses": this.presses.join(",") };
+  }
+}
+
+describe("Session.press and view", () => {
+  it("clicks a thing by name through the camera, or through the HUD's view, as two recorded steps", () => {
+    let field: Field | null = null;
+    const session = new Session({ root: () => (field = new Field()), width: 320, height: 180 });
+    assert.deepEqual(session.view(), { x: 840, y: 410, width: 320, height: 180 }, "the camera centres the hero");
+    assert.deepEqual(session.press("WorldButton"), { x: 160, y: 75 }, "its middle (1000, 485), through the view");
+    assert.equal(session.frame, 2);
+    session.press("MenuButton");
+    session.press("Tile[key=2]");
+    assert.deepEqual(field!.presses, ["world", "hud", "tile 2"]);
+    assert.deepEqual(session.history[0]?.pressed, ["MouseLeft"]);
+    session.replay();
+    assert.deepEqual(field!.presses, ["world", "hud", "tile 2"], "a replay clicks the same");
+    assert.throws(() => session.press("Nobody"), /nothing called 'Nobody'/);
+    assert.throws(() => session.press("Plain"), /'Plain' has nothing pressable.*Pressable now: .*WorldButton.*MenuButton/);
+    assert.equal(session.find("Tile[key=1]").length, 1);
     session.close();
   });
 });

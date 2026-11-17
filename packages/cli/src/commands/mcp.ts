@@ -21,7 +21,7 @@ const KNOWN_VERSIONS = new Set(["2024-11-05", "2025-03-26", "2025-06-18"]);
 const INSTRUCTIONS = `A game made with tse, running headless: nothing is drawn unless you ask for a screenshot. The game steps 60 times a
 second of game time, and only when you play input or step it. Play input with game_input (a script such as "right*30, jump, _*10":
 a name is one of the game's actions or a key name, *N holds it N steps, + starts terms together, _ waits). Read the game with
-game_observe (the scene as text: each object, its world position, texts, colliders and state) and game_state. Keep a moment with
+game_observe (the scene as text: each object, its world position, texts, colliders and state), game_map (the level drawn in characters, with things marked) and game_state. Keep a moment with
 game_snapshot and go back with game_restore. After changing the game's source, game_reload compiles it and plays the same input again
 with the new code. Positions are in pixels, y grows downward.`.replace(/\n/g, " ");
 
@@ -68,12 +68,24 @@ const SCHEMAS: Readonly<Record<string, Record<string, unknown>>> = {
     maxSteps: num("With until: the most steps to run (default 3600, a minute)."),
   }),
   type: schema({ text: str("The characters to type; \\b is Backspace.") }, ["text"]),
+  press: schema({ query: str("What to click: a name or class name (`StartButton`), or a list item (`Pad[key=7]`).") }, ["query"]),
   observe: schema({
     only: { type: "string", enum: ["all", "components"], description: '"components": only components and texts (shorter).' },
     depth: num("How many levels below the root to describe."),
     maxNodes: num("The most objects to describe (default 400)."),
   }),
   state: schema({ query: str("A component's name: every such component's position and state. Without it: the game state.") }),
+  map: schema({
+    around: str("A component's name: draw the tilemap it stands on (default: what the camera follows)."),
+    region: {
+      type: "object",
+      description: "The part of the world to draw, in pixels.",
+      properties: { x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" } },
+      required: ["x", "y", "width", "height"],
+      additionalProperties: false,
+    },
+    maxColumns: num("The widest the map may be, in characters (default 120)."),
+  }),
   texts: schema(),
   snapshot: schema({ name: str("A name for the snapshot.") }, ["name"]),
   restore: schema({ name: str("The snapshot to go back to.") }, ["name"]),

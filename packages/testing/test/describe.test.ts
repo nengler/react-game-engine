@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** The tree as text: `describeScene`, `sceneText` and `Rendered.describe`. */
 import { describe, it } from "node:test";
 
-import { Collider, Entity, Sprite, Text } from "@tsengine/runtime";
+import { Collider, Entity, Pointer, Sprite, Text } from "@tsengine/runtime";
 
 import { describeScene, render, sceneText } from "../src/index.ts";
 
@@ -70,6 +70,12 @@ describe("describing a scene", () => {
     const few = describeScene(t.root, { maxNodes: 2 });
     assert.equal(few.children.length, 1);
     assert.equal(few.omitted, 3);
+  });
+
+  it("gives what can be clicked its size", () => {
+    const holder = new Entity({ name: "Button" });
+    holder.addChild(new Pointer({ width: 30, height: 12 }));
+    assert.equal(sceneText(describeScene(holder)), ["Button @(0,0)", "  Pointer 30×12"].join("\n"));
   });
 
   it("describes the running game's tree when given no root, and says so when there is none", () => {
