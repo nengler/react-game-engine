@@ -423,6 +423,9 @@ Script time only, on the recording backend:
   from blended transforms is put back. A `<Flex>` outside a `<Hud>` is placed by layout, so a world with one is built as before.
   `retain: "check"` builds as well and requires the same colliders. Swarm with 1,500 enemies 0.1 to 1 ms faster; Hearth's wave 10
   about 0.08 ms.
+- **Blending reads a list, not the tree** (2026-11-17). The capture after a step lists the objects whose own transform or placement
+  the step changed, and `blend` moves those; it used to walk every object that was not settled to find them. 0.42 to 0.18 ms a
+  frame with Swarm's 1,500 enemies.
 - **A keyed list whose keys did not change skips its bookkeeping** (2026-11-17): the duplicate check, the scan for removed items and
   the reorder, when the keys are the same, in the same order, as at its last render. `applyProps` walks props with `for…in`, not
   `Object.keys`. A reorder writes the slot's run of children in place instead of sorting them all, and which hooks an object has is a

@@ -108,6 +108,10 @@ Engine, in the order found:
    the index no longer keeps a map entry for every collider and every enemy's entity. On a fixed crowd of 1,500, a query went
    from about 1,100 to 450 ns and making the index from 0.5 to 0.2 ms.
 
+8. **Drawing between steps walked the whole tree to find what had moved.** The interpolator's `blend` visited every object, three an
+   enemy, to move one. The capture after each step now lists the objects whose own transform changed, and `blend` reads the list:
+   0.42 to 0.18 ms a frame at 1,500 enemies. The capture (0.44 ms) and putting the transforms back (0.09 ms) are as they were.
+
 Measured A/B on the same game, the engine before and after 7 (2026-11-17, medians, old then new in turn): 1,000 enemies 5.5 to
 4.7 ms, 1,500 about 9.3 to 7.9, 1,500 armed about 14 to 12.9, 3,000 about 21.8 to 17. The table above was taken before 7.
 
@@ -116,7 +120,7 @@ that, 1 and 2 took 2,000 enemies from 38 to 24 ms.
 
 The game, and what it says about writing one:
 
-8. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
+9. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
    speed (40 px/s, at most four neighbours), the crowd behind always won: one 32-pixel cell held 169 enemies and thirty stood on
    one pixel, and every `nearby` in the pile looked at all of them. Stopping at the player and stepping out of each overlap keeps
    the busiest cell under fifty. It is the largest single change here (15 to 11 ms). It is kept because the pile was wrong to

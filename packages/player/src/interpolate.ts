@@ -85,6 +85,11 @@ const LIMIT = [
 export class Interpolator {
   #stamp = 0;
   readonly #cameras = new Map<Camera, { prev: CameraViewState; cur: CameraViewState; stamp: number }>();
+  /**
+   * The objects whose own transform or placement the last step changed, as the last capture met them: all `blend` has to look at.
+   * (It used to walk the tree for them, past every settled leaf of everything that moved: three objects an enemy, to find one.)
+   */
+  readonly #movers: GameObject[] = [];
   /** The objects `blend` moved, for `restore`. */
   readonly #blended: GameObject[] = [];
   readonly #cameraViews: [Camera, CameraViewState][] = [];
@@ -103,6 +108,7 @@ export class Interpolator {
     // The frame builder advances the serial once a frame; when it does not (no world, or `retain: false`), nothing can be skipped.
     const since = serial > this.#serial ? this.#serial : -1;
     this.#serial = serial;
+    this.#movers.length = 0;
     this.#capture(root, stamp, since);
     for (const camera of this.#cameras.keys()) if (camera.world === null) this.#cameras.delete(camera);
   }
@@ -130,6 +136,7 @@ export class Interpolator {
         break;
       }
     }
+    if (!settled) this.#movers.push(object);
     if (object instanceof Camera) {
       settled = false; // a camera's view state is kept every step
       const view = object.saveView();
@@ -150,7 +157,7 @@ export class Interpolator {
   blend(root: GameObject, t: number): boolean {
     if (!(t >= 0 && t < 1) || this.#stamp === 0) return false;
     const stamp = this.#stamp;
-    this.#blend(root, 1 - t, stamp);
+    this.#blend(root, 1 - t);
     // Drawing a camera's view writes what it remembers of the last view (from the blended children, here): every camera's state is
     // kept, to be put back after the frame, whether or not it is blended itself.
     for (const camera of this.#cameras.keys()) this.#cameraViews.push([camera, camera.saveView()]);
@@ -175,38 +182,37 @@ export class Interpolator {
   }
 
   /** `back` is 1 − t: how far back from the last step to draw. */
-  #blend(object: GameObject, back: number, stamp: number): void {
-    const s = object.interpolation;
-    if (s !== null && s[SETTLED] === 1) return; // nothing under it moved in the last step
-    // Only what is still as the last step left it (a frame with no step may have settled a render since), and only a change small
-    // enough to be motion rather than a jump.
-    if (s !== null && s[STAMP] === stamp && unchanged(object, s)) {
-      let moved = false;
+  #blend(root: GameObject, back: number): void {
+    const movers = this.#movers;
+    const world = root.world;
+    for (let m = 0; m < movers.length; m++) {
+      const object = movers[m] as GameObject;
+      // One that has left the tree since the capture is not drawn. (With no world at all, a root on its own, nothing can tell.)
+      if (object.world !== world) continue;
+      const s = object.interpolation as Float64Array;
+      // Only what is still as the last step left it (a frame with no step may have settled a render since), and only a change small
+      // enough to be motion rather than a jump.
+      if (!unchanged(object, s)) continue;
       let jumped = false;
       for (let i = 0; i < N; i++) {
-        const d = (s[CUR + i] as number) - (s[PREV + i] as number);
-        if (d !== 0) moved = true;
-        if (Math.abs(d) > (LIMIT[i] as number)) jumped = true;
+        if (Math.abs((s[CUR + i] as number) - (s[PREV + i] as number)) > (LIMIT[i] as number)) jumped = true;
       }
-      if (moved && !jumped) {
-        const t = object.transform;
-        const p = object.placement;
-        t.x = (s[CUR] as number) - ((s[CUR] as number) - (s[PREV] as number)) * back;
-        t.y = (s[CUR + 1] as number) - ((s[CUR + 1] as number) - (s[PREV + 1] as number)) * back;
-        t.rotation = (s[CUR + 2] as number) - ((s[CUR + 2] as number) - (s[PREV + 2] as number)) * back;
-        t.scaleX = (s[CUR + 3] as number) - ((s[CUR + 3] as number) - (s[PREV + 3] as number)) * back;
-        t.scaleY = (s[CUR + 4] as number) - ((s[CUR + 4] as number) - (s[PREV + 4] as number)) * back;
-        p.x = (s[CUR + 5] as number) - ((s[CUR + 5] as number) - (s[PREV + 5] as number)) * back;
-        p.y = (s[CUR + 6] as number) - ((s[CUR + 6] as number) - (s[PREV + 6] as number)) * back;
-        p.rotation = (s[CUR + 7] as number) - ((s[CUR + 7] as number) - (s[PREV + 7] as number)) * back;
-        p.scaleX = (s[CUR + 8] as number) - ((s[CUR + 8] as number) - (s[PREV + 8] as number)) * back;
-        p.scaleY = (s[CUR + 9] as number) - ((s[CUR + 9] as number) - (s[PREV + 9] as number)) * back;
-        object.markMoved();
-        this.#blended.push(object);
-      }
+      if (jumped) continue;
+      const t = object.transform;
+      const p = object.placement;
+      t.x = (s[CUR] as number) - ((s[CUR] as number) - (s[PREV] as number)) * back;
+      t.y = (s[CUR + 1] as number) - ((s[CUR + 1] as number) - (s[PREV + 1] as number)) * back;
+      t.rotation = (s[CUR + 2] as number) - ((s[CUR + 2] as number) - (s[PREV + 2] as number)) * back;
+      t.scaleX = (s[CUR + 3] as number) - ((s[CUR + 3] as number) - (s[PREV + 3] as number)) * back;
+      t.scaleY = (s[CUR + 4] as number) - ((s[CUR + 4] as number) - (s[PREV + 4] as number)) * back;
+      p.x = (s[CUR + 5] as number) - ((s[CUR + 5] as number) - (s[PREV + 5] as number)) * back;
+      p.y = (s[CUR + 6] as number) - ((s[CUR + 6] as number) - (s[PREV + 6] as number)) * back;
+      p.rotation = (s[CUR + 7] as number) - ((s[CUR + 7] as number) - (s[PREV + 7] as number)) * back;
+      p.scaleX = (s[CUR + 8] as number) - ((s[CUR + 8] as number) - (s[PREV + 8] as number)) * back;
+      p.scaleY = (s[CUR + 9] as number) - ((s[CUR + 9] as number) - (s[PREV + 9] as number)) * back;
+      object.markMoved();
+      this.#blended.push(object);
     }
-    const children = object.children;
-    for (let i = 0; i < children.length; i++) this.#blend(children[i] as GameObject, back, stamp);
   }
 
   /** Put back what `blend` moved: every transform and camera exactly as the last step left it. */
