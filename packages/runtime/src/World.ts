@@ -11,6 +11,7 @@ import { activeProfiler, PROFILE_INPUT, PROFILE_RENDER, PROFILE_UPDATE } from ".
 import { geometryOf, geometryOverlapsBox } from "./shapes.ts";
 import { countStep } from "./Sound.ts";
 import { findTilemap } from "./tilemap.ts";
+import type { WorldTransform } from "./Transform.ts";
 
 /** Steps the world is asked to freeze for by `freeze`: taken up by the next tick that is not already frozen. */
 let freezeRequest = 0;
@@ -112,8 +113,8 @@ export class World implements BodySpace {
   tick(dt: number, input: InputState = NO_INPUT, beforeUpdate?: () => void): number {
     countStep();
     this.#boxes = null;
+    this.#spaces = null;
     this.#indexes = null;
-    this.#rotateFound();
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const order = (this.#order ??= this.#treeOrder());
@@ -396,6 +397,8 @@ export class World implements BodySpace {
    * step's updates began, as the step's state is a snapshot.
    */
   #boxes: Map<Collider, Box> | null = null;
+  /** Objects' child spaces, for the boxes (`#spaceOf`): dropped with them. */
+  #spaces: Map<GameObject, WorldTransform> | null = null;
   /** The colliders by tag on a grid, for queries (`#indexOf`): dropped whenever the boxes are, and when a collider joins or leaves. */
   #indexes: Map<string, ColliderIndex> | null = null;
   readonly #tilemaps = new Set<Tilemap>();
@@ -407,83 +410,14 @@ export class World implements BodySpace {
    * be handed to `send` to reach that one collider. Boxes are where they were when the step's updates began, as for bodies.
    */
   nearby<Tag extends string>(tag: Tag, x: number, y: number, radius: number, ignore: GameObject | null = null): Nearby<Tag>[] {
-    const found = this.#nearbyEntries(tag, x, y, radius, ignore);
-    const out: Nearby<Tag>[] = [];
-    const { results, colliders } = this.#found;
-    for (const { entry, distance } of found) {
-      const { collider, box } = entry;
-      const result = {
-        tag: collider.tag,
-        owner: collider.owner,
-        data: collider.data,
-        x: box.x + box.width / 2,
-        y: box.y + box.height / 2,
-        distance,
-      };
-      // Which collider it is, for `send`: kept in plain arrays, and put in `FOUND` only if the result is sent (`#colliderOf`).
-      results.push(result);
-      colliders.push(collider);
-      out.push(result as unknown as Nearby<Tag>);
+    if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
+    const found = this.#indexOf(tag).within(x, y, radius, ignore);
+    const out: Nearby<Tag>[] = new Array(found);
+    for (let i = 0; i < found; i++) {
+      const { collider, box } = NEAR_ENTRIES[i]!;
+      out[i] = new NearbyResult(collider, box.x + box.width / 2, box.y + box.height / 2, NEAR_DISTANCES[i]!) as unknown as Nearby<Tag>;
     }
     return out;
-  }
-
-  /** The index entries `nearby` answers with, nearest first, with their distances: without making a result for each. */
-  #nearbyEntries(tag: string, x: number, y: number, radius: number, ignore: GameObject | null): { entry: IndexEntry; distance: number }[] {
-    if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
-    const found: { entry: IndexEntry; distance: number }[] = [];
-    // The circle's bounds, a pixel wider so a box that just touches the circle is looked at.
-    const bounds = { x: x - radius - 1, y: y - radius - 1, width: radius * 2 + 2, height: radius * 2 + 2 };
-    for (const entry of this.#indexOf(tag).query(bounds)) {
-      if (ignore !== null && (entry.component === undefined ? (entry.component = componentOf(entry.collider)) : entry.component) === ignore)
-        continue;
-      const distance = distanceToBox(x, y, entry.box);
-      if (distance <= radius) found.push({ entry, distance });
-    }
-    if (found.length > 1) found.sort((a, b) => a.distance - b.distance || a.entry.order - b.entry.order);
-    return found;
-  }
-
-  /**
-   * The results `nearby` gave in this step and the one before (a result found in a collision callback is sent in the next step), with
-   * the collider each is. Registering every result in a `WeakMap` as it was made cost more than the rest of the query in a crowd
-   * (a thousand enemies each asking which are next to it); most results are only read, so a result is looked up here, and put in
-   * `FOUND`, only when it is sent.
-   */
-  #found: FoundResults = { results: [], colliders: [] };
-  #lastFound: FoundResults = { results: [], colliders: [] };
-  /** The results above by object, made the first time a step sends to one; how many of `#found` it holds. */
-  #foundMap: Map<object, Collider> | null = null;
-  #foundMapped = 0;
-
-  /** A step starts: this step's results become the last step's, and the ones before are let go. */
-  #rotateFound(): void {
-    if (this.#found.results.length === 0 && this.#lastFound.results.length === 0) return;
-    const spare = this.#lastFound;
-    spare.results.length = 0;
-    spare.colliders.length = 0;
-    this.#lastFound = this.#found;
-    this.#found = spare;
-    this.#foundMap = null;
-    this.#foundMapped = 0;
-  }
-
-  /** The collider a `nearby` result is: one already sent to, or one found in this step or the last. */
-  #colliderOf(result: object): Collider | undefined {
-    const known = FOUND.get(result);
-    if (known !== undefined) return known;
-    let map = this.#foundMap;
-    if (map === null) {
-      map = this.#foundMap = new Map();
-      const last = this.#lastFound;
-      for (let i = 0; i < last.results.length; i++) map.set(last.results[i]!, last.colliders[i]!);
-    }
-    const { results, colliders } = this.#found;
-    for (let i = this.#foundMapped; i < results.length; i++) map.set(results[i]!, colliders[i]!);
-    this.#foundMapped = results.length;
-    const collider = map.get(result);
-    if (collider !== undefined) FOUND.set(result, collider);
-    return collider;
   }
 
   /**
@@ -494,8 +428,6 @@ export class World implements BodySpace {
    * delivered at the end of the next step's update phase. A receiver that left the world by then hears nothing.
    */
   send<Tag extends string>(tag: Tag, where: SendTarget<Tag>, value: unknown): void {
-    // A `nearby` result is tied to its collider now, so it reaches that collider whenever it is delivered.
-    if (!("radius" in where)) this.#colliderOf(where);
     this.#sends.push({ tag, where, value });
   }
 
@@ -515,14 +447,14 @@ export class World implements BodySpace {
     // Sends made by receivers join the end of the queue, so every one is delivered in order, in this step.
     for (let i = 0; i < this.#sends.length; i++) {
       const { tag, where, value } = this.#sends[i]!;
-      const one = FOUND.get(where);
+      const one = colliderOfResult(where);
       const receivers: Collider[] =
         one !== undefined
           ? one.tag === tag && one.world === this
             ? [one]
             : []
           : "radius" in where
-            ? this.#nearbyEntries(tag, where.x, where.y, where.radius, null).map((found) => found.entry.collider)
+            ? this.#collidersWithin(tag, where.x, where.y, where.radius)
             : [];
       for (const receiver of receivers) {
         if (receiver.world !== this) continue;
@@ -534,6 +466,15 @@ export class World implements BodySpace {
       }
     }
     this.#sends.length = 0;
+  }
+
+  /** The colliders with `tag` within `radius` of a point, nearest first: whom a send to a circle reaches. */
+  #collidersWithin(tag: string, x: number, y: number, radius: number): Collider[] {
+    if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
+    const found = this.#indexOf(tag).within(x, y, radius, null);
+    const out: Collider[] = new Array(found);
+    for (let i = 0; i < found; i++) out[i] = NEAR_ENTRIES[i]!.collider;
+    return out;
   }
 
   /** `BodySpace`: the tag of something solid in `box` (`"tile"` for a solid tile), or null. */
@@ -581,7 +522,8 @@ export class World implements BodySpace {
       const entries: IndexEntry[] = [];
       let order = 0;
       for (const collider of this.#colliders) {
-        if (tag === SOLID ? collider.solid : collider.tag === tag) entries.push({ collider, box: this.#boxOf(collider), order, seen: 0 });
+        if (tag === SOLID ? collider.solid : collider.tag === tag)
+          entries.push({ collider, box: this.#boxOf(collider), order, seen: 0, component: undefined });
         order++;
       }
       index = new ColliderIndex(entries);
@@ -594,10 +536,31 @@ export class World implements BodySpace {
     const boxes = (this.#boxes ??= new Map());
     let box = boxes.get(collider);
     if (box === undefined) {
-      box = colliderBox(collider);
+      const at = collider.parent === null ? collider.worldTransform() : collider.worldTransformIn(this.#spaceOf(collider.parent));
+      box = { x: at.x, y: at.y, width: collider.width, height: collider.height };
       boxes.set(collider, box);
     }
     return box;
+  }
+
+  /**
+   * The space `object`'s children are placed in (`childSpace()`), remembered with the boxes: a thousand enemies' colliders share every
+   * object above their own entity, and composing each one's transform up the tree from scratch was most of making the index.
+   */
+  #spaceOf(object: GameObject): WorldTransform {
+    const spaces = (this.#spaces ??= new Map());
+    let space = spaces.get(object);
+    if (space === undefined) {
+      // An object that places its children its own way (a `Camera` is transparent to them) is asked.
+      space =
+        object.childSpace !== GameObject.prototype.childSpace || object.worldTransform !== GameObject.prototype.worldTransform
+          ? object.childSpace()
+          : object.parent === null
+            ? object.worldTransform()
+            : object.worldTransformIn(this.#spaceOf(object.parent));
+      spaces.set(object, space);
+    }
+    return space;
   }
 
   /** The tree changed (a child added, removed or moved) or an object with handlers joined or left: the order handlers run in is made again. */
@@ -681,6 +644,7 @@ export class World implements BodySpace {
     const restore = takeTreeRestore(this);
     if (restore !== null) restoreHotState(this, restore.root, restore.state);
     this.#boxes = null;
+    this.#spaces = null;
     this.#indexes = null;
     return renders;
   }
@@ -758,12 +722,6 @@ function shapeOverlaps(collider: Collider, box: Box): boolean {
   return g !== null && geometryOverlapsBox(g, box.x, box.y, box.width, box.height);
 }
 
-/** A collider's box in world space: its top left at its world position, not scaled or turned (bodies are boxes on the grid). */
-function colliderBox(collider: Collider): Box {
-  const at = collider.worldTransform();
-  return { x: at.x, y: at.y, width: collider.width, height: collider.height };
-}
-
 /**
  * The component a collider belongs to: the nearest object above it that is not a built-in (a compiled component's class has no
  * `intrinsic` of its own), or null.
@@ -776,21 +734,54 @@ function componentOf(collider: Collider): GameObject | null {
 
 /** The distance from a point to a box (0 inside it). */
 function distanceToBox(x: number, y: number, box: Box): number {
-  const dx = Math.max(box.x - x, 0, x - (box.x + box.width));
-  const dy = Math.max(box.y - y, 0, y - (box.y + box.height));
-  return Math.hypot(dx, dy);
+  const dx = box.x > x ? box.x - x : x > box.x + box.width ? x - (box.x + box.width) : 0;
+  const dy = box.y > y ? box.y - y : y > box.y + box.height ? y - (box.y + box.height) : 0;
+  // Not `Math.hypot`, which V8 runs several times slower: this is asked for every collider a query looks at.
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
-/** The collider each `nearby` result is, so `send` can reach that one: results stay plain objects, and a result kept past its world reaches nothing. */
-const FOUND = new WeakMap<object, Collider>();
+/**
+ * A `nearby` result: the collider's contact (`tag`, `owner`, `data`), where its box's middle is and how far it is, and, hidden, the
+ * collider itself, so `send` can reach that one. A private field and not a `WeakMap` from result to collider: putting each result in
+ * a map cost about 200 times making it, and kept every result alive past the young generation, in a crowd where every enemy asks
+ * for its neighbours every step. A copy of a result (a save, a snapshot) has no collider and reaches nothing, as a result kept past
+ * its world does.
+ */
+class NearbyResult {
+  readonly #collider: Collider;
+  readonly tag: string;
+  readonly owner: unknown;
+  readonly data: unknown;
+  readonly x: number;
+  readonly y: number;
+  readonly distance: number;
+
+  constructor(collider: Collider, x: number, y: number, distance: number) {
+    this.#collider = collider;
+    this.tag = collider.tag;
+    this.owner = collider.owner;
+    this.data = collider.data;
+    this.x = x;
+    this.y = y;
+    this.distance = distance;
+  }
+
+  static colliderOf(where: object): Collider | undefined {
+    return #collider in where ? (where as NearbyResult).#collider : undefined;
+  }
+}
+
+/** The collider a `nearby` result is, or undefined for anything else (a circle, a copy of a result). */
+const colliderOfResult = (where: object): Collider | undefined => NearbyResult.colliderOf(where);
 
 /** More deliveries than this in one step is a loop of receivers sending to each other. */
 const MAX_DELIVERIES = 100_000;
 
 /** The key of the index of the solid colliders, whatever their tags (`solidIn`): not a tag a game can write. */
 const SOLID = "\u0000solid";
-/** The side of a cell of a collider index, in pixels. */
-const CELL = 32;
+/** The sides a collider index's cells may have, in pixels: about one and a half times its boxes' typical side, as a power of two. */
+const MIN_CELL = 16;
+const MAX_CELL = 64;
 /** A collider whose box covers more cells than this is kept out of the cells and looked at by every query. */
 const MAX_CELLS = 64;
 /** Fewer entries than this, and a query looks at them all: a grid costs more than it saves. */
@@ -803,29 +794,60 @@ interface IndexEntry {
   readonly order: number;
   /** The query that last looked at it, so an entry in several cells is taken once. */
   seen: number;
-  /** The component it belongs to (`componentOf`), worked out the first time a query needs it. */
-  component?: GameObject | null;
-}
-
-/** Results `nearby` made, and the collider each is, in two arrays side by side. */
-interface FoundResults {
-  readonly results: object[];
-  readonly colliders: Collider[];
+  /** The component it belongs to (`componentOf`), worked out the first time a query needs it (undefined until then). */
+  component: GameObject | null | undefined;
 }
 
 let queries = 0;
 
-/** The entries of one tag, on a grid of `CELL`-pixel cells. */
+/**
+ * What `ColliderIndex.within` found, nearest first: its entries and their distances, in arrays kept from one query to the next, so a
+ * thousand enemies each asking for their neighbours make no garbage but the results they are given.
+ */
+const NEAR_ENTRIES: IndexEntry[] = [];
+const NEAR_DISTANCES: number[] = [];
+
+/**
+ * `ColliderIndex.within`'s look at one entry: if it is not `ignore`'s own and comes within `radius` of (x, y), put it in its place in
+ * the sorted run of `found` in `NEAR_ENTRIES` (a query finds a handful, so an insertion). Returns the new count.
+ */
+function take(entry: IndexEntry, x: number, y: number, radius: number, ignore: GameObject | null, found: number): number {
+  if (ignore !== null && (entry.component === undefined ? (entry.component = componentOf(entry.collider)) : entry.component) === ignore)
+    return found;
+  const distance = distanceToBox(x, y, entry.box);
+  if (!(distance <= radius)) return found;
+  let i = found;
+  while (i > 0 && nearer(entry, distance, NEAR_ENTRIES[i - 1]!, NEAR_DISTANCES[i - 1]!)) {
+    NEAR_ENTRIES[i] = NEAR_ENTRIES[i - 1]!;
+    NEAR_DISTANCES[i] = NEAR_DISTANCES[i - 1]!;
+    i--;
+  }
+  NEAR_ENTRIES[i] = entry;
+  NEAR_DISTANCES[i] = distance;
+  return found + 1;
+}
+
+/** Whether entry `a` at distance `da` comes before `b` at `db`: nearer first, then in the world's order. */
+const nearer = (a: IndexEntry, da: number, b: IndexEntry, db: number): boolean => da < db || (da === db && a.order < b.order);
+
+/**
+ * The entries of one tag, on a grid. A cell is about one and a half times the boxes' typical side: in a crowd, a cell much bigger than
+ * the boxes holds dozens of them, and every query looks at all of them (32-pixel cells under 10-pixel enemies looked at fifty entries
+ * a query to find four).
+ */
 class ColliderIndex {
   readonly #entries: readonly IndexEntry[];
   readonly #cells = new Map<number, IndexEntry[]>();
   /** Entries too big (or not finite) to put in cells. */
   readonly #wide: IndexEntry[] = [];
   readonly #out: IndexEntry[] = [];
+  readonly #cell: number;
 
   constructor(entries: readonly IndexEntry[]) {
     this.#entries = entries;
+    this.#cell = cellSideFor(entries);
     if (entries.length < SMALL) return;
+    const CELL = this.#cell;
     for (const entry of entries) {
       const { box } = entry;
       const left = Math.floor(box.x / CELL);
@@ -847,11 +869,15 @@ class ColliderIndex {
     }
   }
 
-  /** The entries whose boxes overlap `box`, in the world's order. The array is reused by the next query. */
-  query(box: Box): readonly IndexEntry[] {
+  /**
+   * The entries whose boxes overlap `box`, in the world's order (or in no order, with `sorted` false, for a caller that sorts them
+   * itself). The array is reused by the next query.
+   */
+  query(box: Box, sorted = true): readonly IndexEntry[] {
     const out = this.#out;
     out.length = 0;
     const entries = this.#entries;
+    const CELL = this.#cell;
     const left = Math.floor(box.x / CELL);
     const right = Math.floor((box.x + box.width) / CELL);
     const top = Math.floor(box.y / CELL);
@@ -874,9 +900,66 @@ class ColliderIndex {
       }
     }
     for (const entry of this.#wide) if (boxesOverlap(box, entry.box)) out.push(entry);
-    if (out.length > 1) out.sort((a, b) => a.order - b.order);
+    if (sorted && out.length > 1) out.sort(byOrder);
     return out;
   }
+
+  /**
+   * The entries whose boxes come within `radius` of (`x`, `y`), not counting those `ignore` draws itself, into `NEAR_ENTRIES` and
+   * `NEAR_DISTANCES`, nearest first (ties in the world's order); returns how many. One pass over the cells the circle's bounds
+   * cover (a pixel wider, so a box that just touches the circle is looked at), with no object made per entry.
+   */
+  within(x: number, y: number, radius: number, ignore: GameObject | null): number {
+    const entries = this.#entries;
+    const CELL = this.#cell;
+    const left = Math.floor((x - radius - 1) / CELL);
+    const right = Math.floor((x + radius + 1) / CELL);
+    const top = Math.floor((y - radius - 1) / CELL);
+    const bottom = Math.floor((y + radius + 1) / CELL);
+    const cells = (right - left + 1) * (bottom - top + 1);
+    let found = 0;
+    if (entries.length < SMALL || !Number.isFinite(cells) || cells > entries.length) {
+      for (let i = 0; i < entries.length; i++) found = take(entries[i]!, x, y, radius, ignore, found);
+    } else {
+      const stamp = ++queries;
+      for (let cy = top; cy <= bottom; cy++) {
+        for (let cx = left; cx <= right; cx++) {
+          const cell = this.#cells.get(cellKey(cx, cy));
+          if (cell === undefined) continue;
+          for (let i = 0; i < cell.length; i++) {
+            const entry = cell[i]!;
+            if (entry.seen === stamp) continue;
+            entry.seen = stamp;
+            found = take(entry, x, y, radius, ignore, found);
+          }
+        }
+      }
+      const wide = this.#wide;
+      for (let i = 0; i < wide.length; i++) found = take(wide[i]!, x, y, radius, ignore, found);
+    }
+    return found;
+  }
+}
+
+const byOrder = (a: IndexEntry, b: IndexEntry): number => a.order - b.order;
+
+/** A power of two about one and a half times the median longer side of the boxes, from `MIN_CELL` to `MAX_CELL`. */
+function cellSideFor(entries: readonly IndexEntry[]): number {
+  if (entries.length < SMALL) return MAX_CELL;
+  // The median of a sample of up to 64 is enough to size the cells.
+  const step = Math.max(1, Math.floor(entries.length / 64));
+  const sides: number[] = [];
+  for (let i = 0; i < entries.length; i += step) {
+    const { width, height } = entries[i]!.box;
+    const side = Math.max(width, height);
+    if (Number.isFinite(side)) sides.push(side);
+  }
+  if (sides.length === 0) return MAX_CELL;
+  sides.sort((a, b) => a - b);
+  const want = sides[sides.length >> 1]! * 1.5;
+  let cell = MIN_CELL;
+  while (cell < want && cell < MAX_CELL) cell *= 2;
+  return cell;
 }
 
 /** One number for a cell: distinct for any cell a game reaches (±32,768 cells, a million pixels each way); a clash would only cost a check. */
