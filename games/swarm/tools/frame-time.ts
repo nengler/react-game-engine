@@ -9,6 +9,7 @@
  * there were at the busiest step. A stress run skips the first 120 steps (the crowd filling up, and V8 warming up).
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
+import { startProfiling, stopProfiling, type Profiler } from "@tsengine/runtime";
 
 import { bindings, gameConfig, screen } from "../game.ts";
 import { Stress } from "../generated/Stress.ts";
@@ -19,6 +20,9 @@ const args = process.argv.slice(2);
 const at = args.indexOf("--count");
 const count = at >= 0 ? Number(args[at + 1]) : 0;
 const armed = args.includes("--armed");
+/** `--profile`: also print each phase's milliseconds a step and the costliest components (the inspector's profiler). */
+const profile = args.includes("--profile");
+let profiler: Profiler | null = null;
 const secondsAt = args.indexOf("--seconds");
 const seconds = secondsAt >= 0 ? Number(args[secondsAt + 1]) : count > 0 ? 20 : 600;
 
@@ -28,7 +32,8 @@ const script = count > 0 ? walk(seconds).replace(/^confirm, /, "") : walk(second
 const frames = parseInputScript(script, { bindings, screen });
 const backend = new RecordingBackend({ keepFrames: 1 });
 for (const f of frames) backend.queueInput(f);
-const config = count > 0 ? { ...gameConfig, root: () => new Stress({ count, armed }) } : gameConfig;
+const base = args.includes("--no-interpolate") ? { ...gameConfig, interpolate: false } : gameConfig;
+const config = count > 0 ? { ...base, root: () => new Stress({ count, armed }) } : base;
 const player = createPlayer(backend, { ...config, warn: () => {} });
 const times: number[] = [];
 let busiest = { enemies: 0, bolts: 0, gems: 0, time: 0 };
@@ -42,16 +47,28 @@ for (let i = 0; i < frames.length; i++) {
   if (play === null) continue;
   const r = runOf(play);
   if (count > 0 && i < 120) continue;
+  if (profile && profiler === null) profiler = startProfiling();
   times.push(elapsed);
   if (r.enemies >= busiest.enemies) busiest = { enemies: r.enemies, bolts: r.bolts, gems: r.gems, time: Math.round(r.time) };
 }
 player.close();
+if (profiler !== null) {
+  const report = profiler.take();
+  stopProfiling();
+  const round = (n: number): number => +n.toFixed(3);
+  console.log(JSON.stringify({ phases: Object.fromEntries(Object.entries(report.phases).map(([k, v]) => [k, round(v)])) }));
+  for (const c of report.components.slice(0, 12))
+    console.log(
+      `${c.name.padEnd(16)} n=${String(c.instances).padStart(5)} update ${round(c.update)} render ${round(c.render)} renders ${round(c.renders)}`
+    );
+}
 times.sort((a, c) => a - c);
 const mean = times.reduce((a, c) => a + c, 0) / Math.max(1, times.length);
 console.log(
   JSON.stringify({
     steps: times.length,
     meanMs: +mean.toFixed(3),
+    medianMs: +(times[times.length >> 1] ?? 0).toFixed(3),
     p99Ms: +(times[Math.floor(times.length * 0.99)] ?? 0).toFixed(3),
     maxMs: +(times[times.length - 1] ?? 0).toFixed(3),
     busiest,

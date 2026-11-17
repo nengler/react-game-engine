@@ -112,7 +112,7 @@ export function Play({ seed = 1, cap = ENEMY_CAP, startTime = 0, stress = false,
     const my = (input.down("down") ? 1 : 0) - (input.down("up") ? 1 : 0);
     s.moving = mx !== 0 || my !== 0;
     if (s.moving) {
-      const d = Math.hypot(mx, my);
+      const d = Math.sqrt(mx * mx + my * my);
       const speed = PLAYER_SPEED * speedOf(s.build);
       s.px += (mx / d) * speed * dt;
       s.py += (my / d) * speed * dt;

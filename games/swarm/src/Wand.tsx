@@ -29,7 +29,7 @@ export function Wand({ build, px, py, onFire }: WandProps) {
       const t = targets[i % targets.length]!;
       const dx = t.x - px;
       const dy = t.y - py;
-      const d = Math.hypot(dx, dy) || 1;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
       bolts.push({ x: px, y: py, vx: (dx / d) * w.speed, vy: (dy / d) * w.speed, damage: w.damage, pierce: w.pierce });
     }
     sfx.play("shoot");

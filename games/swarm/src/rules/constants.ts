@@ -34,9 +34,15 @@ export const ENEMY_CAP = 2500;
  * not its middle, so a small number already reaches the ones touching it). Wider costs more than it shows: in a crowd of 2,000,
  * a reach of 7 found eleven neighbours a query and cost a third of the step.
  */
-export const SPACING = 2;
-/** How hard they push apart, in pixels a second at full overlap. */
-export const PUSH = 40;
+export const SPACING = 3;
+/** The part of each overlap with a neighbour an enemy steps out of in one step (both of a pair do). */
+export const PUSH = 0.5;
+/** Each enemy keeps apart every this many steps (staggered by id), stepping out of that much more of each overlap. */
+export const SEPARATE_EVERY = 2;
+/** How many of the enemies touching it each one steps away from. */
+export const NEIGHBOURS = 6;
+/** An enemy stops walking when its edge is this close to the player's middle: the crowd rings the player. */
+export const REACH = 4;
 
 /** Seconds an enemy shows white after a hit. */
 export const FLASH = 0.08;

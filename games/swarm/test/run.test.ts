@@ -57,7 +57,9 @@ describe("the stress scene", () => {
     });
     assert.deepEqual(warnings, []);
     const last = states.at(-1)!;
-    assert.equal(last.enemies, 400);
+    // The spawner tops the crowd up as each step starts, so a step in which enemies die ends a few short.
+    assert.equal(Math.max(...states.map((s) => s.enemies ?? 0)), 400);
+    assert.ok((last.enemies ?? 0) > 380, `enemies ${last.enemies}`);
     assert.ok((last.kills ?? 0) > 50, `kills ${last.kills}`);
     assert.ok((last.gems ?? 0) > 0);
   });
