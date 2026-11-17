@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-/** Timers (DESIGN.md, "Timers"): `after`, `every` and `cancelTimers` in handlers, the component's own. */
+/** Timers (DESIGN.md, "Timers"): `after`, `every`, `cancelTimer` and `cancelTimers` in handlers, the component's own. */
 import { after as afterAll, describe, it } from "node:test";
 
-import { Entity, Text, World, freeze, type InputState } from "@tsengine/runtime";
+import { Entity, Text, World, captureHotState, freeze, restoreHotState, type InputState } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
@@ -91,6 +91,99 @@ describe("after, every and cancelTimers", () => {
     step(60);
     assert.equal(flash.text, "on 0");
     assert.equal(flash.pendingTimers, 0);
+  });
+
+  it("after and every return an id; cancelTimer stops that timer only, and restarting a flash keeps the other timers", async () => {
+    const compiled = compile(`import { Text, after, cancelTimer, every, useInput, useMount, useMutable } from "@tsengine/runtime/jsx";
+
+export function Hit() {
+  const s = useMutable({ flash: false, flashTimer: 0, ticker: 0, ticks: 0 });
+  useMount(() => {
+    s.ticker = every(0.5, () => { s.ticks += 1; });
+  });
+  useInput((input) => {
+    if (input.pressed("Space")) {
+      cancelTimer(s.flashTimer);
+      s.flash = true;
+      s.flashTimer = after(0.15, () => { s.flash = false; });
+    }
+    if (input.pressed("Escape")) cancelTimer(s.ticker);
+  });
+  return <Text>{s.flash ? "on" : "off"} {s.ticks} {s.flashTimer}</Text>;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Hit } = await load<{ Hit: new () => Text }>(compiled);
+    const world = new World();
+    const holder = new Entity({});
+    world.mount(holder);
+    const hit = new Hit();
+    holder.addChild(hit);
+    world.flush();
+    const step = (n = 1, input?: InputState): void => {
+      for (let i = 0; i < n; i++) world.tick(1 / 60, i === 0 ? input : undefined);
+    };
+    step(1, key("Space"));
+    assert.equal(hit.text, "on 0 2", "the every was timer 1, the flash timer 2");
+    step(6);
+    step(1, key("Space"));
+    assert.equal(hit.text, "on 0 3", "hit again: the old flash timer is cancelled and a new one set");
+    step(7);
+    assert.equal(hit.text, "on 0 3", "0.13 s after the second hit: still on (the first timer would have ended it by now)");
+    step(3);
+    assert.equal(hit.text, "off 0 3");
+    step(15);
+    assert.equal(hit.text, "off 1 3", "the every kept running through both restarts");
+    step(1, key("Escape"));
+    step(60);
+    assert.equal(hit.text, "off 1 3", "cancelTimer(ticker): that one stops");
+    assert.equal(hit.pendingTimers, 0);
+  });
+
+  it("cancelTimer of a timer due later in the same step skips it, and ignores 0 and finished ids", () => {
+    const owner = new Entity({});
+    const world = new World();
+    world.mount(owner);
+    const calls: string[] = [];
+    let second = 0;
+    owner.after(0.01, () => {
+      calls.push("first");
+      owner.cancelTimer(second);
+    });
+    second = owner.after(0.01, () => calls.push("second"));
+    owner.cancelTimer(0);
+    owner.cancelTimer(99);
+    world.tick(1 / 60);
+    assert.deepEqual(calls, ["first"], "both were due this step; the first cancelled the second before it ran");
+    assert.equal(owner.pendingTimers, 0);
+  });
+
+  it("a component that takes another's state over (hot reload, a tree save) numbers its timers on from there", () => {
+    class Flasher extends Entity {
+      timer = 0;
+      override saveHotState(): Record<string, unknown> {
+        return { timer: this.timer };
+      }
+      override loadHotState(saved: Record<string, unknown>): void {
+        if (typeof saved["timer"] === "number") this.timer = saved["timer"];
+      }
+    }
+    const world = new World();
+    const before = new Flasher({});
+    world.mount(before);
+    before.after(1, () => {});
+    before.timer = before.after(1, () => {});
+    assert.equal(before.timer, 2);
+    const saved = captureHotState(before);
+    const after = new Flasher({});
+    const next = new World();
+    next.mount(after);
+    restoreHotState(next, after, saved);
+    assert.equal(after.timer, 2, "its state names timer 2 of the build it replaced");
+    assert.equal(
+      after.after(1, () => {}),
+      3,
+      "so its own timers start at 3, and cancelTimer(2) cannot stop one of them"
+    );
   });
 
   it("are refused while rendering, and must be imported", () => {

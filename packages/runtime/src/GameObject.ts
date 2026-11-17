@@ -652,27 +652,61 @@ export class GameObject<P extends object = {}> {
     return NO_HANDLES;
   }
 
-  /** This object's timers (`after`, `every`): seconds left, the period for a repeating one (0: once), and what to call. */
+  /**
+   * This object's timers (`after`, `every`): its id, seconds left, the period for a repeating one (0: once), what to call, and
+   * whether `cancelTimer` took it out (so a step already running them skips it).
+   */
   /** `NO_TIMERS` (shared, never written) until the first timer is set, so an object with none makes no array. */
-  #timers: { left: number; period: number; fn: () => void }[] = NO_TIMERS;
+  #timers: Timer[] = NO_TIMERS;
+  /** The id the next timer gets: 1, 2, 3… for this object, never reused, so 0 can mean "no timer" in a component's state. */
+  #nextTimerId = 1;
 
   /**
    * Call `fn` once, `seconds` of game time from now: `after(0.15, () => setFlash(false))` in a handler. Timers count the fixed
    * step's time in the update phase (so they stop during `freeze` and `<Game paused>`, and replay), and are cancelled when this
    * object leaves the world, so one never sets state on a component that is gone.
    */
-  after(seconds: number, fn: () => void): void {
-    this.#addTimer(seconds, 0, fn);
+  after(seconds: number, fn: () => void): number {
+    return this.#addTimer(seconds, 0, fn);
   }
 
   /** Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimers` or the object leaves the world. */
-  every(seconds: number, fn: () => void): void {
-    this.#addTimer(seconds, seconds > 0 ? seconds : 0, fn);
+  every(seconds: number, fn: () => void): number {
+    return this.#addTimer(seconds, seconds > 0 ? seconds : 0, fn);
+  }
+
+  /**
+   * Cancel the timer `after` or `every` returned `id` for, and no other: a hit flash restarted without stopping the object's other
+   * timers. An id that is done, cancelled already, or 0 is ignored.
+   */
+  cancelTimer(id: number): void {
+    const timers = this.#timers;
+    for (let i = 0; i < timers.length; i++) {
+      const timer = timers[i] as Timer;
+      if (timer.id !== id) continue;
+      timer.cancelled = true;
+      timers.splice(i, 1);
+      return;
+    }
   }
 
   /** Cancel every timer of this object. */
   cancelTimers(): void {
+    for (const timer of this.#timers) timer.cancelled = true;
     this.#timers = NO_TIMERS;
+  }
+
+  /** The id this object's next timer will get. Kept by hot reload and tree saves (see `resumeTimerIds`). */
+  get nextTimerId(): number {
+    return this.#nextTimerId;
+  }
+
+  /**
+   * Go on numbering timers from `next`: this object replaces one (a hot reload, a save loaded with its tree) whose state may hold the
+   * ids of that one's timers, so a new timer must not take one of them and be cancelled by mistake.
+   */
+  resumeTimerIds(next: number): void {
+    if (Number.isInteger(next) && next > this.#nextTimerId) this.#nextTimerId = next;
   }
 
   /** How many timers of this object are waiting. */
@@ -680,10 +714,12 @@ export class GameObject<P extends object = {}> {
     return this.#timers.length;
   }
 
-  #addTimer(seconds: number, period: number, fn: () => void): void {
+  #addTimer(seconds: number, period: number, fn: () => void): number {
     if (this.#timers === NO_TIMERS) this.#timers = [];
-    this.#timers.push({ left: seconds > 0 ? seconds : 0, period, fn });
+    const id = this.#nextTimerId++;
+    this.#timers.push({ id, left: seconds > 0 ? seconds : 0, period, fn, cancelled: false });
     this.world?.addTimed(this);
+    return id;
   }
 
   /**
@@ -697,6 +733,7 @@ export class GameObject<P extends object = {}> {
     const due = [...timers];
     for (const timer of due) {
       if (this.#timers !== timers || this.world === null) break; // cancelled by a callback, or gone
+      if (timer.cancelled) continue; // cancelled on its own by an earlier callback this step
       timer.left -= dt;
       // A repeating timer due more than once in one step (a period shorter than the step) runs once a step: no bursts.
       if (timer.left > 1e-9) continue;
@@ -760,8 +797,17 @@ interface OwnedHandle {
   detachOwner?(): void;
 }
 
+/** A timer of `GameObject.after` / `every`. */
+interface Timer {
+  readonly id: number;
+  left: number;
+  readonly period: number;
+  readonly fn: () => void;
+  cancelled: boolean;
+}
+
 /** What `#timers` holds while there are none. Never written: the first timer replaces it with an array of its own. */
-const NO_TIMERS: { left: number; period: number; fn: () => void }[] = [];
+const NO_TIMERS: Timer[] = [];
 
 function definedOnly<T extends object>(value: T | undefined): Partial<T> {
   const out: Partial<T> = {};

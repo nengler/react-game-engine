@@ -1807,7 +1807,7 @@ only. Building Bramble's cutscene found two things about writing one in a compon
 called (only an object a function made for the component, a "handle", can), so the cutscene field starts from `noCutscene()`; and
 `import type { Sequence } from "@tsengine/runtime"` is refused in a component, so `@tsengine/runtime/jsx` re-exports the type.
 
-## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
+## Timers: `after`, `every`, `cancelTimer`, `cancelTimers` (2026-11-13)
 
 React code writes `setTimeout` in a handler; before timers, each delay here was a countdown kept as state.
 
@@ -1815,7 +1815,13 @@ React code writes `setTimeout` in a handler; before timers, each delay here was 
   `World` keeps the objects that have any and calls `stepTimers(dt)` on each after the step's updates, in the update phase, so timers
   stop during `freeze` and `<Game paused>`, follow the fixed step and replay. A repeating timer runs at most once a step. Leaving the
   world clears an object's timers: a timer never calls back into a component that has gone (React's classic `setTimeout` bug).
-- **Compiler.** `after`, `every` and `cancelTimers` are imported from the authoring module and are statements in handlers only
+- **One timer at a time** (2026-11-17). `after` and `every` return an id, and `cancelTimer(id)` stops that timer alone: restarting
+  a hit flash with `cancelTimers()` also stopped the component's other timers. The id is a number (1, 2, 3… per object, never
+  reused, never 0) rather than a handle object, because a component keeps it in `useMutable` state, which holds plain data and is
+  saved and hot-reloaded. A timer cancelled by an earlier callback in the same step is skipped. Hot reload and tree saves carry the
+  object's next id with its state (`$$nextTimerId`), so the object that takes the state over never hands out an id its state already
+  names.
+- **Compiler.** `after`, `every`, `cancelTimer` and `cancelTimers` are imported from the authoring module and are statements in handlers only
   (`TIMER_FUNCTIONS`); a call is the component's own method, `this.after(…)`, and the function passed is lowered as a handler (a
   callback, as one handed to `settings.subscribe`). Their names are reserved members, so a state called `after` takes `$after`.
 - **Hot reload drops pending timers**, with a note in the log: a timer's function closes over the instance that set it, which the
