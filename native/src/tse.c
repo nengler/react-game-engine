@@ -400,6 +400,15 @@ static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float
    * source is flipped. The scissor still clips it. */
   if (target.scissor_on) begin_scissor(target.scissor[0], target.scissor[1], target.scissor[2], target.scissor[3]);
   set_blend(blend, (tint & 255u) < 255u);
+  /* Screen's factors read no alpha, and multiply's source colour is not scaled by it: there the opacity goes on the colour as well
+   * (premultiplied), so a translucent layer is that blend part way from what is below, not screen at full strength or a multiply
+   * that brightens. Add and normal read the alpha in their factors, on both renderers. */
+  Color tint_color = unpack_color(tint);
+  if (blend == TSE_BLEND_SCREEN || blend == TSE_BLEND_MULTIPLY) {
+    tint_color.r = (unsigned char)((tint_color.r * tint_color.a + 127) / 255);
+    tint_color.g = (unsigned char)((tint_color.g * tint_color.a + 127) / 255);
+    tint_color.b = (unsigned char)((tint_color.b * tint_color.a + 127) / 255);
+  }
   TseShader shader;
   bool shaded = assets_shader(shader_handle, &shader);
   if (shaded) {
@@ -414,7 +423,7 @@ static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float
   /* The destination is in the units drawing uses here, which the window's scale (or a parent layer's) takes to its pixels. */
   DrawTexturePro(layer->texture, (Rectangle){ 0.0f, 0.0f, (float)target.width, -(float)target.height },
                  (Rectangle){ 0.0f, 0.0f, (float)target.width / target.scale, (float)target.height / target.scale }, (Vector2){ 0.0f, 0.0f },
-                 0.0f, unpack_color(tint));
+                 0.0f, tint_color);
   rlDrawRenderBatchActive();
   if (shaded) EndShaderMode();
   if (target.scissor_on) EndScissorMode();
