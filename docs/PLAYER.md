@@ -360,9 +360,11 @@ Script time only, on the recording backend:
 - Hearth's wave 10 (109 enemies; 2026-11-15): Node mean about 1.0 ms; QuickJS mean 11.1 ms, 99th percentile about 29 ms (a garbage
   collection). Most of it is every enemy re-rendering every step, then the walk; if the Rust host hitches in the last waves, that is
   where to look.
-- Swarm's stress scene (2026-11-17, a VM about 1.25 times slower than the one above): 1,000 enemies, each asking `nearby` for its
-  neighbours every step, mean 10 ms; 1,500, 18 ms; 2,000, 28 ms. It grows faster than the count, as a bigger crowd is denser. The
-  table and what is left are in [games/swarm/DESIGN.md](../games/swarm/DESIGN.md), "Performance".
+- Swarm's stress scene (2026-11-17, a VM about 1.25 times slower than the one above), a crowd walking after the player and keeping
+  apart with `nearby`: median step 6.9 ms with 1,000 enemies, 10.2 ms with 1,500, 13.8 ms with 2,000; with every weapon (enemies hit,
+  dying and replaced every step) 10.8, 16.8 and 24.3 ms. About 7 µs an enemy, spread over its three objects' update, render, two
+  draw walks, collisions and interpolation. The tables, a breakdown and what is left are in
+  [games/swarm/DESIGN.md](../games/swarm/DESIGN.md), "Performance".
 - 200 styled animated sprites, re-rendered every step: 0.2 ms under Node, 2.2 ms under QuickJS (about 11 µs each, three times a plain
   rect), comfortable for games of this size.
 
@@ -392,9 +394,18 @@ Script time only, on the recording backend:
   parent's list with `findIndex` on every read, so a thousand enemies each reading the player's position was a million comparisons a
   step. The generated module keeps a map of each list array's keys (`$indexOfKey`, made the first time the array is asked about),
   and a prop written after a spread has a getter of its own instead of building every prop. 25 % of a step of 2,000 enemies.
-- **`nearby` registers a result only when it is sent** (2026-11-17). Results are kept in plain arrays for their step and the next,
-  and put in the `WeakMap` that `send` reads only when one is sent: putting each in it cost about 200 times making it, 18 % of a
-  step with 1,000 enemies keeping apart. Each index entry also keeps the component its collider belongs to.
+- **`nearby` in one pass, with no garbage** (2026-11-17). A result carries its collider in a private field for `send`
+  (`NearbyResult`): registering each in a `WeakMap` cost about 200 times making it, and kept every result alive past the young
+  generation. `ColliderIndex.within` walks the cells once into reused arrays, sorted by insertion, with no object per candidate.
+  An index's cells are about one and a half times its boxes' median side (16 to 64 pixels): 32-pixel cells under 10-pixel enemies
+  looked at fifty entries to find four. Boxes are worked out with each ancestor's child space remembered, not composed up the
+  whole tree for every collider. `distanceToBox` uses `Math.sqrt`; `Math.hypot` is about four times slower in V8.
+- **A keyed list whose keys did not change skips its bookkeeping** (2026-11-17): the duplicate check, the scan for removed items and
+  the reorder, when the keys are the same, in the same order, as at its last render. `applyProps` walks props with `for…in`, not
+  `Object.keys`. A reorder writes the slot's run of children in place instead of sorting them all, and which hooks an object has is a
+  field on it (`worldHandlers`), so making the order handlers run in again (every step something mounts or unmounts) looks nothing
+  up. Together with the `nearby` work: Swarm with 1,500 enemies from 14.0 to 11.0 ms, armed from 19.0 to 16.3 ms; Hearth's wave
+  10 from 1.27 to 1.16 ms, 99th percentile 4.5 to 3.7 ms (A/B, same VM).
 - **Mounting** appends without scanning siblings when the child sorts last; it was quadratic before.
 - **A transform's numbers start as doubles** (2026-11-16). V8 picks a field's representation from its first value: a `Transform`
   whose `x` started at 0 (a small integer) and later held a fraction changed shape, and the walk that composes thousands of them kept
