@@ -2208,6 +2208,9 @@ from an input script and reading the game state or the draw records, which alone
 - `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
   from `{ tag, data, width, height }` (made once per spec, under the holder); `press` calls `World.reportPress` at a pressable's
   middle; `setProps` calls the generated `updateProps`.
+- `send(tag, where, value)` queues a value as a component's `send` does and delivers it at once (`World.deliverSends`), without a
+  step, as `collide` reports a contact at once; `place({ …, onReceive })` gives a test's collider a receiver, so a test reads
+  what the component sent it during a step.
 - `state(component)` reads `saveHotState()` back by source name (`"Enemy.health"` becomes `health`): the accessor tests needed,
   which hot reload already had. `texts`, `find` and `findAll` read the tree.
 

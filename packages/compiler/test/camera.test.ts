@@ -153,7 +153,7 @@ describe("<Camera>: IR and generated code", () => {
 
   it("builds the camera and updates zoom in place", () => {
     assert.match(compiled.code, /readonly camera: Camera = new Camera\(\{ zoom: \(this\.\$s_wave > 5\) \? 2 : 1 \}\);/);
-    assert.match(compiled.code, /const (\$\d+) = \(this\.\$s_wave > 5\) \? 2 : 1;[^]*?this\.camera\.zoom = \1;/);
+    assert.match(compiled.code, /const (\$\d+)(?:: [^=]+)? = \(this\.\$s_wave > 5\) \? 2 : 1;[^]*?this\.camera\.zoom = \1;/);
     assert.match(compiled.code, /this\.camera\.transform\.x = 160;/);
   });
 
@@ -164,7 +164,7 @@ describe("<Camera>: IR and generated code", () => {
 
   it("makes a Camera-rooted component a Camera", () => {
     assert.match(compiled.code, /export class View extends Camera<ViewProps> \{/);
-    assert.match(compiled.code, /const (\$\d+) = this\.props\.zoom;[^]*?this\.zoom = \1;/);
+    assert.match(compiled.code, /const (\$\d+)(?:: [^=]+)? = this\.props\.zoom;[^]*?this\.zoom = \1;/);
   });
 
   it("type-checks the generated module", () => {

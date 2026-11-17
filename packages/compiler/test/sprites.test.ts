@@ -107,8 +107,8 @@ describe("<AnimatedSprite>: IR and generated code", () => {
       compiled.code,
       /readonly animatedSprite2: AnimatedSprite = new AnimatedSprite\(\{ frames: \["blink1\.png", "blink2\.png"\] \}\);/
     );
-    assert.match(compiled.code, /const (\$\d+) = this\.\$s_running \? \[[^]*?this\.animatedSprite\.frames = \1;/);
-    assert.match(compiled.code, /const (\$\d+) = this\.\$s_running;[^]*?this\.animatedSprite\.playing = \1;/);
+    assert.match(compiled.code, /const (\$\d+)(?:: [^=]+)? = this\.\$s_running \? \[[^]*?this\.animatedSprite\.frames = \1;/);
+    assert.match(compiled.code, /const (\$\d+)(?:: [^=]+)? = this\.\$s_running;[^]*?this\.animatedSprite\.playing = \1;/);
     assert.doesNotMatch(compiled.code, /this\.animatedSprite2\./, "a fixed sprite is never touched by render");
   });
 

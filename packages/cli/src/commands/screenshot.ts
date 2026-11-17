@@ -7,7 +7,8 @@
  *
  * The game folder holds `game.ts`, which exports `gameConfig` (what `run` takes) and may export `bindings` (the action names a
  * script may use, `jump`, `right`; see `parseInputScript`) and `screen` (how the canvas sits in the window, for `click@x,y`). The script is run with the folder as the working directory, so
- * the game's `assets/` resolve as when it is played.
+ * the game's `assets/` resolve as when it is played. The game is compiled first (`src` to `generated`, as `tse build` does), so a
+ * shot always shows the source as it is now; a compile error is printed and nothing is shot.
  *
  * Options:
  *   --script "<script>"     the input script (default: 1 idle step)
@@ -30,7 +31,18 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
-import { contactSheet, decodePng, encodePng, findNativeLibraryOf, pixelDifference, renderRun, type Pixels } from "@tsengine/player-node";
+import {
+  compileArgs,
+  contactSheet,
+  decodePng,
+  encodePng,
+  findNativeLibraryOf,
+  pixelDifference,
+  renderRun,
+  type Pixels,
+} from "@tsengine/player-node";
+
+import { node } from "../run.ts";
 
 const usage =
   'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
@@ -114,6 +126,13 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
   if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > 255) {
     console.error(`--tolerance takes a whole number from 0 to 255.\n${usage}`);
     return 2;
+  }
+  // Compile first, as `tse check` and `tse dev` do: the generated code a shot runs is never older than the source. About a second.
+  const compiled = node(compileArgs(gameDir), gameDir);
+  if (!compiled.ok) {
+    process.stderr.write(compiled.output);
+    console.error("tse screenshot: the game did not compile, so nothing was shot.");
+    return 1;
   }
   const mod = (await import(pathToFileURL(join(gameDir, "game.ts")).href)) as {
     gameConfig: PlayerConfig;

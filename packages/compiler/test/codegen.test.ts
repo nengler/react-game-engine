@@ -138,7 +138,7 @@ export class WarningIcon extends Entity {
     // Written only when it differs, and then the sprite is told: a render that changes nothing reports nothing.
     assert.match(
       code,
-      /override render\(\): void \{\n {4}const \$1 = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/
+      /override render\(\): void \{\n {4}const \$1: \(typeof this\.sprite\)\["image"\] = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/
     );
     // The sprite is only ever constructed in its field initialiser.
     assert.equal(code.match(/new Sprite/g)?.length, 1);
@@ -151,8 +151,8 @@ export class WarningIcon extends Entity {
         return <Entity><Collider width={(s.a + s.b) * 2} height={s.a + s.b * 2} /></Entity>;
       }
     `);
-    assert.match(code, /const (\$\d+) = \(this\.\$s_a \+ this\.\$s_b\) \* 2;[^]*?this\.collider\.width = \1;/);
-    assert.match(code, /const (\$\d+) = this\.\$s_a \+ \(this\.\$s_b \* 2\);[^]*?this\.collider\.height = \1;/);
+    assert.match(code, /const (\$\d+)(?:: [^=]+)? = \(this\.\$s_a \+ this\.\$s_b\) \* 2;[^]*?this\.collider\.width = \1;/);
+    assert.match(code, /const (\$\d+)(?:: [^=]+)? = this\.\$s_a \+ \(this\.\$s_b \* 2\);[^]*?this\.collider\.height = \1;/);
   });
 });
 

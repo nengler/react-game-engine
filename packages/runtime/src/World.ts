@@ -442,6 +442,14 @@ export class World implements BodySpace {
     this.#sends.push({ tag, where, value });
   }
 
+  /**
+   * Deliver now what `send` has queued, instead of at the end of the next step's update phase: for a test that hands a component
+   * a value between steps (`@tsengine/testing`'s `t.send`). A game never needs it.
+   */
+  deliverSends(): void {
+    if (this.#sends.length > 0) this.#deliver();
+  }
+
   /** What `send` has queued for the end of the update phase. */
   readonly #sends: { readonly tag: string; readonly where: SendTarget; readonly value: unknown }[] = [];
 

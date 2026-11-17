@@ -180,15 +180,20 @@ export class ElementEmitter extends HandlerEmitter {
    * What a render writes to one object: each value is worked out, and only if one differs from what is there are they
    * written and the object told, once (`markChanged`, or `markMoved` for its transform). So a render that changes nothing
    * that is drawn reports nothing, and the player keeps what it drew; one that only moves the component reports only that.
-   * The temporaries are numbered through the whole `render()`, so none can hide another.
+   * The temporaries are numbered through the whole `render()`, so none can hide another. A write that names its target's
+   * `type` declares its temporary with it, so the value is typed against the field as it would be written in place: a
+   * template literal (`` `${pct}%` ``) then checks as the field's template-literal type (`${number}%`), not as `string`.
    */
-  protected emitReportedWrites(writes: readonly { readonly target: string; readonly value: ExprIR }[], report: string): void {
+  protected emitReportedWrites(
+    writes: readonly { readonly target: string; readonly value: ExprIR; readonly type?: string }[],
+    report: string
+  ): void {
     if (writes.length === 0) return;
     const w = this.w;
     const emit = (): void => {
       const names = writes.map((write) => {
         const name = `$${++this.renderTemps}`;
-        w.line(`const ${name} = ${this.expr(write.value, true)};`);
+        w.line(`const ${name}${write.type === undefined ? "" : `: ${write.type}`} = ${this.expr(write.value, true)};`);
         return name;
       });
       w.block(`if (${writes.map((write, i) => `${write.target} !== ${names[i]}`).join(" || ")})`, () => {
@@ -206,7 +211,7 @@ export class ElementEmitter extends HandlerEmitter {
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     if (el.component.kind === "Intrinsic") {
       this.emitReportedWrites(
-        dynamic.map((prop) => ({ target: access(ref, prop.name), value: prop.value })),
+        dynamic.map((prop) => ({ target: access(ref, prop.name), value: prop.value, type: writtenFieldType(ref, prop.name) })),
         `${ref}.markChanged()`
       );
     } else if (hasDynamicProps(el.props)) {
@@ -682,4 +687,9 @@ export function colliderTag(el: {
       return JSON.stringify(prop.value.value);
   }
   return null;
+}
+
+/** The type of field `name` of the object `ref` names (`(typeof this.bar)["width"]`), for a declaration typed as the field is. */
+function writtenFieldType(ref: string, name: string): string {
+  return `(typeof ${ref})[${JSON.stringify(name)}]`;
 }
