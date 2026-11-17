@@ -14,8 +14,18 @@ const ROOT = join(OUTPUT_ROOT, String(process.pid), "gs");
 const STATE_FILE = join(ROOT, "GameState.ts");
 const STATE = `import { createGameState } from "@tsengine/runtime";
 
+type MapId = "meadow" | "glowmire";
+type Level = 1 | 2 | 3;
+
 export const useGame = createGameState(
-  { coins: 0, player: { hp: 10, name: "Ada" }, muted: false, enemies: [] as { id: number; hp: number }[] },
+  {
+    coins: 0,
+    player: { hp: 10, name: "Ada" },
+    muted: false,
+    enemies: [] as { id: number; hp: number }[],
+    map: "meadow" as MapId,
+    level: 1 as Level,
+  },
   {
     collect(s, n: number) { s.coins += n; },
     spawn(s, id: number) { s.enemies.push({ id, hp: 3 }); },
@@ -244,6 +254,29 @@ export function Settings() {
     assert.deepEqual(typeErrors(compiled), []);
   });
 
+  it('keeps the type a leaf is written with (`"meadow" as MapId`): a literal union is not widened to string', () => {
+    const compiled = build(`
+const MAPS = { meadow: "Meadow", glowmire: "Glowmire" };
+export function MapName() {
+  const map = useGame((s) => s.map);
+  const level = useGame((s) => s.level);
+  const next: 1 | 2 | 3 = level;
+  return <Text size={12}>{MAPS[map]} {next}</Text>;
+}`);
+    const [map, level] = compiled.ir.components[0]!.state;
+    assert.deepEqual(map!.type, { kind: "SourceType", text: 'ReturnType<typeof useGame.getState>["map"]' });
+    assert.deepEqual(map!.initialValue, { kind: "StringLiteral", value: "meadow" });
+    assert.deepEqual(level!.type, { kind: "SourceType", text: 'ReturnType<typeof useGame.getState>["level"]' });
+    assert.deepEqual(typeErrors(compiled), []);
+    const { schema } = compiler.parseGameState(STATE_FILE, STATE);
+    assert.deepEqual(schema!.tree.children["map"], { kind: "leaf", type: "string", initial: "meadow", typed: true });
+    const plain = compiler.parseGameState("GameState.ts", `export const useGame = createGameState({ a: 0 as number, b: "x" }, {});`);
+    assert.deepEqual(plain.schema!.tree.children, {
+      a: { kind: "leaf", type: "number", initial: 0 },
+      b: { kind: "leaf", type: "string", initial: "x" },
+    });
+  });
+
   it("reads a value named like a member of the root (`name` in an <Entity>) into a field of its own", async () => {
     const compiled = build(`
 export function Badge() {
@@ -312,7 +345,7 @@ export function Counter() {
     assert.equal(top!.code, DiagnosticCode.InvalidGameState);
     assert.match(
       top!.message,
-      /'coin' is not in the game state \(did you mean "coins"\?\)\. State: coins, player, muted, enemies, collect, spawn, hurt, rename, noop\./
+      /'coin' is not in the game state \(did you mean "coins"\?\)\. State: coins, player, muted, enemies, map, level, collect, spawn, hurt, rename, noop\./
     );
     const [nested] = errors(`function A() { const c = useGame((s) => s.player.hpp); return <Entity />; }`);
     assert.match(nested!.message, /'player\.hpp' is not in the game state \(did you mean "player\.hp"\?\)\. 'player' has: hp, name\./);
