@@ -198,9 +198,8 @@ ignored):
 
 A component's state is `const s = useMutable({ hp: 3, foes: [] as Foe[] })`, written directly (`s.hp -= 1`,
 `s.foes.push(f)`). There is no `useState` and no `useRef`: each is `TSE1102`, whose message writes out the conversion in the
-author's names, once per hook. The editor's quick fix and `node tools/codemod-mutable.ts <files or folders>` convert a whole file
-(both are `convertToMutable`, `packages/compiler/src/codemod/mutable.ts`; a ref used as a value, such as returned from a hook, is
-left for a person).
+author's names, once per hook. The codemod that converted whole files was removed (2026-11-17) once no code in the repository
+used either hook.
 
 **Why not React's snapshot.** React's state is a snapshot: a handler sees the value from the last render, and a setter's value
 shows only after the next one. That suits UI, where a handler does one thing, and not a step function, which reads, changes and
@@ -273,8 +272,6 @@ callback prop (`onGone?.()`). `ref={…}` on an element is `TSE1106`.
 - TypeScript does not narrow a field inside a closure: `{s.waiting !== null && <Prompt onKey={() => bind(s.waiting)} />}` is a
   type error where `const waiting = s.waiting` above it is not. It is also a real hazard, since the callback runs later and the
   field may have changed. The guide teaches the `const`.
-- After the codemod, check `setX(x + 1); use(x + 1)`: under a snapshot `use` read the old `x`, but converted to
-  `s.x += 1; use(s.x + 1)` it adds one twice.
 - A hook's own state is named after the hook (`body.x`, `body2` for a second call or a clash), which `t.state()`, saves, hot
   reload and the inspector show.
 

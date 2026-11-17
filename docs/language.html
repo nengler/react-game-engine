@@ -213,7 +213,7 @@ return <Panel title={`Bag (${total})`}>{rows.map((row) => <Label key={row.id}>{r
   </table></div>
 
   <h3 id="hook-usemutable"><code>useMutable</code><span id="hook-usestate"></span></h3>
-  <p>A component's state: an object of fields you write directly. Each field renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once, so a step needs no local copies and no setters; render sees what the frame committed. It replaces React's <code>useState</code>: a <code>useState</code> is <code>TSE1102</code>, whose message writes out the conversion, and the editor's quick fix converts the whole file (as <code>node tools/codemod-mutable.ts</code> does from the command line).</p>
+  <p>A component's state: an object of fields you write directly. Each field renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once, so a step needs no local copies and no setters; render sees what the frame committed. It replaces React's <code>useState</code>: a <code>useState</code> is <code>TSE1102</code>, whose message writes out the conversion in your names.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 const s = useMutable({
   health: 100,                 // number (a literal widens to number)
@@ -266,7 +266,7 @@ useUpdate((dt) => {
   }
 });
 </script></pre>
-  <p>A field cannot be written in <code>useUnmount</code>: the component is going away. Tell the parent with a callback prop. <code>node tools/codemod-mutable.ts &lt;file&gt;</code> and the editor's quick fix move a file's <code>useRef</code> and <code>useState</code> to <code>useMutable</code>.</p>
+  <p>A field cannot be written in <code>useUnmount</code>: the component is going away. Tell the parent with a callback prop.</p>
 
   <h3 id="hook-useinput"><code>useInput</code> and <code>InputState</code></h3>
   <p>Input is polled each frame. There are no key-event props.</p>

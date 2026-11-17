@@ -201,15 +201,9 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
     const from = lines.offset(params.range.start);
     const to = lines.offset(params.range.end);
     const actions: object[] = [];
-    const path = pathOf(uri);
-    const project = path === null ? null : projectFor(path);
-    const converter =
-      project === null || path === null
-        ? undefined
-        : { convertToMutable: (_: string, text: string) => project.convertToMutable(path, text) };
     for (const d of diagnostics) {
       if (d.span === null || d.span.end < from || d.span.start > to) continue;
-      for (const fix of fixesFor(document.text, d, converter)) {
+      for (const fix of fixesFor(document.text, d)) {
         actions.push({
           title: fix.title,
           kind: "quickfix",
