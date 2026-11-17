@@ -23,5 +23,5 @@
       }
     }
   ],
-  "ignorePatterns": ["node_modules", "dist", "**/generated", "native/build*", "host/target"]
+  "ignorePatterns": ["node_modules", "dist", "**/generated", "native/build*", "host/target", "docs/search-index.js"]
 }

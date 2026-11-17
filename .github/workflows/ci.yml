@@ -2,7 +2,7 @@ name: CI
 
 # Actions minutes are limited, so this workflow tries not to spend them twice:
 # - a change that only touches markdown runs nothing (no test reads it). The guide in docs/*.html is not skipped:
-#   tests check it covers every built-in and hook, and that each page's search index is current;
+#   tests check it covers every built-in and hook, and that its search index (docs/search-index.js) is current;
 # - a new push to a pull request cancels the run still going for the old one;
 # - the native jobs cache their raylib and QuickJS builds, which are most of their time. A cache is keyed on
 #   the compiler versions and the files that decide what gets built, so a toolchain upgrade or a change to
