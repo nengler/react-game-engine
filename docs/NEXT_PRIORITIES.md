@@ -32,7 +32,7 @@ Every step is done; the next order has not been set.
 
 These cannot be checked in a cloud container, and each has found bugs the tests did not.
 
-- **macOS** (decided 2026-11-15: the owner will make games on a Mac). Nothing has been built or run on macOS: libtse's CMake build,
+- **macOS** (decided 2026-11-15: the owner will make games on a Mac). Nobody has built or run anything on a Mac by hand: libtse's CMake build,
   `tse dev`, `tse package` (both engines), the link lists in `host/build.rs` and the storage paths are written for it but
   unverified beyond what the release workflow's platform matrix runs (the builds, the C smoke test, the Node host on the software
   renderer and the demo's parity under tse-host, on macOS arm64 and x64 and on Windows x64; a `dry_run` dispatch runs it without

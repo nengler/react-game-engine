@@ -301,7 +301,7 @@ export function Field() {
 <p>To carry a value with the collision (a coin's worth, an enemy's damage), give the collider <code>data</code> and declare what each tag carries once in a <code>.ts</code> file (Systems, collisions).</p>
 
 <h2 id="cooldown">A cooldown and a flash</h2>
-<p>Time is counted in the update, in seconds of game time: it follows the fixed step, replays the same, and stops while the game is paused. <code>after</code> and <code>every</code> do the same for a one-off delay.</p>
+<p>Time is counted in the update, in seconds of game time: it follows the fixed step, replays the same, and stops while the game is paused. <code>after</code> (once) and <code>every</code> (repeating) count the same game time, for a delay you do not need to track yourself.</p>
 <pre class="code" data-lang="tsx" data-recipe="Turret.tsx"><code>import { after, Shape, useInput, useMutable, useUpdate } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Turret() {
