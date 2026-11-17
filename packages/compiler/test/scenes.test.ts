@@ -417,8 +417,8 @@ describe("loadScene", () => {
           prefab: "Frame",
           props: { title: "hud" },
           children: [
-            { id: "a", prefab: "Enemy", props: { speed: 1 }, transform: { x: 10 } },
-            { id: "b", prefab: "Enemy", props: { speed: 2, tint: "blue" }, transform: { x: 20, y: 5, rotation: 0.5 } },
+            { id: "a", prefab: "Enemy", props: { speed: 1 } },
+            { id: "b", prefab: "Enemy", props: { speed: 2, tint: "blue" } },
           ],
         },
       ],

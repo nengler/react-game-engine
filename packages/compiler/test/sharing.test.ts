@@ -33,7 +33,7 @@ function Player({ onMove }: PlayerProps) {
     s.x += 1;
     onMove(s.x);
   });
-  return <Entity transform={{ x: s.x }} />;
+  return <Entity x={s.x} />;
 }
 interface ChaserProps { target: number; onSee: (x: number) => void }
 function Chaser({ target, onSee }: ChaserProps) {

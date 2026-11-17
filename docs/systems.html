@@ -199,16 +199,16 @@ useUpdate(() => {
 <section id="placing" data-group="Systems" data-title="Placing things: Flex, x and y">
   <h2>Placing things</h2>
   <p>Anything laid out in rows or columns is a <code>&lt;Flex&gt;</code>, wherever it is (a menu over the world, a row of hearts, an inventory, a panel in a <code>&lt;Hud&gt;</code>). Anything the game moves (a character, a coin, a shot) is placed with <code>x</code> and <code>y</code> from its state.</p>
-  <p><code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code> and <code>scaleY</code> are props of every built-in that has a transform: <code>&lt;Sprite image="coin.png" x={spot.x} y={spot.y} /&gt;</code>. They are the same as <code>transform={{ x: spot.x, y: spot.y }}</code>. You still need <code>transform</code> for <code>global</code> and for placing a component: on a component, <code>x</code> is whatever its props say (a component may declare an <code>x</code> of its own), so a component is placed with <code>transform</code>. Writing a field both ways is an error. Fading is <code>opacity={…}</code>, a prop on every element (see <a href="language.html#transform">Transform</a>).</p>
+  <p><code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code>, <code>scaleY</code>, <code>global</code> and <code>opacity</code> are props of every built-in that can be placed: <code>&lt;Sprite image="coin.png" x={spot.x} y={spot.y} /&gt;</code>. A component takes none of them, since a component may declare an <code>x</code> of its own. To place one, wrap it in an <code>&lt;Entity&gt;</code>, <code>&lt;Entity x={40} y={8}&gt;&lt;Coin /&gt;&lt;/Entity&gt;</code>, or give it <code>x</code> and <code>y</code> props that it puts on its root (see <a href="language.html#transform">Position and drawing order</a>).</p>
   <p>Bramble's menus sit in a <code>&lt;Screen&gt;</code>, outside any <code>&lt;Hud&gt;</code>. Here is one with its rows placed by hand:</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // Before: every row placed by hand, and the bar behind the cursor's row worked out the same way.
 <Entity>
-  <Shape kind="rect" width={300} height={12} color="#2b3350" transform={{ x: 10, y: top + cursor * 13 }} />
+  <Shape kind="rect" width={300} height={12} color="#2b3350" x={10} y={top + cursor * 13} />
   {rows.map((row, i) => (
-    <Entity key={row.id} transform={{ x: 14, y: top + i * 13 }}>
+    <Entity key={row.id} x={14} y={top + i * 13}>
       <Text>{row.label}</Text>
-      <Text transform={{ x: 170, y: 0 }} color="#a7b0c8">{row.value}</Text>
+      <Text x={170} y={0} color="#a7b0c8">{row.value}</Text>
     </Entity>
   ))}
 </Entity>
@@ -226,7 +226,7 @@ useUpdate(() => {
 </Flex>
 </script></pre>
   <h3 id="flex">Rows and columns: <code>Flex</code></h3>
-  <p>A <code>&lt;Flex&gt;</code> lays out its children in a row or column, with flexbox props and Clay-style sizing. A child's <code>transform</code> still offsets it within its slot. Only a <code>Flex</code> is resized; <code>Sprite</code>, <code>Shape</code> and <code>Text</code> keep their size.</p>
+  <p>A <code>&lt;Flex&gt;</code> lays out its children in a row or column, with flexbox props and Clay-style sizing. A child's own <code>x</code> and <code>y</code> still offset it within its slot. Only a <code>Flex</code> is resized; <code>Sprite</code>, <code>Shape</code> and <code>Text</code> keep their size.</p>
   <div class="tablewrap"><table>
     <tr><th>Size value</th><th>Meaning</th></tr>
     <tr><td><code>"fit"</code> (default)</td><td>The children plus padding and gaps.</td></tr>
@@ -347,7 +347,7 @@ export default function Main() {
     <tr><td><code>"stretch"</code></td><td>Each axis scaled on its own to fill the window.</td></tr>
     <tr><td><code>"expand"</code></td><td>Like <code>"integer"</code>, but the game is widened to the window's shape. A wide window shows more world instead of bars. Lay out with <code>grow</code> and percentages, not fixed x positions.</td></tr>
   </table></div>
-  <p>Only the root <code>&lt;Screen&gt;</code> counts; it takes no <code>transform</code>. Everything inside is in game pixels. Without one, coordinates are window pixels.</p>
+  <p>Only the root <code>&lt;Screen&gt;</code> counts; it takes no <code>x</code> or <code>y</code>. Everything inside is in game pixels. Without one, coordinates are window pixels.</p>
 
   <p><code>&lt;Text&gt;</code> can keep itself readable over a busy picture. <code>shadow="black"</code> draws the text again a pixel right and down in that colour (<code>shadowX</code> and <code>shadowY</code> move it); <code>outline="black"</code> draws it in that colour at every pixel around it, <code>outlineWidth</code> pixels thick (1 to 3). Both work with the built-in font and with bitmap fonts and turn and scale with the text. Used together, the shadow falls from the outlined shape. They take no room in a layout, so leave padding for them, and use opaque colours: a see-through outline shows through where its copies overlap.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
@@ -360,7 +360,7 @@ export default function Main() {
   <h3><code>Camera</code></h3>
   <ul>
     <li>The camera follows its children: <code>&lt;Camera&gt;&lt;Player /&gt;&lt;/Camera&gt;</code> keeps the view on the player (several children: their middle; none: it stays put).</li>
-    <li>Children are placed as if the camera were not there. Its own <code>transform</code> is an offset from the followed point.</li>
+    <li>Children are placed as if the camera were not there. Its own <code>x</code> and <code>y</code> are an offset from the followed point.</li>
     <li><code>zoom</code>: 2 draws everything twice as large; must be positive.</li>
     <li><code>bounds={[x, y, w, h]}</code> keeps the view inside a world area. <code>slide={0.4}</code> eases to new bounds (a room change) instead of jumping.</li>
     <li><code>shake={shake}</code> takes a value from <a href="language.html#logic"><code>useShake()</code></a>.</li>
@@ -419,13 +419,13 @@ export function Hero() {
     else s.vy += 600 * dt;
     if (touching("spikes")) place(16, 32);            // a collider tagged "spikes" overlaps it now
   });
-  return <Entity transform={{ x, y }}><Sprite image="hero.png" /></Entity>;
+  return <Entity x={x} y={y}><Sprite image="hero.png" /></Entity>;
 }
 
 // In the level: <Tilemap map="room1" solid />, and <Collider width={16} height={16} tag="crate" solid /> for a crate.
 </script></pre>
   <ul>
-    <li><code>x</code> and <code>y</code> are state, in the component's parent's space (what its <code>transform</code> means), so the component renders where the body is.</li>
+    <li><code>x</code> and <code>y</code> are state, in the component's parent's space (where an <code>&lt;Entity x y&gt;</code> around it would put it), so the component renders where the body is.</li>
     <li><code>move(dx, dy)</code> moves x first, then y, carrying fractions to the next move, and returns <code>{ left, right, up, down, tags }</code>: the sides it was stopped on and the tags of what stopped it (<code>"tile"</code> for a tile).</li>
     <li><code>touching(tag)</code>: whether a collider with that tag overlaps the body now. The component's own colliders do not count.</li>
     <li><code>blocked(dx, dy)</code>: whether something solid is where a move by (dx, dy) would put the body, without moving it. <code>blocked(0, 1)</code> is standing on the ground (a body standing still is not stopped by anything, so its last <code>move</code> says nothing of the floor); <code>blocked(facing, 0)</code> is a wall to jump off. In a handler, <code>x</code> and <code>y</code> are where the body is now, after any <code>move</code> earlier in the step; render draws it where the step left it.</li>
@@ -443,7 +443,7 @@ import { tilemaps } from "../../generated/tilemaps.ts";
 registerTilemaps(tilemaps);
 </script></pre>
 <pre class="code" data-lang="tsx"><script type="text/plain">
-<Tilemap map="room1" layer="Tiles" transform={{ x: 320, y: 0 }} />   // map = the .tmj file name; tiles from its tilesets' sheets
+<Tilemap map="room1" layer="Tiles" x={320} y={0} />   // map = the .tmj file name; tiles from its tilesets' sheets
 </script></pre>
 <pre class="code" data-lang="ts"><script type="text/plain">
 import { getTilemap, moveActorX, moveActorY } from "@tsengine/runtime";

@@ -77,7 +77,7 @@ describe("quick fixes", () => {
 
   it("turns useMemo into the value and useCallback into the function", () => {
     const memo = fix(
-      `import { Entity, useMemo, useMutable } from "@tsengine/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity transform={{ x: twice }} />;\n}\n`,
+      `import { Entity, useMemo, useMutable } from "@tsengine/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity x={twice} />;\n}\n`,
       "TSE1102"
     );
     assert.match(memo, /const twice = s\.x \* 2;/);

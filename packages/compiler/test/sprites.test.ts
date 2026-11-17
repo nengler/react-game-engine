@@ -146,7 +146,7 @@ describe("<AnimatedSprite>: authored source type-checks", () => {
   it("accepts a list of images, an fps, a playing flag, and a list that comes from a prop", () => {
     assert.deepEqual(check(`<AnimatedSprite frames={["a.png", "b.png"]} />`), []);
     assert.deepEqual(check(`<AnimatedSprite frames={on ? ["a.png"] : ["b.png"]} fps={12} playing={on} />`), []);
-    assert.deepEqual(check(`<AnimatedSprite frames={names} transform={{ x: 4 }} />`), []);
+    assert.deepEqual(check(`<AnimatedSprite frames={names} x={4} />`), []);
   });
 
   it("rejects frames that are a string, or not images, and a wrong fps or playing", () => {

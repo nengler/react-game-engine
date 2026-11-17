@@ -32,7 +32,7 @@ function Pair() {
   const { x: a, far: aFar } = useRunner(100, "ArrowRight");
   const { x: b } = useRunner(10, "ArrowLeft");
   return (
-    <Entity name="Pair" transform={{ x: a, y: b }}>
+    <Entity name="Pair" x={a} y={b}>
       {aFar && <Entity name="far" />}
     </Entity>
   );
@@ -76,7 +76,7 @@ describe("custom hooks", () => {
        function Counters() {
          const [one, two] = useDoubleCounter();
          usePing();
-         return <Entity name="C" transform={{ x: one, y: two }} />;
+         return <Entity name="C" x={one} y={two} />;
        }`,
       "Counters.tsx"
     );
@@ -112,7 +112,7 @@ function Two() {
     b.count += 5;
     toggle();
   });
-  return <Entity name="Two" transform={{ x: a.count, y: b.count, z: on ? 1 : 0 }} />;
+  return <Entity name="Two" x={a.count} y={b.count} z={on ? 1 : 0} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
     const { Two } = await load<{ Two: new () => Entity & { a: { count: number }; b: { count: number } } }>(compiled);
@@ -147,7 +147,7 @@ function Two() {
   it("do not leak: a hook's names cannot clash with the component's own", () => {
     const compiled = compile(
       `function useThing() { const s = useMutable({ x: 1 }); useUpdate(() => { s.x += 1; }); return s.x; }
-       function Both() { const s = useMutable({ x: 100 }); const y = useThing(); return <Entity name="B" transform={{ x: s.x, y }} />; }`,
+       function Both() { const s = useMutable({ x: 100 }); const y = useThing(); return <Entity name="B" x={s.x} y={y} />; }`,
       "Both.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
@@ -159,15 +159,15 @@ function Two() {
 
   it("report a hook called where only a component statement may be, and a call that does not match the hook", () => {
     const nested = compileErrors(
-      `function useA() { const s = useMutable({ n: 0 }); return s.n; } function C() { const s = useMutable({ on: true }); const v = s.on ? useA() : 0; return <Entity name="C" transform={{ x: v }} />; }`
+      `function useA() { const s = useMutable({ n: 0 }); return s.n; } function C() { const s = useMutable({ on: true }); const v = s.on ? useA() : 0; return <Entity name="C" x={v} />; }`
     );
     assert.match(nested[0]!.message, /must be a statement of the component body/);
     const tooMany = compileErrors(
-      `function useA(a: number) { const s = useMutable({ n: a }); return s.n; } function C() { const n = useA(1, 2); return <Entity name="C" transform={{ x: n }} />; }`
+      `function useA(a: number) { const s = useMutable({ n: a }); return s.n; } function C() { const n = useA(1, 2); return <Entity name="C" x={n} />; }`
     );
     assert.match(tooMany[0]!.message, /takes 1 argument, but the call passes 2/);
     const none = compileErrors(
-      `function useA() { useUpdate(() => {}); } function C() { const n = useA(); return <Entity name="C" transform={{ x: n }} />; }`
+      `function useA() { useUpdate(() => {}); } function C() { const n = useA(); return <Entity name="C" x={n} />; }`
     );
     assert.match(none[0]!.message, /returns nothing, but its result is used/);
     const unknown = compileErrors(`function C() { useMissing(); return <Entity name="C" />; }`);
@@ -195,7 +195,7 @@ function Two() {
       );
       writeFileSync(
         join(dir, "src/Clock.tsx"),
-        `import { Entity } from "@tsengine/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" transform={{ x: t }} />;\n}\n`
+        `import { Entity } from "@tsengine/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" x={t} />;\n}\n`
       );
       const repo = resolve(import.meta.dirname, "../../..");
       execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], {
@@ -226,8 +226,8 @@ describe("custom hooks: the name of a hook's own state", () => {
   it("is the hook's name without `use`, numbered where it is taken, and never a name the component has", () => {
     const compiled = compile(
       `function useThing() { const s = useMutable({ x: 1 }); useUpdate(() => { s.x += 1; }); return s.x; }
-       function Twice() { const a = useThing(); const b = useThing(); return <Entity name="T" transform={{ x: a, y: b }} />; }
-       function Taken() { const thing = useMutable({ n: 0 }); const a = useThing(); return <Entity name="K" transform={{ x: a + thing.n }} />; }`,
+       function Twice() { const a = useThing(); const b = useThing(); return <Entity name="T" x={a} y={b} />; }
+       function Taken() { const thing = useMutable({ n: 0 }); const a = useThing(); return <Entity name="K" x={a + thing.n} />; }`,
       "Names.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
@@ -240,7 +240,7 @@ describe("custom hooks: the name of a hook's own state", () => {
     const compiled = compile(
       `function useCounter() { const s = useMutable({ n: 0 }); return s; }
        function useDefault() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n += 1; }); return s.n; }
-       function C() { const counter = useCounter(); const d = useDefault(); return <Entity name="C" transform={{ x: counter.n + d }} />; }`,
+       function C() { const counter = useCounter(); const d = useDefault(); return <Entity name="C" x={counter.n + d} />; }`,
       "Names2.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);

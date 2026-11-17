@@ -115,7 +115,7 @@ export function Menu() {
 export function Faller() {
   const { x, y, move } = useBody({ x: 0, y: 0, width: 4, height: 4 });
   useUpdate((dt) => { move(0, 120 * dt); });
-  return <Entity><Tilemap map="testing-floor" solid /><Entity transform={{ x, y }} /></Entity>;
+  return <Entity><Tilemap map="testing-floor" solid /><Entity x={x} y={y} /></Entity>;
 }`);
     const t = render(Faller, undefined, { tilemaps: { "testing-floor": FLOOR } });
     t.step(30);

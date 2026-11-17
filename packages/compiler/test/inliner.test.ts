@@ -47,7 +47,7 @@ function C() {
 
 export function C() {
   const t = useTicker();
-  return <Entity name="C" transform={{ x: t }}><Sprite image="a.png" /></Entity>;
+  return <Entity name="C" x={t}><Sprite image="a.png" /></Entity>;
 }`);
     const result = getCompiler().compile("C.tsx", source);
     assert.ok(result.ok, result.diagnostics.map((d) => d.message).join("\n"));
@@ -129,7 +129,7 @@ describe("authoring module", () => {
         `import { Entity, useTime } from "my-engine/jsx";
 function C() {
   const time = useTime();
-  return <Entity name="C" transform={{ x: time }} />;
+  return <Entity name="C" x={time} />;
 }`
       );
       assert.ok(result.ok, result.diagnostics.map((d) => d.message).join("\n"));

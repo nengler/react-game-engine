@@ -52,9 +52,9 @@ interface GaugeProps {
 function Gauge({ max }: GaugeProps) {
   const s = useMutable({ value: 0, round: false });
   return (
-    <Entity name="Gauge" transform={{ x: s.value }}>
+    <Entity name="Gauge" x={s.value}>
       <Shape kind="rect" width={max} height={4} color="gray" />
-      <Shape kind={s.round ? "circle" : "rect"} width={s.value} height={4} color={s.value > 5 ? "red" : "green"} transform={{ x: 2 }} />
+      <Shape kind={s.round ? "circle" : "rect"} width={s.value} height={4} color={s.value > 5 ? "red" : "green"} x={2} />
     </Entity>
   );
 }
@@ -133,7 +133,7 @@ describe("<Shape>: authored source type-checks", () => {
 
   it("accepts both kinds, a color and a placement", () => {
     assert.deepEqual(check(`<Shape kind="rect" width={n} height={4} />`), []);
-    assert.deepEqual(check(`<Shape kind={big ? "circle" : "rect"} width={n} height={n} color="red" transform={{ x: 1 }} />`), []);
+    assert.deepEqual(check(`<Shape kind={big ? "circle" : "rect"} width={n} height={n} color="red" x={1} />`), []);
   });
 
   it("rejects an unknown kind, a missing size and a wrong type, including inside an expression", () => {

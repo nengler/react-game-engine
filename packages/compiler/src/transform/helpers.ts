@@ -154,12 +154,11 @@ export function cleanJsxText(text: string): string {
 export const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
 
 /**
- * Transform fields a built-in that takes `transform` also takes as props of their own: `<Sprite x={spot.x} y={spot.y} />` is
- * `transform={{ x: spot.x, y: spot.y }}`. Not `global` (a flag, not a place). `opacity` is lowered the same way on a built-in
- * without an `opacity` of its own (`<Sprite>`, `<Flex>`, `<Tilemap>` and `<Layer>` have one), and is only ever a prop: see
+ * The transform's fields, written as props of a built-in: `<Sprite x={spot.x} y={spot.y} global />`. `opacity` is lowered the same
+ * way on a built-in without an `opacity` of its own (`<Sprite>`, `<Flex>`, `<Tilemap>` and `<Layer>` have one): see
  * `isTransformShorthand`. Never on a component, where `x` is whatever the component's props say.
  */
-export const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", "rotation", "scaleX", "scaleY"]);
+export const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", "rotation", "scaleX", "scaleY", "global"]);
 
 /**
  * Whether `name` on the built-in `tag` is transform shorthand: one of `TRANSFORM_SHORTHAND`, or `opacity` on a built-in whose

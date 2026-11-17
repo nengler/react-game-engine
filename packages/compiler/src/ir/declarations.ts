@@ -104,11 +104,9 @@ export interface ComponentIR {
 export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
 
 /**
- * The fields of a transform (runtime `Entity.transform`), settable with the
- * `transform={{ x, y }}` attribute. Pixels, y down; `rotation` in radians.
- * Relative to the nearest ancestor `<Entity>` unless `global` is true.
+ * The fields of a transform (runtime `Entity.transform`), each written as a prop of a built-in (`<Entity x={…} global />`).
+ * Pixels, y down; `rotation` in radians. Relative to the parent unless `global` is true. `opacity` is lowered to the same write.
  */
-// `opacity` is written as a prop (`<Entity opacity={…}>`), never inside `transform={{ … }}`; it is lowered to the same write.
 export const TRANSFORM_FIELDS = ["x", "y", "z", "rotation", "scaleX", "scaleY", "global", "opacity"] as const;
 
 export type TransformField = (typeof TRANSFORM_FIELDS)[number];

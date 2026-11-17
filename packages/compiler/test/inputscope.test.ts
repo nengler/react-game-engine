@@ -77,7 +77,7 @@ export function Pads({ onWave }: PadsProps) {
     <Entity>
       <Flex pressKey="Space" onPress={onWave} />
       <Pointer width={10} height={10} originX={5} originY={5} focusable autoFocus onFocus={() => { s.focused = 0; }} />
-      <Pointer width={10} height={10} originX={5} originY={5} transform={{ x: 30 }} focusable onFocus={() => { s.focused = 1; }} onBlur={() => { s.focused = -1; }} />
+      <Pointer width={10} height={10} originX={5} originY={5} x={30} focusable onFocus={() => { s.focused = 1; }} onBlur={() => { s.focused = -1; }} />
       <Text size={8}>{\`\${s.focused}\`}</Text>
     </Entity>
   );

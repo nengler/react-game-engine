@@ -34,7 +34,7 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
   mid-frame get hooks next frame; collision callbacks run after `useUpdate`, which is why the guide says to move with `useBody`, whose
   `move`, `touching` and `overlapping` answer in the same step.
 - Props are read live in handlers everywhere but a callback prop (a function, made once) and a list inside a list item.
-- Placement: built-ins take `x` / `y`; a component is placed with `transform={{ x, y }}` (its own props may say `x`). The origin is
+- Placement: built-ins take `x` / `y`; a component is placed by an `<Entity x y>` around it (its own props may say `x`). The origin is
   top-left except where `originX` / `originY` exist, and `z` adds to the parent's.
 
 ## 4. Game state

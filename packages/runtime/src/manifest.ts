@@ -75,7 +75,7 @@ export interface RuntimeManifest {
    */
   readonly reservedMembers: readonly string[];
   /**
-   * Intrinsics that take the `transform={{ x, y }}` attribute. Every runtime
+   * Intrinsics that take `x`, `y` and the other transform props. Every runtime
    * object has a transform; an intrinsic left out here (say, a sound with no
    * position) simply cannot be placed from JSX.
    */

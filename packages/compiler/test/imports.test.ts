@@ -147,7 +147,7 @@ function Player() {
     assert.ok(
       getCompiler().compile(
         "S.tsx",
-        `import { Entity } from "@tsengine/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" transform={{ x: helper(1) }} />; }`
+        `import { Entity } from "@tsengine/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" x={helper(1)} />; }`
       ).ok
     );
   });

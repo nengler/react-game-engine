@@ -39,7 +39,7 @@ import type { InputState } from "./input.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 import type { SpringOptions, TweenOptions } from "./math.ts";
 
-export type { TransformProps, TransformShorthand, OpacityShorthand, Child } from "./jsx-runtime.ts";
+export type { TransformShorthand, OpacityShorthand, Child } from "./jsx-runtime.ts";
 /** A cutscene's sequence, for a field's type (`intro: null as Sequence | null`); its steps come from `@tsengine/runtime` in a `.ts` file. */
 export type { Sequence, SequencePosition, Step } from "./sequence.ts";
 import type { OpacityShorthand, TransformShorthand } from "./jsx-runtime.ts";
@@ -63,7 +63,7 @@ function compileTimeOnly(name: string): never {
  *     const squash = useSquash();
  *     squash.x = 0.6;                                 // in a handler: thin and tall
  *     squash.y = 1.4;
- *     <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} … />   // scales about the sprite's origin
+ *     <Sprite scaleX={squash.x} scaleY={squash.y} … />   // scales about the sprite's origin
  *
  * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
@@ -77,7 +77,7 @@ export function useSquash(_recover?: number): { x: number; y: number } {
  * springs, one for each axis.
  *
  *     const y = useSpring(open ? 0 : -40, { duration: 0.4, bounce: 0.2 });
- *     <Entity transform={{ y }}>…</Entity>
+ *     <Entity y={y}>…</Entity>
  *
  * It steps in this component's update, so it follows the fixed step, `freeze` and replays, and renders only while it moves. It
  * starts at its first target. An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
@@ -123,7 +123,7 @@ export function useTime(): number {
  * A sound, played by calling the returned function in a handler:
  * `const playHit = useSound("hit.wav");` then `playHit();`, or `playHit(0.5)` at half volume (0 to 1). A sound played again
  * while it still sounds plays over itself, up to four at once, then the oldest is cut off. The path must be a
- * string literal. Sounds are not placed, so there is no `transform`.
+ * string literal. Sounds are not placed, so they take no `x` or `y`.
  */
 export function useSound(_path: string): (volume?: number) => void {
   return compileTimeOnly("useSound");
@@ -172,9 +172,9 @@ export interface BodyHandle {
  *       if (hit.down) setVy(0);
  *       if (touching("spikes")) die();
  *     });
- *     return <Entity transform={{ x, y }}>…</Entity>;
+ *     return <Entity x={x} y={y}>…</Entity>;
  *
- * Position is in the component's parent's space, as `transform` is. `x` and `y` are state: they render where the body is.
+ * Position is in the component's parent's space, as an element's `x` and `y` are. `x` and `y` are state: they render where the body is.
  * An ordinary hook the engine ships (\`useMutable\` and functions of the component, inlined like any custom hook).
  */
 export function useBody(_options: BodyOptions): BodyHandle {
@@ -326,7 +326,7 @@ export function Line(_props: LineProps & TransformShorthand & OpacityShorthand):
 }
 
 /**
- * The viewport. Its `transform` is the view (moving it pans, `zoom` magnifies),
+ * The viewport. Its `x` and `y` are the view (moving it pans, `zoom` magnifies),
  * and it follows its children: `<Camera><Player /></Camera>` keeps the view on
  * the player. With no children it stays where it is.
  */
@@ -346,7 +346,7 @@ export function AnimatedSprite(_props: AnimatedSpriteProps & TransformShorthand)
  * A container that places its children in a row or a column. It takes the props of CSS flexbox (`direction`,
  * `alignItems`, `justifyContent`, `gap`, `padding`) and sizes itself the way Clay does: each axis is `"fit"` (the
  * default), `"grow"`, a number of pixels or a percentage such as `"50%"`, with optional `minWidth` / `maxWidth` /
- * `minHeight` / `maxHeight`. A child's own `transform` moves it within its slot. `background` fills the box, and `borderWidth`, `borderColor` and `borderRadius`
+ * `minHeight` / `maxHeight`. A child's own `x` and `y` move it within its slot. `background` fills the box, and `borderWidth`, `borderColor` and `borderRadius`
  * give it a border (which takes room like padding) and rounded corners; `hoverBackground`, `hoverBorderColor`, `focusBackground` and `focusBorderColor`
  * are the colours it is drawn in while the mouse is over it or it has the focus; `pressedBackground` / `pressedBorderColor` while the button is held on it;
  * `disabled` switches it off (and shows `disabledBackground` / `disabledBorderColor` over every other state). `transition` fades between the colours of those states over that many seconds instead of snapping.
@@ -416,7 +416,7 @@ export function TextInput(_props: TextInputProps & TransformShorthand): JSX.Elem
 /**
  * A grid of tiles from a sheet, with no object per tile: `<Tilemap map="room1" image="tiles.png" />` draws the registered Tiled map
  * `room1` with the tiles of `tiles.png`; without `image`, each tile comes from its own tileset's sheet, as saved in Tiled. The same
- * map, as `getTilemap("room1")`, is the solid grid that movement code reads. Placed by `transform` at the map's top left; `layer` draws one layer only. A leaf.
+ * map, as `getTilemap("room1")`, is the solid grid that movement code reads. Placed by `x` and `y` at the map's top left; `layer` draws one layer only. A leaf.
  */
 export function Tilemap(_props: TilemapProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Tilemap");
@@ -425,7 +425,7 @@ export function Tilemap(_props: TilemapProps & TransformShorthand): JSX.Element 
 /**
  * An emitter of small squares for dust, a dash's trail or a death, with no game object per particle: `rate` a second while `emitting`,
  * `burst` at once when it turns on (or when it is made), each living `lifetime` seconds, thrown at `speed` toward `angle` ± `spread`,
- * pulled by `gravity`, fading or shrinking. `space="world"` leaves them where they were made. A leaf, placed by `transform`.
+ * pulled by `gravity`, fading or shrinking. `space="world"` leaves them where they were made. A leaf, placed by `x` and `y`.
  */
 export function Particles(_props: ParticlesProps & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Particles");
@@ -540,7 +540,7 @@ export function freeze(_steps: number): void {
 
 /**
  * A layer that stays on the screen while the camera moves, drawn after the world: a score, a health bar, a button.
- * Its coordinates are screen pixels (game pixels under a `<Screen>`). `transform` moves the whole layer.
+ * Its coordinates are screen pixels (game pixels under a `<Screen>`). `x` and `y` move the whole layer.
  */
 export function Hud(_props: HudProps & { children?: Child } & TransformShorthand & OpacityShorthand): JSX.Element {
   return compileTimeOnly("Hud");
@@ -567,7 +567,7 @@ export function Lighting(_props: LightingProps & { children?: Child } & Transfor
 /**
  * The game's screen, at a fixed resolution: `<Screen width={320} height={180}>` as the root of the game draws
  * everything at 320 × 180 and scales it to fit the window (`fit`), with `border` around it. Only the root's
- * `<Screen>` does this; it cannot be placed with `transform`.
+ * `<Screen>` does this; it cannot be placed with `x` and `y`.
  */
 export function Screen(_props: ScreenProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Screen");

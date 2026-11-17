@@ -66,8 +66,8 @@ function Hero() {
   });
   const hurt = s.health < 25;
   return (
-    <Entity name={s.title} transform={{ x: s.health > 0 ? 1 : 0, y: 2, rotation: 0.5, scaleX: 1, scaleY: 1, global: false }}>
-      <Sprite image={hurt ? "hurt.png" : "ok.png"} transform={{ y: s.health }} />
+    <Entity name={s.title} x={s.health > 0 ? 1 : 0} y={2} rotation={0.5} scaleX={1} scaleY={1} global={false}>
+      <Sprite image={hurt ? "hurt.png" : "ok.png"} y={s.health} />
       {s.alive && <Collider width={16} height={24} onCollisionEnter={(other) => { s.alive = false; }} />}
       {s.alive ? <Sprite image="a.png" /> : null}
     </Entity>
@@ -103,7 +103,7 @@ function C() {
   st.n = 5;
   st.n += 1;
   st.s = "b";
-  return <Entity name={st.s} transform={{ x: st.n }} />;
+  return <Entity name={st.s} x={st.n} />;
 }`),
       []
     );
@@ -116,20 +116,20 @@ function C() {
     }
   });
 
-  it("reports bad transform values and fields", () => {
-    for (const transform of [`{{ x: "1" }}`, `{{ z: 1 }}`, `{{ global: 1 }}`, `{{ rotation: true }}`, `"x"`]) {
-      const errors = checkSource(`${IMPORTS}\nfunction C() { return <Entity transform={${transform}} />; }`);
-      assert.ok(errors.length > 0, transform);
+  it("reports bad transform prop values, and a transform attribute", () => {
+    for (const props of [`x="1"`, `global={1}`, `rotation={true}`, `transform={{ x: 1 }}`]) {
+      const errors = checkSource(`${IMPORTS}\nfunction C() { return <Entity ${props} />; }`);
+      assert.ok(errors.length > 0, props);
     }
   });
 
-  it("accepts transform and key on a component element, whose props type does not declare them", () => {
+  it("accepts key on a component element, whose props type does not declare it, and refuses transform there", () => {
     const source = `${IMPORTS}
 interface CoinProps { value: number }
-function Coin({ value }: CoinProps) { return <Entity name="coin" transform={{ y: value }} />; }
-function Level() { return <Entity name="level"><Coin value={1} transform={{ x: 10, global: true }} /></Entity>; }`;
+function Coin({ value }: CoinProps) { return <Entity name="coin" y={value} />; }
+function Level() { return <Entity name="level"><Coin value={1} key="a" /></Entity>; }`;
     assert.deepEqual(checkSource(source), []);
-    assert.ok(checkSource(source.replace("global: true", `global: "yes"`)).length > 0, "its values are still type-checked");
+    assert.ok(checkSource(source.replace(`key="a"`, `transform={{ x: 10 }}`)).length > 0, "a component is placed by a wrapper");
     assert.ok(
       checkSource(source.replace("<Coin value={1}", "<Coin value={1} nope={2}")).length > 0,
       "other unknown props are still reported"

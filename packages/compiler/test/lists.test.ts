@@ -40,7 +40,7 @@ interface EnemyProps {
 }
 
 function Enemy({ speed, onDefeated }: EnemyProps) {
-  return <Entity name="Enemy" transform={{ x: speed }} />;
+  return <Entity name="Enemy" x={speed} />;
 }
 
 function Pack() {
@@ -61,7 +61,7 @@ function Pack() {
       <Sprite image="fg.png" />
       {s.showBoss && (
         <Entity name="Boss">
-          {s.enemies.filter((e) => e.speed > 5).map((e, i) => <Sprite key={e.id} image={e.id + ".png"} transform={{ x: i * 10 }} />)}
+          {s.enemies.filter((e) => e.speed > 5).map((e, i) => <Sprite key={e.id} image={e.id + ".png"} x={i * 10} />)}
         </Entity>
       )}
     </Entity>
@@ -218,7 +218,7 @@ function C() {
 interface Item { id: string; n: number }
 function C() {
   const s = useMutable({ items: [] as Item[] });
-  return <Entity name="C">{s.items.map((e, i) => <Sprite key={e.id} image={e.id} transform={{ x: i * e.n }} />)}</Entity>;
+  return <Entity name="C">{s.items.map((e, i) => <Sprite key={e.id} image={e.id} x={i * e.n} />)}</Entity>;
 }`;
     assert.ok(getCompiler().compile("C.tsx", source).ok);
     assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M5bSource.tsx`, text: source }]), []);
@@ -495,11 +495,11 @@ interface DotProps {
 }
 
 function Dot({ x }: DotProps) {
-  return <Entity name="dot" transform={{ x }} />;
+  return <Entity name="dot" x={x} />;
 }
 
 function Ring({ x }: DotProps) {
-  return <Entity name="ring" transform={{ x }} />;
+  return <Entity name="ring" x={x} />;
 }
 
 function Switching() {
@@ -671,7 +671,7 @@ export function Foes() {
   return (
     <Entity name="Foes">
       <Entity name="byHelper">
-        {onMap(st.run).map((e) => <Sprite key={e.id} image="things.png" frame={FRAME[e.kind]} transform={{ x: e.x }} />)}
+        {onMap(st.run).map((e) => <Sprite key={e.id} image="things.png" frame={FRAME[e.kind]} x={e.x} />)}
       </Entity>
       <Entity name="byMember">
         {st.run.enemies.map((e) => ({ id: e.id, frame: FRAME[e.kind] })).map((s) => <Sprite key={s.id} image="things.png" frame={s.frame} />)}

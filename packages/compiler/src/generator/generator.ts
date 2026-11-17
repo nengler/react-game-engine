@@ -502,7 +502,7 @@ class ComponentGenerator extends ElementEmitter {
         for (const p of c.root.props) {
           if (p.kind === "CallbackProp") w.line(`this.${p.name} = ${this.callback(p.handler)};`);
         }
-        this.emitStaticTransform(c.root.transform, "this", "transform");
+        this.emitStaticTransform(c.root.transform, "this");
         this.emitStaticWiring(c.root.children, ROOT);
         const slot = findChildrenSlot(c.root.children, "this");
         if (slot) {
@@ -624,7 +624,7 @@ class ComponentGenerator extends ElementEmitter {
                   })),
                   "this.markChanged()"
                 );
-                this.emitDynamicTransform(c.root.transform, "this", "transform");
+                this.emitDynamicTransform(c.root.transform, "this");
                 this.emitChildUpdates(c.root.children, ROOT, "persistent");
               });
             };

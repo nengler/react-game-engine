@@ -69,7 +69,7 @@ export function Enemy({ power }: Props) {
   return (
     <Entity name="Enemy">
       <Camera shake={shake} />
-      {st.hp > 0 && <AnimatedSprite frames={["a.png"]} transform={{ scaleX: squash.x, scaleY: squash.y }} />}
+      {st.hp > 0 && <AnimatedSprite frames={["a.png"]} scaleX={squash.x} scaleY={squash.y} />}
     </Entity>
   );
 }

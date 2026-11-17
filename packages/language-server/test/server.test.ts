@@ -88,7 +88,7 @@ import { useGame } from "./GameState.ts";
 export function Coins() {
   const coins = useGame((s) => s.coins);
   const st = useMutable({ shown: false });
-  return <Entity transform={{ x: coins }} />;
+  return <Entity x={coins} />;
 }
 `;
 const STATE = `import { createGameState } from "@tsengine/runtime";

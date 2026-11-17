@@ -174,7 +174,7 @@ const x = useSpring(s.shown ? 0 : 24, { duration: 0.3, bounce: 0.15 });
     <li><code>useTween</code> takes <code>duration</code> (default 0.25) and <code>ease</code>: <code>linear</code>, <code>inQuad</code>, <code>outQuad</code>, <code>inOutQuad</code>, <code>inCubic</code>, <code>outCubic</code> (the default), <code>inOutCubic</code>, <code>inSine</code>, <code>outSine</code>, <code>inOutSine</code>, <code>inBack</code>, <code>outBack</code>, <code>outElastic</code>, <code>outBounce</code>, or a function from a <code>.ts</code> file. A new target starts again from where it is.</li>
     <li>They step in the component's <code>useUpdate</code>: they follow the fixed step, <code>freeze</code> and replays, render only while moving, and keep their place through a hot reload. They also stop while <code>&lt;Game paused&gt;</code> is on, so a pause menu does not animate.</li>
     <li>Each takes a number: a point is two springs, one for each axis. In plain code, <code>stepSpring</code> and <code>stepTween</code> (from <code>@tsengine/runtime</code>) take points too.</li>
-    <li><code>opacity={…}</code> fades any element and what is in it; see <a href="language.html#transform">Transforms</a>.</li>
+    <li><code>opacity={…}</code> fades any element and what is in it; see <a href="language.html#transform">Position and drawing order</a>.</li>
   </ul>
 
   <h3>Music and fades</h3>

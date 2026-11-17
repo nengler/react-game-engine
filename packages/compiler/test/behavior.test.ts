@@ -291,9 +291,9 @@ function Drifter({ tint }: DrifterProps) {
     if (s.ticks <= 3) s.x += 10;
   });
   return (
-    <Entity transform={{ x: s.x }}>
+    <Entity x={s.x}>
       <Shape kind="rect" width={4} height={4} color={tint} />
-      <Shape kind="rect" width={2} height={2} transform={{ y: s.ticks > 5 ? 1 : 0 }} />
+      <Shape kind="rect" width={2} height={2} y={s.ticks > 5 ? 1 : 0} />
     </Entity>
   );
 }
@@ -361,7 +361,7 @@ function Tag() {
     if (input.pressed("X")) s.x += 5;
     if (input.pressed("N")) s.n += 1;
   });
-  return <Text transform={{ x: s.x, y: s.y }}>{\`n\${s.n}\`}</Text>;
+  return <Text x={s.x} y={s.y}>{\`n\${s.n}\`}</Text>;
 }
 `);
     assert.deepEqual(

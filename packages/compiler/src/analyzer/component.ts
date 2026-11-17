@@ -355,7 +355,7 @@ export function analyzeComponent(
       diagnostics.push(
         error(
           DiagnosticCode.UnknownHook,
-          "useTransform was removed: keep position in state and set it with the `transform={{ x, y }}` attribute on an <Entity>.",
+          "useTransform was removed: keep position in state and write it as props, `<Entity x={s.x} y={s.y}>`.",
           span(node)
         )
       );

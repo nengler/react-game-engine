@@ -63,7 +63,7 @@ const Pair = () => (<Entity name="pair"><Dot /><Dot /></Entity>);`);
   it("imports a default export under any local name, alone or with named imports", async () => {
     const project = compileProject({
       "Enemy.tsx": `interface EnemyProps { speed: number }
-export default function Enemy({ speed }: EnemyProps) { return <Entity name="E" transform={{ x: speed }} />; }
+export default function Enemy({ speed }: EnemyProps) { return <Entity name="E" x={speed} />; }
 export function Boss() { return <Entity name="B" />; }`,
       "Level.tsx": `import Monster, { Boss } from "./Enemy.tsx";
 export function Level() {
@@ -120,7 +120,7 @@ function Coin({ value }: CoinProps) {
   useUpdate(() => { s.spin += value; });
   return <Sprite image={s.spin > 5 ? "gold.png" : "coin.png"} />;
 }
-function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }} /></Entity>; }`);
+function Level() { return <Entity name="L" x={10}><Coin value={3} /></Entity>; }`);
     assert.match(compiled.code, /export class Coin extends Sprite<CoinProps> \{/);
     assert.match(
       compiled.code,
@@ -140,12 +140,11 @@ function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }}
     world.tick(1);
     world.tick(1);
     assert.equal(coin.image, "gold.png");
-    assert.equal(coin.placement.x, 10);
-    assert.equal(coin.worldTransform().x, 10, "placed like any component");
+    assert.equal(coin.worldTransform().x, 10, "placed by its parent, like any component");
   });
 
   it("passes a static image straight to the Sprite constructor", () => {
-    const { code } = compile(`const Dot = () => <Sprite image="dot.png" transform={{ x: 3 }} />;`);
+    const { code } = compile(`const Dot = () => <Sprite image="dot.png" x={3} />;`);
     assert.match(code, /super\(\{ image: "dot\.png" \}\);/);
     assert.match(code, /this\.transform\.x = 3;/);
   });

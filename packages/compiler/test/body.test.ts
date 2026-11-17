@@ -39,14 +39,14 @@ export function Hero({ onLanded, onSpikes }: HeroProps) {
     } else s.vy += 400 * dt;
     if (touching("spikes")) onSpikes();
   });
-  return <Entity transform={{ x, y }} />;
+  return <Entity x={x} y={y} />;
 }
 export function Room({ onLanded, onSpikes }: HeroProps) {
   return (
     <Entity>
       <Tilemap map="body-room" layer="Tiles" solid />
-      <Collider width={8} height={8} tag="crate" solid transform={{ x: 16, y: 16 }} />
-      <Collider width={8} height={2} tag="spikes" transform={{ x: 32, y: 22 }} />
+      <Collider width={8} height={8} tag="crate" solid x={16} y={16} />
+      <Collider width={8} height={2} tag="spikes" x={32} y={22} />
       <Hero onLanded={onLanded} onSpikes={onSpikes} />
     </Entity>
   );
@@ -128,10 +128,10 @@ export function Tower({ onSee }: TowerProps) {
 export function Field({ onSee }: TowerProps) {
   return (
     <Entity>
-      <Collider width={4} height={4} tag="enemy" data={{ id: "near" }} transform={{ x: 32, y: 30 }} />
-      <Collider width={4} height={4} tag="enemy" data={{ id: "far" }} transform={{ x: 80, y: 30 }} />
-      <Collider width={4} height={4} tag="wall" transform={{ x: 30, y: 30 }} />
-      <Entity transform={{ x: 30, y: 30 }}>
+      <Collider width={4} height={4} tag="enemy" data={{ id: "near" }} x={32} y={30} />
+      <Collider width={4} height={4} tag="enemy" data={{ id: "far" }} x={80} y={30} />
+      <Collider width={4} height={4} tag="wall" x={30} y={30} />
+      <Entity x={30} y={30}>
         <Tower onSee={onSee} />
       </Entity>
     </Entity>

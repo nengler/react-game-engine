@@ -41,7 +41,7 @@ function Enemy({ speed, skin = "red", onDefeated }: EnemyProps) {
     if (s.hp <= 0) onDefeated?.();
   });
   return (
-    <Entity name="Enemy" transform={{ x: speed }}>
+    <Entity name="Enemy" x={speed}>
       <Sprite image={skin === "red" ? "enemy-red.png" : "enemy-blue.png"} />
     </Entity>
   );
@@ -187,7 +187,7 @@ describe("props: generated code", () => {
 function Spinner({ rate = 2, label }: SpinProps) {
   const s = useMutable({ angle: 0 });
   useUpdate((dt) => { s.angle += dt * rate; });
-  return <Entity name="spinner" transform={{ rotation: s.angle * rate, x: label ? 1 : 0 }} />;
+  return <Entity name="spinner" rotation={s.angle * rate} x={label ? 1 : 0} />;
 }`);
     assert.match(compiled.code, /dt \* this\.\$live\.rate!/);
     assert.match(compiled.code, /this\.props\.label\b(?!!)/, "an optional prop without a default really can be undefined");
@@ -370,14 +370,16 @@ describe("props across files", () => {
     "Enemy.tsx": `interface EnemyProps { speed: number; onDefeated?: () => void }
 export function Enemy({ speed, onDefeated }: EnemyProps) {
   useUpdate(() => { if (speed > 5) onDefeated?.(); });
-  return <Entity name="Enemy" transform={{ x: speed }} />;
+  return <Entity name="Enemy" x={speed} />;
 }`,
     "Level.tsx": `import { Enemy } from "./Enemy.tsx";
 export function Level() {
   const s = useMutable({ score: 0, speed: 1 });
   return (
     <Entity name="Level">
-      <Enemy speed={s.speed} onDefeated={() => { s.score += 1; }} transform={{ y: s.score }} />
+      <Entity y={s.score}>
+        <Enemy speed={s.speed} onDefeated={() => { s.score += 1; }} />
+      </Entity>
     </Entity>
   );
 }`,
@@ -399,7 +401,7 @@ export function Level() {
     assert.equal(level.enemy.transform.x, 9);
     world.tick(1);
     assert.equal(level.s.score, 1, "the imported child called the parent's callback");
-    assert.equal(level.enemy.placement.y, 1, "and the placement follows the score");
+    assert.equal(level.enemy.worldTransform().y, 1, "and the wrapper around it follows the score");
   });
 
   it("catches a wrong prop to an imported component in the project's type-check", () => {
@@ -504,7 +506,7 @@ export function Seeded({ seed: firstSeed, speed: rate = 2 }: SeedProps) {
   it("imports a runtime function that is used only in a prop's default", async () => {
     const compiled = compile(`import { Entity, clamp } from "@tsengine/runtime/jsx";
 interface P { speed?: number }
-export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Capped" transform={{ x: speed }} />; }`);
+export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Capped" x={speed} />; }`);
     assert.match(compiled.code, /import \{ Entity, clamp, type PrefabDefinition \} from "@tsengine\/runtime";/);
     assert.deepEqual(typeCheck(compiled), []);
     const { Capped } = await load<{ Capped: new (props?: { speed?: number }) => Entity }>(compiled);
@@ -555,7 +557,7 @@ function Enemy(props: EnemyProps) {
     if (s.hp <= 0) props.onDefeated?.();
   });
   return (
-    <Entity name="Enemy" transform={{ x: props.speed }}>
+    <Entity name="Enemy" x={props.speed}>
       <Sprite image={props.skin === "blue" ? "blue.png" : "red.png"} />
     </Entity>
   );

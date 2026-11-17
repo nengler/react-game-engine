@@ -20,7 +20,7 @@ function Arena() {
   const s = useMutable({ wide: false });
   return (
     <Screen width={s.wide ? 640 : 320} height={180} fit="contain" border="navy">
-      <Shape kind="rect" width={8} height={8} transform={{ x: 4, y: 4 }} />
+      <Shape kind="rect" width={8} height={8} x={4} y={4} />
     </Screen>
   );
 }
@@ -85,10 +85,10 @@ describe("Screen: diagnostics", () => {
     );
   });
 
-  it("cannot be placed with transform", () => {
-    const errors = compileErrors(`function C() { return <Screen width={320} height={180} transform={{ x: 4 }} />; }`);
+  it("cannot be placed with x and y", () => {
+    const errors = compileErrors(`function C() { return <Screen width={320} height={180} x={4} />; }`);
     assert.ok(
-      errors.some((d) => /<Screen> cannot be placed with `transform`/.test(d.message)),
+      errors.some((d) => /<Screen> cannot be placed with `x`/.test(d.message)),
       errors.map((d) => d.message).join("\n")
     );
   });
@@ -123,7 +123,7 @@ interface PanelProps {
 }
 function Panel({ coins }: PanelProps) {
   return (
-    <Hud transform={{ x: 8, y: 4 }}>
+    <Hud x={8} y={4}>
       <Text size={8}>Coins: {coins}</Text>
     </Hud>
   );
@@ -151,7 +151,7 @@ function Level() {
     const check = getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/Hud${Math.random()}.tsx`,
-        text: `import { Hud, Text } from "@tsengine/runtime/jsx";\nfunction C() { return <Hud transform={{ x: 1 }}><Text size={8}>x</Text></Hud>; }`,
+        text: `import { Hud, Text } from "@tsengine/runtime/jsx";\nfunction C() { return <Hud x={1}><Text size={8}>x</Text></Hud>; }`,
       },
     ]);
     assert.deepEqual(check, []);

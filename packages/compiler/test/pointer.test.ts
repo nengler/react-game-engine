@@ -19,8 +19,8 @@ const MENU = `
 function Menu() {
   const s = useMutable({ open: false, taps: 0 });
   return (
-    <Entity name="Menu" transform={{ x: 100 }}>
-      <Pointer width={40} height={20} transform={{ x: 10 }} onPress={() => { s.open = !s.open; }} />
+    <Entity name="Menu" x={100}>
+      <Pointer width={40} height={20} x={10} onPress={() => { s.open = !s.open; }} />
       <Pointer width={s.taps + 5} height={20} onPress={() => { s.taps += 1; }} />
     </Entity>
   );
@@ -82,7 +82,7 @@ describe("<Pointer>: authored source type-checks", () => {
 
   it("accepts a size, a placement and a press handler", () => {
     assert.deepEqual(check(`<Pointer width={10} height={10} />`), []);
-    assert.deepEqual(check(`<Pointer width={10} height={10} transform={{ x: 1 }} onPress={() => {}} />`), []);
+    assert.deepEqual(check(`<Pointer width={10} height={10} x={1} onPress={() => {}} />`), []);
   });
 
   it("rejects a missing size, a wrong type and children", () => {

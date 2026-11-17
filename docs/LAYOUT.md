@@ -90,7 +90,7 @@ One prop per axis, as in CSS and Clay. The compiler checks a literal through the
 
 - **Children are laid out in tree order**, which follows the JSX. A conditional child that turns on takes its place among its
   siblings; one that turns off lets the rest close up; a keyed list keeps its order.
-- **A child's own `transform` moves it within its slot**, not the slot: as CSS's `transform`, a nudge, rotation or scale never
+- **A child's own `x`, `y`, `rotation` and scale move it within its slot**, not the slot: as CSS's `transform`, a nudge, rotation or scale never
   pushes its neighbours. So a button can bounce on press without disturbing the row.
 - **Leaves keep their size.** `grow`, `stretch`, percentages and shrinking resize only a child that is itself a `Flex`; a `Shape`,
   `Sprite` or `Text` keeps the size its props give it (resizing one from layout would fight its `render()`). To stretch a coloured
@@ -187,7 +187,7 @@ Every `GameObject` has `layoutX` / `layoutY`, composed first:
 world = parent × layout × placement × transform
 ```
 
-Layout never writes `transform` (that would fight `render()`) or `placement` (that is the parent's `transform` attribute). They
+Layout never writes `transform` (that would fight `render()`) or `placement` (a scene sets that). They
 are zero outside a `Flex`, only x and y, and reserved names (a state called `layoutX` is a compile error). `worldTransform()` and
 the player's `walkTree` both apply them, and a test checks they agree.
 
@@ -325,7 +325,7 @@ and output is byte-identical to a game without one.
 
 `<Screen>` must be the root (or the only child of the root `<Game>`): the player looks for it there each frame, so a game can
 change its resolution or `fit` from state. Anywhere else it warns once and acts as an `Entity`, which only the player can tell,
-since what ends up at the root depends on another file. A `transform` on it is a compile error.
+since what ends up at the root depends on another file. An `x` or `y` on it is a compile error.
 
 Full screen is a key the player handles: `<Game fullscreenKey>` or `PlayerConfig.fullscreenKey` (default `"F11"`, `false` for
 none), and Alt + Enter always (`tse_set_fullscreen`, a borderless window at the desktop's size).

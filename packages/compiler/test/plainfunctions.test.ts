@@ -52,7 +52,7 @@ import { shade, log, ease } from "./helpers.ts";
 interface Props { curve: (t: number) => number }
 
 export function Child({ curve }: Props) {
-  return <Entity name="Child" transform={{ x: curve(2) }} />;
+  return <Entity name="Child" x={curve(2)} />;
 }
 
 export function A() {
@@ -63,7 +63,7 @@ export function A() {
     s.n += 1;
   });
   return (
-    <Entity name="A" transform={{ x: half }}>
+    <Entity name="A" x={half}>
       <Shape kind="rect" width={4} height={4} color={shade(s.n, "x")} />
       <Child curve={ease} />
     </Entity>
@@ -95,7 +95,7 @@ export function A() {
   const fire = (shot: Shot) => {
     s.n = ease(shot.speed) + SPEEDS.fast;
   };
-  return <Pointer width={4} height={4} transform={{ x: s.n }} onPress={() => fire({ speed: 2 })} />;
+  return <Pointer width={4} height={4} x={s.n} onPress={() => fire({ speed: 2 })} />;
 }
 `,
     });
@@ -126,7 +126,7 @@ export function D() {
   });
   return (
     <Entity name="D">
-      {ROOMS.filter((r) => Math.abs(r.index - s.room) <= 1).map((r) => <Shape key={r.name} kind="rect" width={4} height={4} color="#fff" transform={{ x: r.x }} />)}
+      {ROOMS.filter((r) => Math.abs(r.index - s.room) <= 1).map((r) => <Shape key={r.name} kind="rect" width={4} height={4} color="#fff" x={r.x} />)}
     </Entity>
   );
 }
@@ -179,7 +179,7 @@ export default function Main() { return <Game controls={controls}><Hero /></Game
 import { shade } from "./helpers.ts";
 export function B() {
   const s = useMutable({ n: 0, other: 0 });
-  return <Entity name="B"><Shape kind="rect" width={1} height={1} color={shade(s.n, "a")} transform={{ x: s.other }} /></Entity>;
+  return <Entity name="B"><Shape kind="rect" width={1} height={1} color={shade(s.n, "a")} x={s.other} /></Entity>;
 }
 `,
     });

@@ -22,7 +22,7 @@ interface BoxProps {
 }
 
 function Box({ x, label }: BoxProps) {
-  return <Entity name={label} transform={{ x }} />;
+  return <Entity name={label} x={x} />;
 }
 
 interface Item {
@@ -184,7 +184,7 @@ function C() { const s = useMutable({ p: { width: 4, height: 4 } as ShapeSize })
   });
 
   it("still rejects computed attribute names and a spread of something that is not an expression the compiler can read", () => {
-    const errors = compileErrors(`function Box({ x }: { x: number }) { return <Entity name="B" transform={{ x }} />; }
+    const errors = compileErrors(`function Box({ x }: { x: number }) { return <Entity name="B" x={x} />; }
 function C() { return <Entity name="C"><Box {...window.props} /></Entity>; }`);
     assert.ok(errors.length > 0);
   });
