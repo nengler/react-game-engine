@@ -130,7 +130,7 @@ mark { background: var(--accent-soft); color: inherit; }
 <main>
 <section id="effects" data-group="Effects and input" data-title="Effects and audio">
   <h2>Effects and audio</h2>
-  <p>State is for what lasts. A burst of dust where you landed, or a sound, happens at a moment and then plays out. For those, <strong>make a store once, mount its renderer once, and call it from anywhere</strong>, the way a toast library works. There is no <code>useEffect</code>.</p>
+  <p>State is for what lasts. A burst of dust where you landed, or a sound, happens at a moment and then plays out. For those, you make a store once, mount its renderer once, and call it from anywhere, as with a toast library. There is no <code>useEffect</code>.</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // effects.ts
 import { createParticles, createSounds } from "@tsengine/runtime";
@@ -152,8 +152,8 @@ sfx.play("land");                     // second argument: volume multiplier
     <li>A burst belongs to the layer, so it plays out even if whoever asked has left. With no layer mounted, it is counted but not drawn.</li>
     <li>A preset is <code>&lt;Particles&gt;</code>'s props except <code>rate</code>, <code>emitting</code> and <code>space</code>.</li>
     <li>A burst's <code>color</code> and <code>endColor</code> replace the preset's for that burst only, so one preset can make every enemy's death puff in that enemy's colour. One not given stays the preset's; a preset with no <code>endColor</code> keeps a given <code>color</code> throughout.</li>
-    <li>A sound with <code>once: true</code> plays at most once a step however many components ask for it: twenty towers firing together make one shot, not a roar.</li>
-    <li><strong>Continuous</strong> effects (a trail while dashing) stay JSX: <code>&lt;Particles emitting={dashing} space="world" /&gt;</code>.</li>
+    <li>A sound with <code>once: true</code> plays at most once a step however many components ask for it: twenty towers firing together make one sound.</li>
+    <li>Continuous effects (a trail while dashing) stay in JSX: <code>&lt;Particles emitting={dashing} space="world" /&gt;</code>.</li>
   </ul>
 
   <h3 id="motion">Motion: springs and tweens</h3>
@@ -236,7 +236,7 @@ vec4 effect(vec2 uv) {
 <section id="input" data-group="Effects and input" data-title="Input actions and timing">
   <h2>Input actions and timing</h2>
   <h3>Named actions</h3>
-  <p>Name actions once and every <code>input.pressed / down / released</code> accepts a name as well as a key. Rebinding is one place.</p>
+  <p>Name actions once, and every <code>input.pressed / down / released</code> then accepts a name as well as a key. Rebinding changes that one list.</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // rules/controls.ts
 import { createControls } from "@tsengine/runtime";
@@ -254,7 +254,7 @@ useInput((input) => { if (input.pressed("jump")) jump(); });
 </script></pre>
   <ul>
     <li><code>down</code>: any key held. <code>pressed</code>: one went down this step. <code>released</code>: one went up with none still held.</li>
-    <li>An unknown name warns once and lists the actions. Rebinding at run time: see <a href="#saved">Saved data</a>. No analog axes yet.</li>
+    <li>An unknown name warns once and lists the actions. For rebinding at run time, see <a href="#saved">Saved data</a>. There are no analog axes.</li>
     <li>Gamepad: the first pad's buttons and four directions are keys (see <a href="language.html#hook-useinput">key names</a>). <code>gamepadDeadzone</code> on <code>&lt;Game&gt;</code> sets the stick threshold.</li>
   </ul>
 
@@ -279,7 +279,7 @@ useUpdate((dt, input) => {
   <ul>
     <li><code>input.pressedWithin(key, seconds)</code>: the key (or an action's key) went down within the last <code>seconds</code> of game time, this step included, and the press was not taken. <code>pressedWithin(key, 0)</code> is <code>pressed(key)</code>. Game time is the steps' <code>dt</code>, so under <code>fixedStep</code> a window is whole steps and a replay repeats it.</li>
     <li><code>input.consumePress(key)</code> takes the key's last press (each of an action's keys), so <code>pressedWithin</code> stops seeing it. <code>pressed</code> is not changed.</li>
-    <li><code>grace(active, left, dt, seconds)</code> returns <code>seconds</code> while <code>active</code>, then counts down to 0: keep it in a field and pass it back each step. A plain function, so it works in a rules file too.</li>
+    <li><code>grace(active, left, dt, seconds)</code> returns <code>seconds</code> while <code>active</code>, then counts down to 0: keep it in a field and pass it back each step. It is a plain function, so it also works in a rules file.</li>
     <li><code>input.pressHandled</code> is true on the step that sees a left click that a <code>&lt;Pointer&gt;</code>, <code>&lt;Button&gt;</code> or other pressable took. <code>input.pressed("MouseLeft")</code> is still true then: check both.</li>
   </ul>
 
@@ -310,9 +310,9 @@ function Pause() {
 </script></pre>
   <ul>
     <li><code>useUpdate</code> runs at a fixed rate with <code>dt = 1 / rate</code>. A frame runs no step, one, or several (at most 8; leftover time is dropped). Drawing stays once per frame.</li>
-    <li><strong>Smooth on any display</strong>: each frame is drawn between the last two steps, by how far it is into the next one (<code>interpolate</code>, on by default), so a 60-step game moves smoothly on a 120 Hz or 144 Hz screen. Positions, rotations, scales and the camera's follow and slide are blended for drawing only: <code>useUpdate</code>, collisions and saves see whole steps. It draws up to one step behind. Something that moves more than 64 pixels in one step (a respawn, a door) is drawn where it lands, not slid there. <code>&lt;Game interpolate={false}&gt;</code> draws the latest step instead; a hidden window (tests, <code>tse screenshot</code>) does that by default.</li>
-    <li><strong>No input is lost</strong>: a tap between two steps is seen by the next one as pressed and released.</li>
-    <li>Off by default: one update per frame with the frame's own time.</li>
+    <li>Each frame is drawn between the last two steps, by how far it is into the next one (<code>interpolate</code>, on by default), so a 60-step game moves smoothly on a 120 Hz or 144 Hz screen. Positions, rotations, scales and the camera's follow and slide are blended for drawing only: <code>useUpdate</code>, collisions and saves see whole steps. It draws up to one step behind. Something that moves more than 64 pixels in one step (a respawn, a door) is drawn where it lands, not slid there. <code>&lt;Game interpolate={false}&gt;</code> draws the latest step instead; a hidden window (tests, <code>tse screenshot</code>) does that by default.</li>
+    <li>A tap between two steps is not lost: the next step sees it as pressed and released.</li>
+    <li>The fixed step is off by default. Without it, there is one update per frame, with the frame's own time.</li>
   </ul>
   <h3 id="timers">Timers: <code>after</code> and <code>every</code></h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
@@ -329,11 +329,11 @@ useMount(() => {
 cancelTimers();                              // all of this component's timers
 </script></pre>
   <ul>
-    <li>Statements in a handler, as <code>setTimeout</code> is in React. The function is a handler too: it writes state, calls actions, plays sounds.</li>
+    <li>You call them as statements in a handler, as you would <code>setTimeout</code> in React. The function you pass is a handler too: it writes state, calls actions, plays sounds.</li>
     <li>A timer is the component's: it is cancelled when the component unmounts, so it never sets state on one that is gone.</li>
     <li><code>after</code> and <code>every</code> return the timer's id (1, 2, 3… for the component, never 0, so <code>0</code> in state means none). <code>cancelTimer(id)</code> stops that one timer and leaves the others; an id that is done, or 0, is ignored.</li>
     <li>They count game time in the update phase: they follow the fixed step and replay, and stop during <code>freeze</code> and <code>&lt;Game paused&gt;</code>.</li>
-    <li><strong>A timer or state?</strong> A timer is code, so it is not saved and a hot reload drops it (the log says so). Use one for what is only for the eye: a flash, a blink, a beat before a title appears. A delay that is part of the game (a few seconds of safety after a hit, a slow) is state that counts down in <code>useUpdate</code>, or a time it ends at kept in state: it is then saved, reloaded and tested like any state.</li>
+    <li>Choosing between a timer and state: a timer is code, so it is not saved and a hot reload drops it (the log says so). Use one for what is only for the eye: a flash, a blink, a beat before a title appears. A delay that is part of the game (a few seconds of safety after a hit, a slow) is state that counts down in <code>useUpdate</code>, or a time it ends at kept in state: it is then saved, reloaded and tested like any state.</li>
   </ul>
   <h3 id="cutscenes">Cutscenes: sequences</h3>
   <p>A cutscene is a list of steps run one after another as game time passes: a <strong>sequence</strong>, written as data in a <code>.ts</code> file. A component keeps it in a field and steps it from <code>useUpdate</code>; while it runs, the component can hold the world still.</p>
@@ -386,10 +386,10 @@ const paused = useGame((s) => s.paused);
 
   <h3 id="inspect">Seeing inside a running game</h3>
   <ul>
-    <li><strong>The layout overlay.</strong> Under <code>tse dev</code>, <strong>F1</strong> in the window (<code>&lt;Game overlayKey&gt;</code> to change it) outlines every <code>&lt;Flex&gt;</code> and its padding, every collider (a colour per layer) and every pointer, and labels the box under the mouse with the components it is in, its size and what sized it (<code>width grow</code>). A packaged game never has it.</li>
-    <li><strong>The inspector.</strong> <code>tse dev</code> prints an address (<code>inspector: http://127.0.0.1:…/</code>): open it in a browser to see the tree by component, as React DevTools shows it; the selected component's state and refs, props, the game-state paths it reads and how many times it has rendered; and each game state with its last actions and what each one changed, as Redux DevTools shows them.</li>
-    <li><strong>Editing.</strong> A state value or a game-state leaf can be changed in the inspector (type a JSON value). It shows on the next render. An edit is not input, so a replay does not repeat it; the log says so each time.</li>
-    <li><strong>Profiling.</strong> The inspector's <strong>profile</strong> button times every component while the game runs and shows, once a second, a table of milliseconds a frame: for each component (by name, with how many there are) its input, update and render time and renders a frame, the slowest first, and above it the frame's phases (steps, collisions, building the frame, drawing). A row over a millisecond is red. Timing costs a little, so it is on only while the button is; in a test or a tool, <code>startProfiling()</code> from <code>@tsengine/runtime</code> gives the same report (<code>profiler.take()</code>).</li>
+    <li>Under <code>tse dev</code>, <strong>F1</strong> in the window (<code>&lt;Game overlayKey&gt;</code> to change it) shows the layout overlay. It outlines every <code>&lt;Flex&gt;</code> and its padding, every collider (a colour per layer) and every pointer, and labels the box under the mouse with the components it is in, its size and what sized it (<code>width grow</code>). A packaged game never has it.</li>
+    <li><code>tse dev</code> also prints the address of the inspector (<code>inspector: http://127.0.0.1:…/</code>): open it in a browser to see the tree by component, as React DevTools shows it; the selected component's state and refs, props, the game-state paths it reads and how many times it has rendered; and each game state with its last actions and what each one changed, as Redux DevTools shows them.</li>
+    <li>In the inspector you can change a state value or a game-state leaf by typing a JSON value. The change shows on the next render. An edit is not input, so a replay does not repeat it; the log says so each time.</li>
+    <li>The inspector's <strong>profile</strong> button times every component while the game runs. Once a second it shows a table of milliseconds a frame: for each component (by name, with how many there are) its input, update and render time and renders a frame, the slowest first, and above it the frame's phases (steps, collisions, building the frame, drawing). A row over a millisecond is red. Timing costs a little, so it is on only while the button is; in a test or a tool, <code>startProfiling()</code> from <code>@tsengine/runtime</code> gives the same report (<code>profiler.take()</code>).</li>
   </ul>
 
   <h3 id="rewind">Rewind</h3>
@@ -397,7 +397,7 @@ const paused = useGame((s) => s.paused);
   <ul>
     <li><strong>F2</strong> pauses. <strong>←</strong> and <strong>→</strong> go back and on a frame, <strong>↑</strong> and <strong>↓</strong> a second; a bar over the game shows where you are. <strong>F2</strong> again plays on from there with live input, and the recorded future is dropped. The inspector's page has the same timeline, with a slider.</li>
     <li>Going to a frame restores the snapshot before it and plays the recorded input again to it, silently and without drawing: under a tenth of a second.</li>
-    <li><strong>Save a file while paused</strong> and the game is reloaded and the same input played again with the new code, to the same frame: you see the moment with the fix.</li>
+    <li>If you save a file while paused, the game is reloaded and the same input is played again with the new code, to the same frame, so you see the moment with the fix.</li>
     <li><strong>F4</strong> saves the moment (from the snapshot before the paused frame to it) to <code>moments/</code>. A test plays it again with <code>replayMoment</code> from <code>@tsengine/player</code>: the bug becomes a replay test.</li>
     <li>It relies on the game being a function of its input. Each frame's state is hashed as it is played; when a replay differs from the recording (<code>Math.random</code> or <code>Date.now</code> in the game, a timer used for gameplay), rewind names the first frame that differs, in the log, on the bar and on the page.</li>
   </ul>
@@ -416,7 +416,7 @@ test("the tower that missed now hits", () => {
     <li><code>npm run check:kite</code> (or <code>check:&lt;game&gt;</code>) compiles, type-checks, runs tests and replays the game headless.</li>
     <li>Input scripts: <code>right*30, jump, right*20+dash</code>. Items run in order, <code>+</code> starts terms together, <code>name*N</code> holds N frames, a bare name taps, <code>_</code> waits. A key stays held until the script changes it, so <code>right, right</code> is one press held for two steps, and <code>right, _, right</code> is two presses. A name that is neither a key nor an action throws, listing the actions. <code>runScript</code> steps a game and returns what you observe. A game exports <code>bindings</code> (<code>{ jump: ["Z"], … }</code>) so scripts can use action names.</li>
     <li><code>tse screenshot &lt;game&gt; --script "right*30" --at 0,29</code> renders chosen steps to PNG through the software renderer (needs <code>npm run native:build:headless</code>).</li>
-    <li><code>--gpu</code> draws them with the desktop build on OpenGL instead, as a player's window does, so what a driver (or, later, a shader) does shows. It needs <code>npm run native:build</code>; without a display it runs itself under <code>xvfb-run</code>, which Mesa's software OpenGL draws for.</li>
+    <li><code>--gpu</code> draws them with the desktop build on OpenGL instead, as a player's window does, so what a driver or a shader does shows. It needs <code>npm run native:build</code>; without a display it runs itself under <code>xvfb-run</code>, which Mesa's software OpenGL draws for.</li>
     <li><code>--compare refs/</code> checks each frame against <code>refs/step-&lt;n&gt;.png</code> and fails if one differs; <code>--tolerance 64</code> lets a channel differ by that much (two Mesa versions do), and <code>--update</code> writes the references. <code>npm run check:gpu</code> does this for the demo and Kite, and CI runs it.</li>
   </ul>
   <h3 id="testing">Testing one component: <code>@tsengine/testing</code></h3>
@@ -462,7 +462,7 @@ export const Build = story(
 </script></pre>
   <ul>
     <li><code>stories(Component, { size, origin, scale, background, wrap })</code>: the screen the component is drawn on (<code>size</code>, in game pixels), where its own (0, 0) sits on it (<code>origin</code>, default the top left), how many times larger a screenshot is (<code>scale</code>, default 4), and <code>wrap</code> to put it inside something it needs, a <code>Provider</code> or a <code>Flex</code> that gives it a width. It is drawn with the game's own <code>&lt;Game&gt;</code> look: background, assets, font, text size and colour, controls.</li>
-    <li><code>story(props, { setup, input })</code> for a story that sets game state first (every game state is put back to its start before <code>setup</code>) or plays an input script before it is looked at. A plain object is just props. Stories are listed by name.</li>
+    <li><code>story(props, { setup, input })</code> for a story that sets game state first (every game state is put back to its start before <code>setup</code>) or plays an input script before it is looked at. A plain object is props only. Stories are listed by name.</li>
     <li><code>tse preview</code> opens a window on the first story, with hot reload: save the component or the stories file and it changes in place. <strong>F5</strong> and <strong>F6</strong> go to the previous and next story; <code>--story SidePanel</code> (or <code>SidePanel/Build</code>) starts at one.</li>
     <li><code>tse preview --screenshot</code> stores a PNG of every story in <code>stories/screenshots/</code>; commit them. <code>tse check</code> then renders every story again and fails on a picture that changed, on a story with no picture, and on a picture whose story is gone, and says where the new pictures are. When the change is meant, store them again. This needs the headless libtse, which <code>@tsengine/native</code> ships; without it the check says it did not compare.</li>
   </ul>
@@ -497,12 +497,12 @@ settings.get();  settings.set({ music: 0.4 });  settings.reset();
 const music = useStore(settings, musicVolume);      // musicVolume() { return settings.get().music; } in a .ts file
 </script></pre>
   <ul>
-    <li><strong>Component state</strong> (<code>tree: true</code>): an enemy that keeps its own <code>hp</code> in <code>useMutable</code> keeps it in the save. On <code>load</code>, <code>apply</code> runs first; once the tree it builds has settled, each component takes its saved state back, found by its path from the root, and a list item by its <code>key</code> (so an enemy removed before the save is loaded does not hand its state to the next one). Values that are not plain data (a function, a body) are left out, said once.</li>
-    <li><strong>What is stored</strong> is JSON, <code>{ version, data }</code> (and <code>tree</code> with <code>tree: true</code>). A file that does not parse is said once and read as no save; a save from a <em>newer</em> version than the game is refused with a message; <code>migrate</code> steps run in order up to the current version.</li>
-    <li><strong>Settings</strong> are applied when the game starts, before the first frame, and on each <code>set</code>: <code>music</code> and <code>effects</code> are the two volume groups (<code>setVolume("music", v)</code> multiplies every <code>&lt;Music&gt;</code>; <code>effects</code> every sound), <code>fullscreen</code> switches the window, <code>bindings</code> goes to <code>controls.load</code>. Other settings are the game's own.</li>
-    <li><strong>Showing them:</strong> <code>settings</code> and <code>controls</code> are not state a component reads, so <code>settings.subscribe(fn)</code> (after each <code>set</code>, <code>reset</code> and reload, once applied) and <code>controls.subscribe(fn)</code> (after each <code>bind</code>, <code>reset</code> and <code>load</code>) say when they change; both return the function that stops it. A component shows them with <code>useStore(settings, read)</code>, React's <code>useSyncExternalStore</code>: <code>read</code> is a function from a <code>.ts</code> file that returns what to show; it runs at mount and on each notification, the component renders only when the data it returns differs, and the subscription ends when the component goes (Bramble's <code>Settings.tsx</code>). Underneath it is <code>useMount</code> returning the subscription's <a href="language.html#mount-cleanup">cleanup</a>, which a component can also write itself. If several screens show a setting, mirror it into the game state from a <code>.ts</code> module instead.</li>
-    <li><strong>Rebinding:</strong> <code>controls.bind("jump", ["Space"])</code> (false for an unknown action or a key that is not a key name), <code>controls.reset()</code>, <code>controls.toJSON()</code>, <code>controls.load(data)</code> (ignores unknown actions and keys). The change applies at once. <code>input.lastPressed()</code> is the first key pressed this step, or <code>undefined</code>: "press a key for Jump" (<code>const key = input.lastPressed(); if (key !== undefined) bindKey(action, key);</code>).</li>
-    <li><strong>Tests:</strong> <code>setStorage(createMemoryStorage())</code> in a runtime test; <code>new RecordingBackend({ storage: { save: "…" } })</code> starts a replay from a save, and <code>backend.stored</code> shows what was written.</li>
+    <li>With <code>tree: true</code>, component state is saved too: an enemy that keeps its own <code>hp</code> in <code>useMutable</code> keeps it in the save. On <code>load</code>, <code>apply</code> runs first; once the tree it builds has settled, each component takes its saved state back, found by its path from the root, and a list item by its <code>key</code> (so an enemy removed before the save is loaded does not hand its state to the next one). Values that are not plain data (a function, a body) are left out, said once.</li>
+    <li>A save is stored as JSON, <code>{ version, data }</code> (and <code>tree</code> with <code>tree: true</code>). A file that does not parse is said once and read as no save; a save from a <em>newer</em> version than the game is refused with a message; <code>migrate</code> steps run in order up to the current version.</li>
+    <li>Settings are applied when the game starts, before the first frame, and on each <code>set</code>: <code>music</code> and <code>effects</code> are the two volume groups (<code>setVolume("music", v)</code> multiplies every <code>&lt;Music&gt;</code>; <code>effects</code> every sound), <code>fullscreen</code> switches the window, <code>bindings</code> goes to <code>controls.load</code>. Other settings are the game's own.</li>
+    <li><code>settings</code> and <code>controls</code> are not state a component reads, so <code>settings.subscribe(fn)</code> (after each <code>set</code>, <code>reset</code> and reload, once applied) and <code>controls.subscribe(fn)</code> (after each <code>bind</code>, <code>reset</code> and <code>load</code>) say when they change; both return the function that stops it. A component shows them with <code>useStore(settings, read)</code>, the counterpart of React's <code>useSyncExternalStore</code>. <code>read</code> is a function from a <code>.ts</code> file that returns what to show. It runs at mount and on each notification, the component renders only when the data it returns differs, and the subscription ends when the component goes (Bramble's <code>Settings.tsx</code>). Underneath it is <code>useMount</code> returning the subscription's <a href="language.html#mount-cleanup">cleanup</a>, which a component can also write itself. If several screens show a setting, mirror it into the game state from a <code>.ts</code> module instead.</li>
+    <li>To rebind, use <code>controls.bind("jump", ["Space"])</code> (false for an unknown action or a key that is not a key name), <code>controls.reset()</code>, <code>controls.toJSON()</code>, <code>controls.load(data)</code> (ignores unknown actions and keys). The change applies at once. <code>input.lastPressed()</code> is the first key pressed this step, or <code>undefined</code>; it is how you write "press a key for Jump" (<code>const key = input.lastPressed(); if (key !== undefined) bindKey(action, key);</code>).</li>
+    <li>In a runtime test, call <code>setStorage(createMemoryStorage())</code>; <code>new RecordingBackend({ storage: { save: "…" } })</code> starts a replay from a save, and <code>backend.stored</code> shows what was written.</li>
   </ul>
 </section>
 

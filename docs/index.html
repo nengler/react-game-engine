@@ -131,7 +131,7 @@ mark { background: var(--accent-soft); color: inherit; }
 <p style="margin:0 0 16px"><strong>New here?</strong> <a href="start.html">Getting started</a> takes you from an empty folder to a packaged game.</p>
 <section id="overview" data-group="Start here" data-title="Overview">
   <h1>Write games as components.</h1>
-  <p class="intro">A native-first 2D engine with React-like TSX authoring. There is no React and no virtual DOM: a compiler turns each component into a TypeScript class whose children are persistent instances, updated in place when state changes.</p>
+  <p class="intro">tse is a native-first 2D engine that you write in React-like TSX. There is no React and no virtual DOM: a compiler turns each component into a TypeScript class whose children are persistent instances, updated in place when state changes.</p>
 
   <div class="pipeline">
     <div><b>Component.tsx</b>Your TSX: state, hooks, elements.</div><div class="arr">→</div>
@@ -142,16 +142,16 @@ mark { background: var(--accent-soft); color: inherit; }
 
   <h3>The mental model in five lines</h3>
   <ol>
-    <li>A component is a function: hooks, then <strong>one</strong> <code>return</code> of JSX. It is compiled, never run as written.</li>
+    <li>A component is a function: hooks, then exactly one <code>return</code> of JSX. It is compiled, never run as written.</li>
     <li>Its root is a built-in (<code>Entity</code>, <code>Sprite</code>, <code>Game</code>…), which the generated class <em>extends</em>.</li>
-    <li>State is written directly (<code>s.hp -= 1</code>), and a handler reads its own writes; render sees what the frame committed. A frame's writes cause <strong>one render</strong>.</li>
+    <li>State is written directly (<code>s.hp -= 1</code>), and a handler reads its own writes; render sees what the frame committed. All of a frame's writes cause one render.</li>
     <li>Position is state: <code>x={s.x} y={s.y}</code> on any built-in (<code>transform={{ x, y }}</code> on a component), usually driven by <code>useMutable</code>. Rows and columns are a <code>&lt;Flex&gt;</code>, anywhere. See <a href="systems.html#placing">Placing things</a>.</li>
-    <li>Each frame runs <code>useInput</code> → <code>useUpdate</code> → render dirty components → commit structure → draw.</li>
+    <li>Each frame runs <code>useInput</code>, then <code>useUpdate</code>, then renders dirty components, commits structure and draws.</li>
   </ol>
 
-  <div class="callout"><p><strong>Game code goes in components, as in React.</strong> An enemy keeps its own <code>hp</code> in <code>useMutable</code>, walks in its <code>useUpdate</code>, takes hits in its collider's <code>onCollisionEnter</code> and tells its parent it died through a callback prop. A plain function in a <code>.ts</code> file is for what you would extract in React too: a pure calculation, a table, or something a search runs thousands of times.</p></div>
+  <div class="callout"><p>Game code goes in components, as in React. An enemy keeps its own <code>hp</code> in <code>useMutable</code>, walks in its <code>useUpdate</code>, takes hits in its collider's <code>onCollisionEnter</code> and tells its parent it died through a callback prop. A plain function in a <code>.ts</code> file is for what you would extract in React too: a pure calculation, a table, or something a search runs thousands of times.</p></div>
 
-  <div class="callout"><p><strong>The rule of thumb.</strong> Anything outside the supported subset is a compiler error (<code>TSE####</code>), never silently ignored. See <a href="reference.html#diagnostics">Error codes</a>.</p></div>
+  <div class="callout"><p>Anything outside the supported subset is a compiler error (<code>TSE####</code>), never silently ignored. See <a href="reference.html#diagnostics">Error codes</a>.</p></div>
 
   <h3>A whole component</h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
@@ -180,7 +180,7 @@ export function Player() {
 </section>
 <section id="react" data-group="Start here" data-title="Coming from React">
   <h2>Coming from React</h2>
-  <p>A component reads like React, and most of what you know carries over. The difference underneath: <strong>the component is compiled, never run as written.</strong> The compiler turns it into a class whose children live for as long as it does and are updated in place, so the function body is a description the compiler reads, and it only understands the part of TypeScript it can turn into that class. What it does not understand is an error (<code>TSE####</code>) at build time, not a surprise at run time.</p>
+  <p>A component reads like React, and most of what you know carries over. The difference is that the component is compiled, never run as written. The compiler turns it into a class whose children live for as long as it does and are updated in place. The function body is a description for the compiler to read, and the compiler understands only the part of TypeScript it can turn into that class. Anything else is an error (<code>TSE####</code>) at build time, not a surprise at run time.</p>
 
   <h3>What carries over</h3>
   <div class="tablewrap"><table>
@@ -188,7 +188,7 @@ export function Player() {
     <tr><td>Function components, props, a props type</td><td>The same. The props type is written in the parameter (<code>({ hp }: { hp: number })</code>) or declared in the same file.</td></tr>
     <tr><td>An early <code>if (!hero) return null;</code></td><td>The same, at the top of the body: each <code>if (…) return …;</code> becomes a condition of the last <code>return</code>, and what follows it is worked out only when it did not return.</td></tr>
     <tr><td><code>useState</code>, updaters, batching</td><td><code>useMutable</code>: state you write directly (<code>s.n += 1</code>), with no setters or updaters. A handler reads its own writes at once, so <code>s.n += 1</code> twice adds 2; render sees what the frame committed, and any number of writes cause one render per frame. A <code>useState</code> is an error whose message writes out the conversion, and the editor's quick fix converts the file. Why: <a href="https://github.com/nengler/tse/blob/main/docs/DESIGN.md#state-usemutable-2026-11-14">DESIGN.md, "State"</a>.</td></tr>
-    <tr><td><code>useMemo</code>, <code>useCallback</code>, <code>React.memo</code></td><td>Not needed. The compiler knows what every value reads, so it does what they are for by itself: a derived <code>const</code> that calls a function is worked out again only when what it reads changes, and a render writes an element's values, or sends a child its props, only when a state or prop they read is a different value than at the last render. The component's functions are made once, so passing one down never re-renders anyone. See <a href="language.html#render-scope">what a render does</a>.</td></tr>
+    <tr><td><code>useMemo</code>, <code>useCallback</code>, <code>React.memo</code></td><td>Not needed. The compiler knows what every value reads and does their job itself. A derived <code>const</code> that calls a function is worked out again only when what it reads changes. A render writes an element's values, or sends a child its props, only when a state or prop they read has a different value than at the last render. The component's functions are made once, so passing one down never re-renders anyone. See <a href="language.html#render-scope">what a render does</a>.</td></tr>
     <tr><td><code>{cond &amp;&amp; &lt;X /&gt;}</code>, <code>{a ? &lt;X /&gt; : &lt;Y /&gt;}</code>, fragments</td><td>The same. A condition turning off unmounts.</td></tr>
     <tr><td><code>{items.map((i) =&gt; &lt;X key={i.id} /&gt;)}</code></td><td>The same, with one inline arrow. Instances follow keys. <code>key</code> on a single element starts it over when it changes.</td></tr>
     <tr><td><code>children</code></td><td><code>children: Child</code> in the props type, placed once as <code>{children}</code>.</td></tr>
@@ -209,17 +209,17 @@ export function Player() {
   </table></div>
 
   <h3>Three places code can go</h3>
-  <p>Most "why is this an error" comes from writing code in the wrong one of these. Each is checked by its own rules.</p>
+  <p>Most "why is this an error" questions come from code written in the wrong one of these places. Each place is checked by its own rules.</p>
   <div class="tablewrap"><table>
     <tr><th>Where</th><th>May hold</th><th>For</th></tr>
-    <tr><td>The component body</td><td>Hooks, then statements that work out what to draw (derived <code>const</code>s, loops, <code>let</code>), and one <code>return</code> of JSX. No setters: a body describes, it does not change.</td><td>Describing what is on screen, from the component's state and props.</td></tr>
+    <tr><td>The component body</td><td>Hooks, then statements that work out what to draw (derived <code>const</code>s, loops, <code>let</code>), and one <code>return</code> of JSX. It calls no setters: the body describes the screen and changes nothing.</td><td>Describing what is on screen, from the component's state and props.</td></tr>
     <tr><td>Handlers: <code>useInput</code>, <code>useUpdate</code>, <code>useMount</code>, collisions, callback props, the component's own functions</td><td>Any TypeScript, with setters, actions, sounds and refs.</td><td>The game: what happens on a key, a step, a contact or a press.</td></tr>
     <tr><td>Plain <code>.ts</code> files</td><td>Any TypeScript.</td><td>What you would extract in React too: tables and numbers, a pure calculation (a path, a target), the game state, and code a search runs many times (Kite's solver).</td></tr>
   </table></div>
-  <div class="callout"><p><strong>The shape that works.</strong> Hearth's battle is in its components: <code>Play</code> keeps the gold, the lives and the lists; each <code>Enemy</code>, <code>Tower</code> and <code>Shot</code> keeps its own state and steps itself; they report up with callbacks and reach each other through collisions that carry data. Each is tested alone with <a href="effects.html#testing"><code>@tsengine/testing</code></a>. Kite keeps its movement in plain functions because a solver steps it thousands of times. See <a href="language.html#logic">Plain functions</a>.</p></div>
+  <div class="callout"><p>Hearth keeps its battle in components: <code>Play</code> keeps the gold, the lives and the lists; each <code>Enemy</code>, <code>Tower</code> and <code>Shot</code> keeps its own state and steps itself; they report up with callbacks and reach each other through collisions that carry data. Each is tested alone with <a href="effects.html#testing"><code>@tsengine/testing</code></a>. Kite keeps its movement in plain functions because a solver steps it thousands of times. See <a href="language.html#logic">Plain functions</a>.</p></div>
 
   <h3>When something goes wrong</h3>
-  <p>Each component is written out as a class in <code>generated/</code> (by <code>tse dev</code>, <code>build</code> and <code>check</code>; never edit it). You should not have to read it: <strong>an error names your <code>.tsx</code></strong>.</p>
+  <p>Each component is written out as a class in <code>generated/</code> (by <code>tse dev</code>, <code>build</code> and <code>check</code>; never edit it). You should not have to read it, because an error names your <code>.tsx</code>.</p>
   <div class="tablewrap"><table>
     <tr><th>What</th><th>Where it points</th></tr>
     <tr><td>A rule of the language (<code>TSE1xxx</code>)</td><td>The line in <code>src/</code>, as you wrote it (custom hooks included).</td></tr>
@@ -231,9 +231,9 @@ export function Player() {
     <tr><th>What you see</th><th>Why, and what to write</th></tr>
     <tr><td>My enemy does not see the player</td><td>Two components share a value through their common parent: the player reports where it is with a callback prop, the parent keeps it in <code>useMutable</code> and hands it down (a prop, or context). It arrives one step later, every time. See <a href="language.html#sharing">Sharing state between components</a>.</td></tr>
     <tr><td>My collision is a step late (the hero is inside the wall before it stops)</td><td><code>onCollisionEnter</code> runs after the step's updates. Move with <a href="systems.html#tilemaps"><code>useBody</code></a>: <code>move</code> stops at walls, and <code>touching</code> and <code>overlapping</code> answer in the same step.</td></tr>
-    <tr><td>The game is slow, or a frame takes too long</td><td>Under <code>tse dev</code>, open the inspector and press <strong>profile</strong>: milliseconds a frame for each component and each phase of the frame, the slowest first (<a href="effects.html#inspect">the inspector</a>).</td></tr>
-    <tr><td>A box is not where I expect, or I cannot see what a component holds</td><td>Under <code>tse dev</code>, press <strong>F1</strong> in the window to outline every box, its padding, every collider and pointer, and name the box under the mouse; open the inspector's address that <code>tse dev</code> prints to see the tree, a component's state and the game state as they change. See <a href="effects.html#inspect">Seeing inside a running game</a>.</td></tr>
-    <tr><td>Something went wrong a few seconds ago, and is hard to make happen again</td><td>Under <code>tse dev</code>, press <strong>F2</strong> and step back to it with the arrow keys; fix the code and save, and the same moment plays again with the fix; <strong>F4</strong> saves it for a test. See <a href="effects.html#rewind">Rewind</a>.</td></tr>
+    <tr><td>The game is slow, or a frame takes too long</td><td>Under <code>tse dev</code>, open the inspector and press <strong>profile</strong>. It shows milliseconds per frame for each component and each phase of the frame, slowest first (<a href="effects.html#inspect">the inspector</a>).</td></tr>
+    <tr><td>A box is not where I expect, or I cannot see what a component holds</td><td>Under <code>tse dev</code>, press <strong>F1</strong> in the window to outline every box, its padding, every collider and pointer, and to name the box under the mouse. To watch the tree, a component's state and the game state as they change, open the inspector at the address <code>tse dev</code> prints. See <a href="effects.html#inspect">Seeing inside a running game</a>.</td></tr>
+    <tr><td>Something went wrong a few seconds ago, and is hard to make happen again</td><td>Under <code>tse dev</code>, press <strong>F2</strong> and step back to it with the arrow keys. Fix the code and save, and the same moment plays again with the fix. <strong>F4</strong> saves it for a test. See <a href="effects.html#rewind">Rewind</a>.</td></tr>
     <tr><td>I am building a panel or a dialogue box, and must play to where it shows each time</td><td>Give it a stories file (its props, and game state for what it reads), and <code>tse preview</code> shows it on its own with hot reload; <code>tse preview --screenshot</code> stores pictures that <code>tse check</code> compares. See <a href="effects.html#previews">Previews</a>.</td></tr>
     <tr><td>A child's report in a step loses all but one</td><td>Several children call the parent in one step, and each <code>setList([...list, x])</code> starts from the same snapshot. Use an updater: <code>setList((list) =&gt; [...list, x])</code>.</td></tr>
   </table></div>
@@ -294,7 +294,7 @@ tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
     <tr><td><code>packages/player</code></td><td>Pure-TypeScript half of the player: object tree → draw records, collisions, layout, the frame loop.</td></tr>
     <tr><td><code>packages/player-node</code></td><td>Node host: koffi binding to <code>libtse</code>, and <code>play.ts</code>.</td></tr>
     <tr><td><code>host/</code>, <code>native/</code></td><td>The Rust + QuickJS-ng host and the C library <code>libtse</code> (raylib window, audio, input).</td></tr>
-    <tr><td><code>packages/kite</code></td><td>A precision platformer: a title screen, eight Tiled rooms and an end screen, with music, effects and gamepad. <strong>The best reference for a real game.</strong> Read <code>src/Main.tsx</code> first.</td></tr>
+    <tr><td><code>packages/kite</code></td><td>A precision platformer: a title screen, eight Tiled rooms and an end screen, with music, effects and gamepad. It is the best reference for a real game; read <code>src/Main.tsx</code> first.</td></tr>
     <tr><td><code>packages/demo</code></td><td>A small playable game, the simplest end-to-end example.</td></tr>
     <tr><td><code>packages/example</code></td><td>Example components that exercise every feature, with committed generated output and scenes.</td></tr>
   </table></div>
@@ -308,7 +308,7 @@ tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
     <tr><td>Keep a value that changes and shows on screen</td><td><a href="language.html#hook-usemutable"><code>useMutable</code></a> (per component) or <a href="language.html#gamestate"><code>useGame</code></a> (shared by the game)</td></tr>
     <tr><td>Keep a value that must <em>not</em> re-render (timers, held direction)</td><td>a <a href="language.html#never-renders"><code>useMutable</code> field</a> the JSX does not read (<code>s.timer -= dt</code>)</td></tr>
     <tr><td>Move something</td><td><code>transform={{ x, y }}</code> driven by state, changed in <a href="language.html#hook-useupdate"><code>useUpdate</code></a></td></tr>
-    <tr><td>React to keys or the mouse position</td><td><a href="language.html#hook-useinput"><code>useInput</code></a> → <code>input.down / pressed / released</code></td></tr>
+    <tr><td>React to keys or the mouse position</td><td><a href="language.html#hook-useinput"><code>useInput</code></a> with <code>input.down / pressed / released</code></td></tr>
     <tr><td>Do something every frame</td><td><a href="language.html#hook-useupdate"><code>useUpdate((dt) =&gt; …)</code></a></td></tr>
     <tr><td>Do something once when it appears or disappears</td><td><a href="language.html#hook-usemount"><code>useMount</code></a> / <code>useUnmount</code></td></tr>
     <tr><td>Play a sound</td><td><a href="language.html#hook-usesound"><code>useSound("hit.wav")</code></a>, called in a handler</td></tr>
@@ -321,7 +321,7 @@ tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
     <tr><td>Window title, size, background, assets folder</td><td>Props of <a href="reference.html#el-Game"><code>&lt;Game&gt;</code></a></td></tr>
     <tr><td>Spawn and remove many of the same thing</td><td>A <a href="language.html#lists">keyed list</a> over array state</td></tr>
     <tr><td>Show or hide something</td><td><code>{cond &amp;&amp; &lt;X /&gt;}</code> or <code>{cond ? &lt;A /&gt; : &lt;B /&gt;}</code></td></tr>
-    <tr><td>Let a parent tell a child something happened</td><td>A callback prop (<code>onDefeated</code>) — see <a href="language.html#props">Props</a></td></tr>
+    <tr><td>Let a parent tell a child something happened</td><td>A callback prop (<code>onDefeated</code>); see <a href="language.html#props">Props</a></td></tr>
     <tr><td>Wrap whatever the parent passes (a frame, a panel)</td><td><code>children: Child</code> and <code>{children}</code></td></tr>
     <tr><td>Switch between screens (title, level, game over)</td><td><a href="systems.html#router"><code>Router</code> + <code>Route</code></a></td></tr>
     <tr><td>Draw a tile level, and ask what is solid</td><td><a href="systems.html#tilemaps"><code>Tilemap</code> and <code>getTilemap</code></a></td></tr>

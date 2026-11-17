@@ -28,7 +28,7 @@ Decisions, each still in force:
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `TSE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | `useMutable` (2026-11-14, replacing `useState` and React's snapshot): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. Every handler sees the latest writes, in the order handlers run (tree order); render sees the frame's committed state. See "State: `useMutable`" |
-| Global state | `createGameState(data, actions)` in `GameState.ts`, real code the game runs: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (paths the compiler checks and subscribes to), read-only; **update** by calling an action from `useGame.actions()` in a handler. Per process, reset by the player. Decided 2026-11-09 as a Zustand store changed with `set`; that form was removed 2026-11-15. See "Global state" |
+| Global state | `createGameState(data, actions)` in `GameState.ts`, real code the game runs: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). Components read it with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (paths the compiler checks and subscribes to), read-only, and update it by calling an action from `useGame.actions()` in a handler. Per process, reset by the player. Decided 2026-11-09 as a Zustand store changed with `set`; that form was removed 2026-11-15. See "Global state" |
 | Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`TSE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
@@ -68,7 +68,7 @@ generated file. Each generated line maps to the start of the construct it was wr
 the IR's spans), not to the exact expression, so a stack trace through `node --enable-source-maps` names the right line of
 the `.tsx`. Spans already point at the source as written, through the custom-hook inliner's `EditMap`.
 
-**Errors in the source** (2026-11-12). Every `compile` now returns the same line origins
+**Errors in the source** (2026-11-12). Every `compile` returns the same line origins
 (`origins`), with or without a map. The command line keeps them per generated file, and `mapToSource` moves each type error the
 check of the generated code finds (`TSE9001`) to the source line of the construct its generated line was written for, keeping
 where it was found: `src/Settings.tsx:9:28 - error TSE9001: TS2345: … (in the generated out/Settings.ts:44:59)`. A line written for
@@ -76,8 +76,8 @@ no construct (an import, the class header) keeps its generated position. And whe
 not type-checked at all ("skipped type-checking the generated code"), as scenes are not validated: the other files would only
 report its module as missing, or check against an old one.
 
-**Errors while the game runs** (2026-11-12). A thrown error read `at Main.onInput (generated/Main.ts:71:7)`: a generated file and a
-method the author never wrote. `compileArgs` (what `tse dev`, `build` and `check` compile with) now passes `--source-maps`, and `tse dev`
+**Errors while the game runs** (2026-11-12). Without a map, a thrown error reads `at Main.onInput (generated/Main.ts:71:7)`: a generated file and a
+method the author never wrote. `compileArgs` (what `tse dev`, `build` and `check` compile with) passes `--source-maps`, and `tse dev`
 runs the window, and `tse check` its tests, under `node --enable-source-maps`, so the same error reads
 `at Main.onInput (src/Main.tsx:14:3)`, the line of the hook (the map is line-level: a generated line maps to the start of the construct
 it was written for). The dev window's error screen shows the stack as Node formats it, so it is mapped too, and hot reload's
@@ -98,7 +98,7 @@ that talks to a `tsc` child process over IPC; there is no in-process
 | Walk the AST | node `.forEachChild`, guards from `typescript/ast/is`, `SyntaxKind` from `typescript/ast` |
 | Positions | `sourceFile.getLineAndCharacterOfPosition(pos)` |
 | Type-check generated code | `api.createSnapshot({ fileSystem: createFileSystemLayer(files), createPrograms: [...] })` then `program.getSemanticDiagnostics()` |
-| In-memory files | `createFileSystemLayer` from `typescript/fs` — layered over the real disk, so generated files can import the runtime package |
+| In-memory files | `createFileSystemLayer` from `typescript/fs`, layered over the real disk, so generated files can import the runtime package |
 
 Limitations found while integrating:
 
@@ -107,7 +107,7 @@ Limitations found while integrating:
   server process. We import the enums from `typescript/sync` / `typescript/ast`.
 * The sync API spawns a process; creating one per file is wasteful, so the
   `Compiler` class owns a single `API` instance and must be `close()`d.
-* We only use the AST for reading. We do **not** use `typescript/ast/factory`
+* We only use the AST for reading. We do not use `typescript/ast/factory`
   for code generation (see "Code generation" below).
 
 ## Authoring model
@@ -134,7 +134,7 @@ ignored):
   with a capitalised name (optionally `export`ed, or the module's default
   export) whose body is hooks (`useMutable`, `useSound`, the handler hooks), derived values and statements (see "Statements in the
   component body"), and a `return`. An arrow with
-  an expression body (`const Dot = () => <Sprite … />`) is just its return. A derived `const` (`const hurt = health < 25;`) may read
+  an expression body (`const Dot = () => <Sprite … />`) is its return. A derived `const` (`const hurt = health < 25;`) may read
   anything declared above it; it is inlined where it is used, so JSX that uses
   it updates with the state it reads, and a handler that uses it sees current
   state.
@@ -263,8 +263,10 @@ component's `component.s.vx` reads the committed value and `component.s.vx = 1` 
 write state as handlers do.
 
 **No `useRef`.** A ref was a field that never renders, readable in handlers only. A `useMutable` field nothing in render reads
-costs one comparison, not a redraw, since each part of `render()` is guarded by what it reads, so two hooks for one kind of value
-were not worth keeping. A field cannot be written in `useUnmount` (`TSE1402`), which a ref could; to tell the parent, call a
+costs no redraw: a write to it does run `render()`, but a render writes only what differs, and its parts that set a built-in's
+props are guarded by what they read. (A keyed list is not guarded: every render of its component goes through the list's items
+again, comparing each one's props. With a field written every step, such as a clock, that is a pass over every list each step:
+see NEXT_PRIORITIES.md, "Compiler and language".) So two hooks for one kind of value were not worth keeping. A field cannot be written in `useUnmount` (`TSE1402`), which a ref could; to tell the parent, call a
 callback prop (`onGone?.()`). There is no `ref={…}` on elements either (`TSE1106`).
 
 **Things to know.**
@@ -290,7 +292,7 @@ Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
 * IR is plain data. No AST nodes, so it can be serialised, snapshotted in tests
   and (later) cached or diffed for hot reload.
 * `ExprIR` is a small expression tree. State reads are `StateRead { state:
-  StateId }`, not identifiers — the generator decides how to access state
+  StateId }`, not identifiers: the generator decides how to access state
   (`this.health`), and dependency analysis is a tree walk, not a string scan.
 * `StateId` and `ElementId` are branded strings so they cannot be mixed up with
   arbitrary names.
@@ -354,13 +356,13 @@ a `let` local or a value the handler owns (see "Any expression in handlers"); a 
 `n++` / `--n` as a statement is `+= 1` / `-= 1`. Position is not
 assigned: it is state. `While` (`while`, and `do…while` with `doWhile`), `For` (C-style: `let` locals or
 assignments, a test that may be left out, and assignments as the update) and `Try` / `Throw` are written as
-they are (2026-11-13, see "Every loop, and `try`, in handlers"). A loop may now run forever and hang a frame, as
-it may in any JavaScript.
+they are (2026-11-13, see "Every loop, and `try`, in handlers"). A loop can run forever and hang a frame, as
+in any JavaScript.
 
 **Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead`, `Call` and
 `TemplateLiteral`. Which calls and in-place changes a handler may make is in "Any expression in handlers" below (the handle
 methods, `input.pressed/down/released` and the like, are in `transform/handles.ts`). `var`, labelled jumps, `this`, `await` and
-closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`") are diagnostics
+closures that escape (except an arrow handed to a function, see "A cleanup from `useMount`") are diagnostics
 (`TSE1301`/`TSE1401`/`TSE1402`).
 
 **Scoping**: component scope (state) → function scope (parameters) → block scope (`const`s). Shadowing follows JS: state is
@@ -434,22 +436,22 @@ are scoped to the loop, as in JavaScript; its head may not call a setter. Labell
 
 ### Any expression in handlers (2026-11-13)
 
-A handler's expressions were an allowlist (a few `Math` functions, the array, string and number methods
+A handler's expressions were once an allowlist (a few `Math` functions, the array, string and number methods
 that change nothing, handle methods), so a local list could not be pushed to, a `Map` could not be made, and `console.log` was an
-error. Now, in a handler:
+error. In a handler:
 
-- **A value the handler made itself may be changed in place.** A `const` or `let` local whose value is fresh (an array or object
+- A value the handler made itself may be changed in place. A `const` or `let` local whose value is fresh (an array or object
   literal, `new`, a template literal, or what a call returns, except `find`, `findLast` and `at`, which hand back an item of their
   array) is *owned* (`owned` on its scope binding). Any method of it, or of a member or element of it, is called as written
   (`ValueMethod`), and assignments and `++` into it are `Assign` with a `Path` target. A `let` assigned a value that is not fresh
-  (`best = enemy`) stops being owned from that statement on. A local that reads state or a prop (`const list = enemies`) was
-  never owned, so state is still changed only by its setter: the mutating array methods on it keep their message.
-- **`new`** (`New` in the IR, with its type arguments as written) of `Map`, `Set`, `WeakMap`, `WeakSet`, `Array`, the `Error` types,
+  (`best = enemy`) stops being owned from that statement on. A local that reads state or a prop (`const list = enemies`) is
+  never owned, so state is changed only by its setter: the mutating array methods on it keep their message.
+- `new` (`New` in the IR, with its type arguments as written) of `Map`, `Set`, `WeakMap`, `WeakSet`, `Array`, the `Error` types,
   or a class imported from a `.ts` file. Not in a component body (it would run on every render) and not `Date` (the clock).
-- **The standard library** as written: `Object`, `JSON`, `Number`, `Array`, `String`, `Math` and `console` functions, and
+- The standard library, as written: `Object`, `JSON`, `Number`, `Array`, `String`, `Math` and `console` functions, and
   `parseInt`, `parseFloat`, `isNaN`, `isFinite`. The constructors and namespaces can be named as values (`e instanceof Error`).
   `Math.random()` compiles with a warning: replays, tests and the parity between hosts depend on a run repeating.
-- **`typeof`, `instanceof` and `in`**, anywhere.
+- `typeof`, `instanceof` and `in`, anywhere.
 - An arrow handed to one of these calls is a function that may return a value (`returns: "any"`): `list.sort((a, b) => a.hp - b.hp)`,
   `Array.from({ length: 2 }, () => [0, 0])`. With an expression body it is written as an arrow; with a block, as a callback.
 
@@ -457,12 +459,11 @@ What stays out: `this`, `await`, `var`, labelled jumps, and calls of unknown glo
 
 ### Statements in the component body (2026-11-13)
 
-A component body held hooks, derived `const`s and a `return`; a `let`, a loop or a list built up was
-`TSE1101`, so every list a screen drew was made by the rules (Bramble's `rules/view.ts`). Now a run of body statements that are
+A component body once held only hooks, derived `const`s and a `return`; a `let`, a loop or a list built up was
+`TSE1101`, so every list a screen drew was made by the rules (Bramble's `rules/view.ts`). A run of body statements that are
 not hooks, and not all `const name = …`, is a **render block** (`RenderBlockAnalysis` in the analyzer):
 
-- The analyzer groups consecutive non-hook statements; a run of only derived `const`s keeps each as its own derived value, as
-  before. A run with a hook call inside it (`if (open) { useUpdate(…) }`) is not a block: the hook is reported as not at the
+- The analyzer groups consecutive non-hook statements; a run of only derived `const`s keeps each as its own derived value. A run with a hook call inside it (`if (open) { useUpdate(…) }`) is not a block: the hook is reported as not at the
   top level, and nothing else.
 - The block is lowered like a handler (`lowerRenderBlock`, in a scope of its own, with `inRenderBlock` set), so loops, owned
   values, `new` and the standard library work, and then `return { a, b }` of the names it declares at its top level is added.
@@ -536,13 +537,13 @@ both allowed, a returned arrow is a `Callback`, and an expression body that is a
 `return call;`, as React's `() => store.subscribe(…)`. A setter, an action or a sound played in an expression body stays a
 statement. Every other handler keeps `returns: "void"`, so `return value;` in `useUpdate` or `useUnmount` is still `TSE1401`.
 
-**Callbacks as values.** The subscription needs an arrow handed to a function, which handlers could not do before ("closures
-that escape" were a diagnostic). Now, in a handler, an arrow passed to a plain function, a method of
+**Callbacks as values.** The subscription needs an arrow handed to a function, although "closures that escape" are otherwise a
+diagnostic. In a handler, an arrow passed to a plain function, a method of
 an imported object, a callback prop or a local holding a function is a `CallbackIR` (`{ kind: "Callback", fn: FunctionIR }`):
 a handler of its own, lowered like a callback prop (contextual parameters, handler statements, state set through `this`). It
 may run later, after the component has left; a setter called then marks a detached object, which never renders, so nothing
-breaks, but the cleanup is how to stop it. Outside handlers an arrow is still only a callback prop or an array method's
-argument. A handler's own local may now be called (`stop()`, callee `Local`); the type-check checks it is a function.
+breaks, but the cleanup is how to stop it. Outside handlers an arrow is only a callback prop or an array method's
+argument. A handler's own local may be called (`stop()`, callee `Local`); the type-check checks it is a function.
 `walkExpr` walks a callback's statements, so whatever looks for reads and calls in a handler sees inside it.
 
 **Generated code.** A `useMount` whose statements return a value is a method of its own, typed `(() => void) | void`, and
@@ -558,7 +559,7 @@ override onMount(): void {
 }
 ```
 
-A `useMount` that returns nothing is written as before (inlined when it is the only one).
+A `useMount` that returns nothing is written like any other handler (inlined when it is the only one).
 
 **Runtime.** `GameObject.keepCleanup(value)` keeps a function in a private list; `detachFromWorld` calls `onUnmount`, then each
 kept cleanup once in the order kept, and clears the list, before it detaches the children. So a component's cleanups run before
@@ -579,16 +580,16 @@ out by hand (two state fields and a `useMount` that subscribed and set both), wh
   `ReturnType<typeof settingsView>`.
 - Each notification writes `s.value = keepIfEqual(s.value, read())` (`runtime/src/equal.ts`): the setter renders when it is given a different object,
   and a read usually builds a new one, so data equal all the way down (`sameData`) keeps the old value.
-- For it to work as a function, the inliner now writes an argument that names an import of the calling file in place of its
-  parameter, as it did for literals: `store.subscribe(…)` becomes `settings.subscribe(…)`, a method of an imported object, and
+- For it to work as a function, the inliner writes an argument that names an import of the calling file in place of its
+  parameter, as it does for literals: `store.subscribe(…)` becomes `settings.subscribe(…)`, a method of an imported object, and
   `read()` becomes `settingsView()`, a plain function call, both of which a handler may make. Imports are module constants, so
   nothing is evaluated a different number of times.
 - `read` takes no arguments; the store is anything with `subscribe(listener): () => void` (`Subscribable` in the authoring module).
 
 ## Why there is no `useEffect` (2026-11-12)
 
-`useEffect` is the first hook a React author reaches for, and it stays out on purpose. This section says why, and what
-stands in for each thing it is used for. Asked again on 2026-11-12, after a review of what trips new authors:
+`useEffect` is the first hook a React author reaches for, and it stays out on purpose; each of its uses has a replacement,
+listed below. The question came up again on 2026-11-12, after a review of what trips new authors:
 the worry is not that it cannot be built (the compiler knows what every expression reads, so it could even work out the
 dependencies itself) but that it would be used for everything, including what it should not be used for.
 
@@ -599,15 +600,15 @@ drops, where the rules' events cannot help because the component does not know t
 
 **What it would cost, here more than in React.**
 
-- **A frame late, per link.** An effect runs after the render that saw the change; a setter it calls renders next frame,
+- A frame late, per link: an effect runs after the render that saw the change; a setter it calls renders next frame,
   and an effect that triggers another adds a frame each. Kite's first version, which compared counters with refs to play
   sounds, was "one step late" for exactly this reason.
-- **The patterns React's own docs warn against** become the easy path: state copied from other state (here a derived
+- The patterns React's own docs warn against become the easy path: state copied from other state (here a derived
   `const` already does it), chains of effects that set state, and "when X changes, do Y" where Y belongs where X was changed.
-- **Game logic leaves the rules.** Both games found that the rules as plain functions returning events, answered by
+- Game logic leaves the rules. Both games found that the rules as plain functions returning events, answered by
   effect stores, was the shape that worked: headless tests, replays, the same output under V8 and QuickJS. An effect is
   game logic that runs only in the component tree, at a moment set by renders.
-- **It cannot be taken back.** Once games depend on it, removing it is a migration.
+- It cannot be taken back. Once games depend on it, removing it is a migration.
 
 **What to write instead.** Each answer covers one legitimate use and no more:
 
@@ -619,7 +620,7 @@ drops, where the rules' events cannot help because the component does not know t
 | Run something when the component comes or goes | `useMount` / `useUnmount`. | Built |
 | Subscribe to something outside the game state, and stop | A cleanup returned from `useMount` (`useMount(() => settings.subscribe(…))`), with a handler able to hand an arrow to a function. See "A cleanup from `useMount`". `useStore(settings, read)` (as React's `useSyncExternalStore`) does both for a value to show; see "`useStore`". | Built (2026-11-12; `useStore` 2026-11-13) |
 | Start a component's state over when what it shows changes | `key` on any element, not only on a list's items (`<Dialogue key={talk.id} />`), React's own answer. See "Keyed elements". | Built (2026-11-12) |
-| A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's **own** setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
+| A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's own setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
 
 **The diagnostic.** `useEffect` and `useLayoutEffect` are `TSE1102` with a message that names these answers (`REMOVED_HOOKS`
 in `analyzer/model.ts`), not a bare "Unknown hook".
@@ -765,18 +766,18 @@ a callback reads the item.
 }
 ```
 
-* **Identity and renders.** An existing item gets `updateProps` with its
+* An existing item gets `updateProps` with its
   dynamic props; `applyProps` compares with `===`, so an item whose values did
   not change is not marked dirty and does not render.
-* **Callbacks see the current item.** A callback prop is created once, with
+* Callbacks see the current item. A callback prop is created once, with
   the item's first value. Inside it, item reads go through a `{ current }`
   holder (`$rec.current`) that every render refreshes, so after a write
   replaces a record under the same key the callback reads the new one. The callback keeps its holder after
   the item is removed, so `useUnmount` can still call it (it runs when the
   removal commits, after the render that dropped the key).
-* **In a conditional subtree** the list's fields are emptied when the subtree
+* In a conditional subtree, the list's fields are emptied when the subtree
   unmounts, so it is built afresh when it mounts again.
-* **New values** are what make the list re-render; a write inside a field is
+* New values are what make the list re-render; a write inside a field is
   lowered to one (see "Arrays and records").
 
 ### Conditionals inside the map (2026-11-11)
@@ -788,13 +789,13 @@ The callback may return `cond && <El key … />`, `cond ? <El key … /> : null`
 {shots.map((s) => s.live && <Shot key={s.id} {...s} />)}
 ```
 
-`KeyedListChildIR` gains `condition` and `alternate`. With no `alternate` the list is the source filtered by the condition
+`KeyedListChildIR` has `condition` and `alternate`. With no `alternate` the list is the source filtered by the condition
 (`source.filter((s) => s.live)`): an item whose condition is false has no instance. With one, the item's instance is `element` while the
 condition is true and `alternate` while it is false, and **both branches need the same `key` expression** (otherwise `TSE1209`). The
 items map holds the union of the two classes, and a `#<field>Branches` map remembers which each key was built as. On render, a key whose
 branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`, with the item's current props; the
 reorder that follows uses the new instance. The branches in the generated code test the condition itself, not a stored flag, so that
-TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A fragment is still not a branch, and the index parameter cannot
+TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A fragment cannot be a branch, and the index parameter cannot
 be used when the items are conditional (it would count the items left out). The `&&` form is a filter, which TypeScript does not narrow
 through; the generated loop narrows the item with `$assume` (see "Narrowing in the generated code"), so `p.tower && <Tower {...p.tower} />`
 type-checks.
@@ -804,11 +805,11 @@ type-checks.
 What TypeScript narrows in the source, the generated code must narrow too, or the check of the generated code fails where the
 source passed (found by Bramble). Three places lost it:
 
-- **A callback made under a condition** (`{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`). In the
+- A callback made under a condition (`{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`). In the
   source the arrow closes over a narrowed `const`; in the generated code it reads `this.capturing`, which TypeScript does not narrow
   inside a function even when the function is made inside `if (this.capturing !== null)`.
-- **A memo in such a condition** (`const waiting = pick(id)`): it is generated as a call, `this.$memo(…)`, which is never narrowed.
-- **A list's `&&` form**: the generated code filters the items, and TypeScript does not narrow through `filter`.
+- A memo in such a condition (`const waiting = pick(id)`): it is generated as a call, `this.$memo(…)`, which is never narrowed.
+- A list's `&&` form: the generated code filters the items, and TypeScript does not narrow through `filter`.
 
 The generator writes `$assume(condition)`, a function the module declares when it uses it,
 `function $assume(_condition: unknown): asserts _condition {}`. An assertion signature narrows what follows; the body checks nothing.
@@ -819,7 +820,7 @@ can be narrowed: within one call it is the same value, because state is a snapsh
 item is narrowed by the list's own condition, after the filter that makes it true.
 
 **It changes no behaviour.** A callback that runs after its condition stopped holding still runs, reading state as it is now: a
-`useUnmount` that tells the parent `onGone()` after `label` became `null` sees `null`, as before. (React's closure would see the value
+`useUnmount` that tells the parent `onGone()` after `label` became `null` sees `null`. (React's closure would see the value
 of the render that made it; this engine's callbacks read current state, see "Props and callbacks".) Not narrowed still: a condition
 on something that is not a path or a memo, which TypeScript cannot narrow in the source either.
 
@@ -939,7 +940,7 @@ function Scoreboard() {
 ```
 
 **The parent owns what it passes.** The elements are fields of `Scoreboard`, built
-from `Scoreboard`'s state and props and updated in `Scoreboard`'s `render()`, exactly as if
+from `Scoreboard`'s state and props and updated in `Scoreboard`'s `render()`, as if
 they were `Scoreboard`'s own children: `<Coin value={score} />` follows `score`
 without `Panel` knowing, and `{score > 10 && …}` is a conditional child of
 `Scoreboard`. `Panel` only says where they mount, so a passed child's `transform` is
@@ -973,7 +974,7 @@ source may read the outer item (a method taking it), and its callbacks read
 each item around them through that item's record. `children={…}` as an attribute is `TSE1203`. Whether
 the receiver renders `{children}` is its own file's business: the source
 type-check catches `<Leaf>…</Leaf>` for a props type without `children`
-(`TSE9002`), and the runtime throws a clear error if a component that does not
+(`TSE9002`), and the runtime throws an error if a component that does not
 render `{children}` is given some.
 
 **Generated code.** The receiver records where passed children mount, in its
@@ -1027,13 +1028,13 @@ in the innermost container, so static, conditional and list children all work th
 **A forwarded `{children}` may sit beside other passed children, and so may a list** (2026-11-15; until then each had to be the
 only child passed, option A of 2026-11-11). `<Card><Title />{children}<Footer /></Card>` and `<Panel><Head />{items.map(…)}</Panel>`
 are the everyday way to build a reusable panel, and refusing them pushed authors to wrappers. All of a receiver's passed children
-share one slot, so what decides their order is `order`, which is now a `ChildOrder`: a number, or a path of numbers compared in
+share one slot, so what decides their order is `order`, which is a `ChildOrder`: a number, or a path of numbers compared in
 turn (`compareOrder`). A static passed child is its position (`2`); a list's items are the list's position and then their index
 (`[1, 0]`, `[1, 1]`; `queueReorderPassedChildren(items, [1])`); and a component that forwards puts the position of its `{children}`
 among what it passes in front (`passedChildrenForwardAt`), so what it was given sorts between its own `<Title />` and `<Footer />`,
 through any number of forwards. Order ranges (`position × 2²⁰ + i`) were the other way; a path has no limit and needs no
-arithmetic across levels. Plain numbers stay numbers, so children of built-ins sort as before. A forwarding component must itself
-be always present (not in a condition or a list or another component's children): otherwise `TSE1202`, as before.
+arithmetic across levels. Plain numbers stay numbers, so children of built-ins sort as they did. A forwarding component must itself
+be always present (not in a condition or a list or another component's children): otherwise `TSE1202`.
 
 ## Prefabs and scenes
 
@@ -1067,7 +1068,7 @@ files (not only TSX) can place components in a world (M6). Three pieces:
   `prefabs.json` (`{ version, prefabs: { Name: { module, props } } }`, for
   editors and validators). Both are written only when every file compiled: with a
   failure they would silently leave a component out, so the CLI skips them and
-  says so (the files that did compile are still written, as before). It also
+  says so (the files that did compile are still written). It also
   checks the whole project: an exported name used in two files is `TSE1206`
   (scenes refer to prefabs by name), and a static cycle through several files is
   `TSE1205`. A flag that needs a value (`--scenes`, `--runtime`) without one, an
@@ -1119,11 +1120,11 @@ whether an `int` property is whole, and properties inherited from object templat
 **Tile layers** are a second import, `importTilemap`, of the same `.tmj` into `generated/tilemaps.ts`, a table of
 `TilemapData` by file name (see [PLAYER.md](PLAYER.md), "Tilemap"): the layers' ids with flip bits split off, each layer's `visible`
 (a hidden group hides its layers), the first embedded tileset's `firstgid` and its tiles with the property `solid`. It is written
-**before** the sources are type-checked, because a game's own code (its rules) imports it. A map with no tile data (an objects-only
+before the sources are type-checked, because a game's own code (its rules) imports it. A map with no tile data (an objects-only
 map) writes nothing.
 
 **Runtime.** `loadScene(world, scene, prefabs)` builds each entity with
-`create(props)`, copies `transform` onto its **`placement`** (so the component's
+`create(props)`, copies `transform` onto its `placement` (so the component's
 own state-driven `transform` composes on top: a placed `Mover` still moves
 relative to its spawn point), and gives it its `children` *before* anything is
 mounted, so every object mounts once, children first. A child goes to the
@@ -1154,7 +1155,7 @@ attribute and the children were two ways to write one thing):
 `color` (default `"white"`) as fields. The mock draws nothing: a renderer reads
 the fields and `worldTransform()`. It is listed in the manifest's `intrinsics`
 and `transformIntrinsics`, requires `text` (`intrinsicRequired`), and names the
-prop its children become in the new `textContent` entry (`{ Text: "text" }`),
+prop its children become in the `textContent` entry (`{ Text: "text" }`),
 which is what makes an intrinsic take JSX text instead of elements.
 
 **Compiler.** JSX text is not supported anywhere else, so the transform folds
@@ -1187,18 +1188,18 @@ names a state, ref or prop may not use.
 
 **Text wrappers** (2026-11-13). React shares a text style with a component, `<Label>Coins: {coins}</Label>`;
 here it failed five ways (no `TextChild` type to import, `children` had to be `Child`, `{children}` inside `<Text>` meant nothing,
-and a component could not take text). Now a props type with `children: TextChild | readonly TextChild[]` (`isTextChildrenType`,
+and a component could not take text). A props type with `children: TextChild | readonly TextChild[]` (`isTextChildrenType`,
 which also takes `string`) makes `children` an ordinary value prop rather than a slot. At a use site, `childrenKind` sorts what is
 between a component's tags: words, and `{expressions}` that hold no JSX and are not a forwarded `{children}` slot, are text, and
-`lowerTextContent` folds them into the `children` prop exactly as it folds a `<Text>`'s into `text`; elements are lowered as
-before; both at once is `TSE1202`, naming the two props types. Inside the wrapper `<Text>{children}</Text>` reads the prop, and
+`lowerTextContent` folds them into the `children` prop as it folds a `<Text>`'s into `text`; elements are lowered as
+usual; both at once is `TSE1202`, naming the two props types. Inside the wrapper `<Text>{children}</Text>` reads the prop, and
 `<Button>{children}</Button>` passes it to a second wrapper the same way. Whether the component takes text is the type-check's to
 say. No inherited style (`<TextStyle>`) was added: a text's look does not depend on where it is in the tree.
 
 **Game-wide defaults.** `<Game textSize textColor>` set what a `<Text>` without its own `size` or `color` uses, as `font` sets its
 font: the player calls `setTextDefaults` from the root when it starts and on each reload (and `@tsengine/testing` clears them), and
 `Text.size` and `Text.color` are getters that fall back to them, then to 16 and white. `sized` counts the game's size as given,
-so a bitmap font is drawn at it. Literals, like the other settings.
+so a bitmap font is drawn at it. Both take literals only, like the other settings.
 
 **A built-in small font** (2026-11-16, ABI v14). `font="tse:small"` (on `<Text>` or `<Game>`) is a bitmap font built into the
 engine: 3 × 5 glyphs in 4 × 6 cells, so a line is 6 pixels, where the default font is about 8. Every small-resolution game needs
@@ -1317,7 +1318,7 @@ export const gameConfig: PlayerConfig = { root: () => new Main() };
 through the `<Game>` for it (`rootScreen`), as it does for a `<Screen>` that is the root itself. Either is optional
 without the other.
 
-**Optional.** A game with an `<Entity>` or fragment root, or any root object, works as before: the player's own config and
+**Optional.** A game with an `<Entity>` or fragment root, or any root object, works without one: the player's own config and
 the defaults apply. A `<Game>` root overrides them, each prop only where it is written; a field it does not write is
 `undefined` on the object, which is how the player knows to fall back.
 
@@ -1330,24 +1331,24 @@ built-in's.
 
 **No `state` prop** (retired 2026-11-11). It used to hand the game state to the runtime, which never needed it: the player
 starts every game state in the process from its initial values (`resetGameState`), and components read it with selectors,
-with or without a `<Game>`, so `state` is simply not one of its props.
+with or without a `<Game>`, so `state` is not one of its props.
 
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`TSE1206`). The demo's root is `Main`.
 
 **Fast-forward and pause: `timeScale` and `paused`** (2026-11-13). Hearth's 2× speed used to run its rules
 twice per engine step, and its pause skipped them: both were the rules' business, and with the battle in components there is no
-one function to call twice. They are the world's now. Each frame the player reads the current root's `timeScale` (default 1) and
+one function to call twice. So they belong to the world. Each frame the player reads the current root's `timeScale` (default 1) and
 `paused`: the frame's time is multiplied by `timeScale` before it reaches the fixed-step driver, so `2` runs two whole steps of
 the same `dt` (a fast-forward that plays exactly as at 1; the cap on steps a frame grows with it), and `paused` sets
 `World.paused`, under which `tick` runs `onInput` and the presses but no `onUpdate` (the key edges of a paused step are not kept
 for later, as a freeze's are: the press that unpauses is not replayed into the first step). The compiler lets both take any
-expression (`LIVE_GAME_SETTINGS` in `transform/elements.ts`); the rest stay literals. The cost is what it says: 2× is two
+expression (`LIVE_GAME_SETTINGS` in `transform/elements.ts`); the rest stay literals. 2× costs two
 whole steps a frame, renders and collisions included.
 
 ## Camera
 
 `<Camera>` (M12) is the viewport. Its own transform is the view, `zoom`
-(default 1, must be positive) magnifies, and **it follows its children**:
+(default 1, must be positive) magnifies, and it follows its children:
 
 ```tsx
 <Camera zoom={wave > 5 ? 2 : 1}>
@@ -1386,7 +1387,7 @@ objects), and wrapping the target says the same thing with nothing new.
 **The camera is transparent to its children.** Following a child that the camera
 also moves would be circular (the child's position would depend on a camera that
 depends on it), so the camera does not move its children: they are placed in the
-camera's *parent's* space, exactly as if the camera were not there. This is one
+camera's *parent's* space, as if the camera were not there. This is one
 runtime hook, `GameObject.childSpace()` (the space an object's children are
 placed in; its own world transform by default), which `worldTransform()` uses
 and `Camera` overrides. So `<Entity transform={{ x: 100 }}><Camera><Player
@@ -1399,7 +1400,7 @@ camera's anchor (its parent's position, or the origin when it has no parent or i
 that anchor, transformed as usual by its parent. So the offset means the same
 thing with or without children, and adding a child at the parent's own position
 changes nothing. The camera's rotation, scale and zoom stay its own. With no
-children it is simply where its transform puts it, as before, and a camera
+children it sits where its transform puts it, and a camera
 *inside* an entity (`<Entity><Camera /></Entity>`) still moves with it by
 ordinary transform nesting.
 
@@ -1428,15 +1429,15 @@ advances in its own `onUpdate(dt)`, which the `World` calls every tick because
 the class overrides it (the existing registration rule); it loops, carries the
 remainder of a step, and takes several frames from one long `dt`. A non-positive
 or non-finite `fps`, and an empty `frames`, freeze it rather than throw, since
-this runs inside `World.tick`. **Playing is not state**: advancing a frame
+this runs inside `World.tick`. Playing is not state: advancing a frame
 re-renders nothing, so an animation costs no renders.
 
 **Frames.** `frames` is an array prop. The array literals M5a added make it
 writable in source, and it follows the usual rule: a fixed list is built once
 (a `StaticProp`), a list that reads state or props is re-assigned in `render()`
 (a `DynamicProp`). A dynamic list is a *new array every render*, so `frames` is
-an accessor that compares contents: **different contents restart at the first
-frame** (and clear the carried time); **equal contents change nothing**, so an
+an accessor that compares contents: different contents restart at the first
+frame (and clear the carried time); equal contents change nothing, so an
 unrelated state change that makes the component render again does not restart the
 animation. It keeps its own copy, so mutating the caller's array later changes
 nothing. `playing={false}` freezes on the current frame, saves up no time, and
@@ -1457,8 +1458,8 @@ override onUpdate(dt: number): void {
 }
 ```
 
-A hook the root does not implement is generated as before (no `super`, no
-churn in existing output), and a runtime test checks the list is exactly the hooks
+A hook the root does not implement is generated without `super`, so existing
+output does not change, and a runtime test checks the list is exactly the hooks
 the intrinsic classes override, so a new one cannot be forgotten. A component
 rooted at the sprite also cannot name state `frames`, `fps`, `playing`, `frame`,
 `elapsed` or `image`.
@@ -1511,7 +1512,7 @@ export class Mover extends Entity {
 
 **The transform attribute**: `transform={{ x, y: 0, rotation: angle }}` is an
 object literal whose keys are transform fields (`x`, `y`, `z`, `rotation`,
-`scaleX`, `scaleY`, `global`; plain or shorthand properties). Each field lowers exactly
+`scaleX`, `scaleY`, `global`; plain or shorthand properties). Each field lowers
 like a prop: a field that reads no state is a `StaticProp`, set once right
 after the element is constructed (and, for a child, before it is attached);
 one that reads state is a `DynamicProp`, re-applied in `render()`. Fields not
@@ -1544,7 +1545,7 @@ removed; calling it reports `TSE1102` with a pointer to the attribute
 renders once per tick (one render however many writes there were). `render()`
 re-evaluates only the parts whose inputs changed (see "Dependency-scoped `render()`").
 
-**No `useRef`** (removed 2026-11-14; why is in "State: `useMutable`"). The IR lost `RefIR`, `RefRead` and the `RefCurrent`
+**No `useRef`** (removed 2026-11-14; why is in "State: `useMutable`"). The IR has no `RefIR`, `RefRead` or `RefCurrent`
 assignment target, and `TSE1304` (a `ref.current` read in JSX) is retired. `ref={…}` on any element is still `TSE1106`, and
 `useRef` is `TSE1102`.
 
@@ -1577,16 +1578,16 @@ directly (`<Camera>`).
 
 ## Context (2026-11-13)
 
-React's API compiled. Context was left out while props covered every tree; with game code in components, a parent sharing its
+Context is React's API, compiled. It was left out while props covered every tree; with game code in components, a parent sharing its
 state with a deep subtree is the React answer.
 
-- **`createContext(default)`** (`runtime/src/context.ts`), in a `.ts` file, returns `{ default, Provider }`; `Provider` is only for
+- `createContext(default)` (`runtime/src/context.ts`), in a `.ts` file, returns `{ default, Provider }`; `Provider` is only for
   the type-checker (a method, so a context of any value type fits `Context<unknown>`).
-- **`<Theme.Provider value>`** is rewritten, in the inliner's first pass (`providerEdits`), into the built-in
+- `<Theme.Provider value>` is rewritten, in the inliner's first pass (`providerEdits`), into the built-in
   `<Provider context={Theme} value>`, and `Provider` is added to the file's import from the authoring module. `Provider` extends
   `Entity`, is a container with `layoutContents` (layout sees through it), and keeps the components that read it; setting a
   different `value` marks each of them dirty.
-- **`useContext(Theme)`** lowers to two states the component does not own (`transient`: hot reload and saves leave them out): a
+- `useContext(Theme)` lowers to two states the component does not own (`transient`: hot reload and saves leave them out): a
   reader, `readContext(Theme)`, a handle state, so `ownedHandles` tells it its owner when the component joins a world, and it
   finds the nearest `Provider` of that context above and registers the component with it; and the value, whose `refresh`
   (`this.$context1.value`) the generated `commitState` reads every render. Because the value is state, derived values and memos
@@ -1596,8 +1597,8 @@ state with a deep subtree is the React answer.
 ## Global state (`createGameState`)
 
 A component's own state is `useMutable`. The **game state** belongs to the game: a score, hit points, a mute switch, the screen,
-shared by every component. It is one nested object: **data**, read with selectors that return the value, as in Zustand, and
-**actions**, which write it directly. Only actions change it, as only a parent changes the state it passes down: an action keeps an
+shared by every component. It is one nested object: data, read with selectors that return the value, as in Zustand, and
+actions, which write it directly. Only actions change it, as only a parent changes the state it passes down: an action keeps an
 invariant and its side effects together, gives replays and debugging a named event, and keeps one place to answer "what can
 change `run`?". Calling an action marks the store dirty, and at the end of the action the store compares its draft with the
 committed state leaf by leaf and tells only the readers whose leaves changed, so nothing is added to the read path. Decided 2026-11-09 as a
@@ -1624,7 +1625,7 @@ const hp = useGame((s) => s.player.hp);          const { hurt } = useGame.action
                                                   useUpdate(() => { if (hit) hurt(); });
 ```
 
-**Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
+**Access.** `const hp = useGame((s) => s.player.hp)` returns the value, as in Zustand. A component imports the
 store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
 `TSE1108` otherwise) and calls it at the top level, bound with `const` to one name. A **plain path** from its parameter
 subscribes to exactly that path; any other expression is a computed selector (below). A typo is `TSE1108`
@@ -1651,9 +1652,9 @@ reads, which is finer than Zustand's `useShallow`.
 `const player = useGame((s) => s.player)` and then `player.hp` in JSX or a handler, or
 `const enemies = useGame((s) => s.enemies)` and `{enemies.map((e) => <Enemy key={e.id} … />)}`. Its type is TypeScript's,
 written into the generated code as `ReturnType<typeof useGame.getState>["player"]`, so a wrong member is a type error.
-The component re-renders when **any value under the path** changes (the store tells the reader of `player` when
+The component re-renders when any value under the path changes (the store tells the reader of `player` when
 `player.hp` changes), and not when an equal copy is set: values are still compared leaf by leaf, arrays by index.
-What a selector returns is **read-only** (`ReadonlyDeep<T>`; see "Writes are actions' only" below).
+What a selector returns is read-only (`ReadonlyDeep<T>`; see "Writes are actions' only" below).
 
 **Update: actions.** A component takes the actions it calls with `const { hurt } = useGame.actions()` and calls one as a
 statement in a handler, like a sound's play function: not in JSX or a derived value (it would run on every render), not as a value
@@ -1725,7 +1726,7 @@ saw, unlike its own `useMutable` fields); and more than one store per project (o
 wrote and which reads like the Zustand anti-pattern it was an exception to.
 
 - The destructuring split (`hooks/inline.ts`, `storeSelectionEdits`) turns each name into `const collect = useGame.$actions((s) => s.collect)`,
-  which `matchStoreStatement` reads as a selector with `via: "actions"`. An action binding subscribes to nothing, as it always did.
+  which `matchStoreStatement` reads as a selector with `via: "actions"`. An action binding subscribes to nothing.
 - A name that is a value of the state is `TSE1108` and says how to read it (`const coins = useGame((s) => s.coins)`); a typo
   names the nearest action. `useGame.actions()` must be destructured.
 - Names destructured from `useGame((s) => s)` are written `useGame.$wholeN(…)` (N tells the statements apart), and the actions
@@ -1736,11 +1737,11 @@ wrote and which reads like the Zustand anti-pattern it was an exception to.
 
 ## Plain functions in components
 
-A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and **call them in any expression** (a prop, a derived value, a handler) or **pass them as values** (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
+A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and call them in any expression (a prop, a derived value, a handler) or pass them as values (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
 
-**Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `transform={{ x: GEM_AT.x }}`, and a **method of an imported object** called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
+**Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `transform={{ x: GEM_AT.x }}`, and a method of an imported object called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
 
-Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is still lowered as a handler as before. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `tse-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
+Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is lowered as a handler. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `tse-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
 
 **`useUpdate` takes the input.** `useUpdate((dt, input) => { step(input, dt); })`: the polled input of that step (under a fixed timestep, the per-step copy with exactly-once key edges), the same object `useInput` gets, and it can be handed to a game-state action or a plain function, which reads the keys with loops and tables (Kite's `rules/controls.ts`). A canonical `onUpdate` override (several handlers, or a root that implements the hook) declares `input` only when it passes it on.
 
@@ -1771,23 +1772,23 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
 
 ## Motion: springs, tweens and opacity (2026-11-13)
 
-- **`useSpring(target, { duration, bounce })`** and **`useTween(target, { duration, ease })`** are shipped hooks
+- `useSpring(target, { duration, bounce })` and `useTween(target, { duration, ease })` are shipped hooks
   (`hooks/library.ts`): a `useMutable` field made by `startSpring` / `startTween` and a `useUpdate` that steps it with `stepSpring` /
   `stepTween` (`runtime/src/math.ts`). Each step returns the same object once settled, so the state stops changing and the component
   stops rendering. They follow the fixed step, `freeze`, replays and hot reload because they are state stepped in an update. They
   stop under `<Game paused>` too, which is right for the world and wrong for a pause menu: a clock for presentation that a pause
   does not stop is not built (Hearth's pause modal does not animate for that reason).
-- **The spring** is set by `duration` and `bounce`, as SwiftUI and Framer Motion set one, and turned into stiffness (2π / d)² and
+- The spring is set by `duration` and `bounce`, as SwiftUI and Framer Motion set one, and turned into stiffness (2π / d)² and
   damping 4π (1 − bounce) / d (unit mass; bounce 0 is critically damped) by `springFrom`. It is integrated with semi-implicit Euler
   in slices of at most 1/240 s, so a stiff spring is stable at any step, and snaps to its target once within 0.001 of it and slower
   than 0.001. A new target keeps the velocity.
-- **The tween** starts again from its current value when the target changes, over `duration`, along one of `EASINGS` by name or a
+- The tween starts again from its current value when the target changes, over `duration`, along one of `EASINGS` by name or a
   function.
 - **Numbers only, in the hooks.** A hook's state made by a call is typed `ReturnType<typeof f>`, which cannot depend on the
   argument, so the hooks take a number (a point is two). The math functions take points in plain code.
-- **An initial value may read state declared above it** (`useMutable({ spring: startSpring(target) })` with `target` from state),
+- An initial value may read state declared above it (`useMutable({ spring: startSpring(target) })` with `target` from state),
   as in React's first render: state fields are made in declaration order.
-- **`transform.opacity`** (0 to 1, default 1; written `opacity={…}` in JSX since 2026-11-16, see "Placing things") is pushed on the draw list's alpha stack (`pushAlpha`, as a `<Flex opacity>` is) where
+- `transform.opacity` (0 to 1, default 1; written `opacity={…}` in JSX since 2026-11-16, see "Placing things") is pushed on the draw list's alpha stack (`pushAlpha`, as a `<Flex opacity>` is) where
   the walk enters the object and popped where it leaves, in the world walk and the HUD walk, so it multiplies down the tree and
   every record's colour alpha is scaled by it, in both backends (no ABI change). Records with an alpha in them are never copied to
   another frame: a faded object reports itself `WALK_OPAQUE`, takes no leaf fast path, and is kept out of the "it only moved" copy,
@@ -1827,7 +1828,7 @@ React code writes `setTimeout` in a handler; before timers, each delay here was 
 - **Hot reload drops pending timers**, with a note in the log: a timer's function closes over the instance that set it, which the
   reload replaces, and it cannot be carried to the new one. (Keeping timers by call site would need the handler that set the timer
   to run again.) A save never holds a timer either: a delay that is gameplay is state.
-- **Sequences**, for cutscenes, are a separate library: see "Sequences, for cutscenes".
+- Sequences, for cutscenes, are a separate library: see "Sequences, for cutscenes".
 
 ## Seeing inside a running game: the overlay and the inspector (2026-11-13)
 
@@ -1846,12 +1847,12 @@ and without it neither exists.
   changed; it sends a selection or an edit as a POST. Server-sent events and a POST rather than the WebSocket the plan named:
   Node has no WebSocket server built in, and this is the same exchange.
 - **What it reads** (`runtime/src/inspect.ts`): `inspectTree` (components and built-ins, with list keys and a stable id per
-  object), `inspectObject` (props as data, `saveHotState` by source name, `gameStateKeys`, `renderCount`, which `runRender` now
+  object), `inspectObject` (props as data, `saveHotState` by source name, `gameStateKeys`, `renderCount`, which `runRender`
   counts). Only the selected object's details are read each time.
 - **Actions and their changes.** A `GameStore` wraps each action of its creator so it knows which one is running, and while
   `recording` is on (the inspector turns it on) `setState` keeps the last 50 changes: the action's name (or `setState`) and each
   leaf changed, before and after.
-- **Editing** sets a state through `loadHotState` (`editState`), as hot reload does, or a game-state leaf through `setState`; each
+- Editing sets a state through `loadHotState` (`editState`), as hot reload does, or a game-state leaf through `setState`; each
   is logged as an edit from the inspector, which a replay does not repeat.
 - **The profiler** (2026-11-15; `runtime/src/profile.ts`). Speed was learned from CI's bench budgets, after the fact; the profiler
   says where a frame's script time goes while the game runs. The inspector's "profile" button calls `startProfiling()`, and while a
@@ -1860,7 +1861,7 @@ and without it neither exists.
   the contacts and the renders they cause), `build` (the frame's last walk) and `draw` (`backend.frame`, which includes waiting for
   the display). Once a second the inspector sends `take()`: milliseconds a frame per component (input, update, render, total), how
   many ran at most in one frame and renders a frame, the most expensive first. Off, the World checks `activeProfiler()` once per
-  tick and once per flush pass and runs the loops it always ran, so the bench budgets see no cost; on, each handler costs two clock
+  tick and once per flush pass and otherwise runs its usual loops, so the bench budgets see no cost; on, each handler costs two clock
   reads. Times are inclusive of what a handler calls, and a render is the component's own (its children render on their own turn).
   Tried on Hearth's wave 10 under Node: `Tower` (16) 0.30 ms a frame, `Enemy` (110) 0.16, `Play` 0.10, collisions 0.41 of a
   1.35 ms frame: the towers' target queries, not the enemies, are the place to look.
@@ -1886,7 +1887,7 @@ and without it neither exists.
   put into the new component's own instance, which keeps its owner (the saved one belonged to the component that left: towers
   restored with it saw no enemies, and a body after a hot reload stopped colliding); and snapshots copy the tree's state, since a
   body changes in place.
-- **Paused**, the last frame is drawn again with a bar over it; F2, the four arrows and F4 are rewind's. After a hot
+- Paused, the last frame is drawn again with a bar over it; F2, the four arrows and F4 are rewind's. After a hot
   reload while paused, `reloaded()` seeks to the same frame with the new code. Resuming drops the recorded future.
 - **Moments.** F4 writes the snapshot before the paused frame and the input after it as JSON (`Moment`; the driver as data,
   `FixedDriver.toJSON`), and `replayMoment(config, moment, { stores, observe })` plays it on a recording backend.
@@ -1903,7 +1904,7 @@ and without it neither exists.
 - **Same pixels.** The component and `stepBody` use the same mover (`moveActorX` / `moveActorY`) and the same numbers; the body
   finds solid tiles through `<Tilemap solid>` (`World.solidIn`) where the rules call `solidAt`. Six scripts, two rooms, walls and
   ceilings: identical every step.
-- **`Body.blocked(dx, dy)`**, new: whether the box moved by (dx, dy) overlaps something solid, without moving. The rules' `hitsAt`.
+- `Body.blocked(dx, dy)`: whether the box moved by (dx, dy) overlaps something solid, without moving. The rules' `hitsAt`.
   A body standing on the floor has nothing to report from `move(0, 0)`, so without it the ground could not be known.
 - **What the hook's `x` and `y` are in a handler:** the step's snapshot, as all state is; after a `move`, read `blocked` (which asks
   the body where it is now), or move relative to where it is (`move(side, -1)` for the corner slide), never `place(x + …)`.
@@ -1927,10 +1928,10 @@ override render(): void {
   if (($d & 29) !== 0) { /* the sprite: kind, dist, flash, slow */ }
 ```
 
-- **The mask is built in `render()`**, by comparing each input with its value at the last render (`$in`, a fresh object in each slot
+- The mask is built in `render()`, by comparing each input with its value at the last render (`$in`, a fresh object in each slot
   at first, so the first render runs everything). Nothing else changes: setters, `updateProps`, the game state's notifications,
-  context and hot reload are as they were, and a new instance (hot reload, rewind) starts unguarded.
-- **Inputs** are what `inputsOf` finds: state fields (game-state and context fields are state fields), and props. A part that reads
+  context and hot reload are unchanged, and a new instance (hot reload, rewind) starts unguarded.
+- Inputs are what `inputsOf` finds: state fields (game-state and context fields are state fields), and props. A part that reads
   an element's own field (`route.active`), a ref, a handle, or calls the component's own function, a callback prop, an action or a
   local function is not guarded: its reads are not followed. Imported functions are pure, as everywhere in the compiler.
 - **What is guarded:** the root's values, and each element that is always there: an intrinsic's values (one test per element, as
@@ -1938,10 +1939,10 @@ override render(): void {
   this render needs every value written.
 - **Only when it saves something.** When every guarded part reads every input, any change runs them all, and the render is written
   again without the mask (`CodeWriter.truncate`). More than 30 inputs: the parts past the 30th run always.
-- **Memos** the render always reads are worked out once at its top (`alwaysReadMemos`, the ones they read first), and read as locals
+- Memos the render always reads are worked out once at its top (`alwaysReadMemos`, the ones they read first), and read as locals
   where the render reads them; callbacks keep reading `$memo` (they run later). Hearth's enemy worked out its position six times a
   render through `$memo`, each with a new array and closure.
-- **Measured** on Hearth's wave 10 (`tools/frame-time.ts`): 1.40 → 1.18 ms a frame under Node, 13.5 → 12.2 ms under QuickJS (two runs each). The
+- Measured on Hearth's wave 10 (`tools/frame-time.ts`): 1.40 → 1.18 ms a frame under Node, 13.5 → 12.2 ms under QuickJS (two runs each). The
   memos alone took Node to 1.28.
 
 ## Placing things: `<Flex>` anywhere, and `x` / `y` as props (2026-11-13)
@@ -1960,7 +1961,7 @@ override render(): void {
   else. Scenes (`.scene.json`) keep `opacity` in their `transform`: that is data, not JSX.
 - **Not on components.** The compiler compiles one file at a time and does not know whether an imported component declares an `x`,
   so on a component `x` is always its own prop, and placement is `transform`. One rule, with no case that depends on another file.
-- **`<Flex>` in world space** needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and
+- `<Flex>` in world space needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and
   it draws the same pixels as the hand-placed version (its stories' screenshots did not change).
 
 ## Diagnostics in the editor: `tse lsp` (2026-11-13)
@@ -1977,12 +1978,12 @@ override render(): void {
   about 20 ms for Hearth's `Play.tsx` once the TypeScript process is warm, so a document is analysed 150 ms after the last change.
   `GameState.ts` and hook files are read as the editor has them too, and a change to any file of a game analyses its other open
   components again. A diagnostic the compiler found in another file is shown at the start of this one, naming where it is.
-- **Quick fixes are text edits** found from the diagnostic's span with a small scanner (brackets, strings, comments): a missing
+- Quick fixes are text edits, found from the diagnostic's span with a small scanner (brackets, strings, comments): a missing
   import, an import from `"react"`, `useEffect(…, [])` to `useMount`, `useMemo` and `useCallback` to the value and the function,
   `<Text text>` to children (a self-closing `<Text>` only), a whole-state selector to `.actions()`, and a name the authoring module
   does not export. A fix that cannot be made with confidence (an effect with dependencies) is not offered; the message says what
   to do.
-- **The extension** runs the game's own `tse lsp` (the `@tsengine/cli` its folder resolves), so the messages match the engine the game
+- The extension runs the game's own `tse lsp` (the `@tsengine/cli` its folder resolves), so the messages match the engine the game
   is built with, and one server serves every game under one install. It has no dependencies either: no `vscode-languageclient`,
   and the `.vsix` is a zip written by `tools/pack-vscode.ts`.
 - **Packs.** `@tsengine/language-server` is packed (the command line depends on it) and installed as a dev dependency;
@@ -2001,24 +2002,24 @@ window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `
   `game.ts`; never its window, id or speed), a `<Screen>` of the story's size with `fit="contain"`, and the component in an entity
   at the story's origin. That entity's `hotKey` is the story's id, so a hot reload keeps the component's state (same path) and
   switching to another story does not (another path).
-- **The window** is `playWithReload` with a `load` that builds the chosen story instead of importing the entry, also watching
+- The window is `playWithReload` with a `load` that builds the chosen story instead of importing the entry, also watching
   `stories/`. F5 and F6 ask for a reload without compiling (`onReady`'s `reload`); a file saved meanwhile is still compiled.
   The label is drawn over the frame through a backend proxy, as rewind's bar is, so it is not part of the screenshot. Rewind and
   the inspector are off.
-- **Screenshots** go through `renderRun` (the headless build), one hidden window per story at its size times its scale, after the
+- Screenshots go through `renderRun` (the headless build), one hidden window per story at its size times its scale, after the
   story's input and one more step for the layout. `tse check` runs `tse preview --compare` in a process of its own; any pixel that
   differs fails (`--tolerance` allows a difference per channel). The pictures are the software renderer's, and only the headless
   build is used for them: the OpenGL build blends a translucent colour (Hearth's end screen's shade) a little differently.
-- **Keys.** Rewind's "a second" keys were PageUp and PageDown, which are not in `KEY_NAMES`: `KEY_INDEX.get` gave `undefined` and
-  the keys never worked. They are ↑ and ↓ now, and F5 and F6 were free for stories.
+- **Keys.** Rewind's "a second" keys are ↑ and ↓. They were PageUp and PageDown, which are not in `KEY_NAMES`: `KEY_INDEX.get`
+  gave `undefined` and the keys never worked. The change left F5 and F6 free for stories.
 
 ## Effects that happen at a moment (2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each
 happens at a moment and then plays out on its own, after whatever caused it has moved on. React has no `useEffect`
 here (and this compiler will not grow one: an effect that watches state to fire an event is the pattern React's own docs
-warn against); the answer is the one toast libraries use. **An effect store** is made once in a `.ts` module, **its
-renderer is mounted once**, and **anything calls it**: a game-state action (plain TypeScript, where events are known), a
+warn against); the answer is the one toast libraries use. An **effect store** is made once in a `.ts` module, its
+renderer is mounted once, and anything can call it: a game-state action (plain TypeScript, where events are known), a
 plain function, or a component's handler.
 
 ```ts
@@ -2040,18 +2041,18 @@ did this by hand over a step's events; with twenty towers each playing its own s
 for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
 ```
 
-- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count?, color?, endColor? })`, and `bursts`
+- `createParticles(presets)` → `ParticleStore`: `burst(name, x, y, { angle?, count?, color?, endColor? })`, and `bursts`
   (counts by name, for tests). A burst's colours replace the preset's for that burst alone: each particle keeps a small index
-  into its emitter's list of burst colours (emptied whenever no particle is alive), so one preset serves every colour. A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
+  into its emitter's list of burst colours (emptied whenever no particle is alive), so one preset serves every colour. A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. `<ParticleLayer particles={fx}>` holds
   one emitter per preset and attaches itself to the store while mounted (the last mounted wins); a burst's point is in the
   layer's space. It follows the world: frozen with it, gone with it. With no layer mounted a burst is counted, not drawn.
   Put the layer **next to** a `<Camera>`, not inside it, since a camera follows its children.
-- **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
+- `createSounds(entries)` → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
   Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
   a `.ts` file are not checked at build time (only literals in components are).
 - **Time since mount is state: `const time = useTime()`** (2026-11-11). An engine-shipped hook like `useSquash`: a `useMutable({ time: 0 })`
-  that a `useUpdate` adds `dt` to, so the component renders each update. For a blink or a bob (`time % 1 < 0.66`), where a game wrote
-  the clock out by hand.
+  that a `useUpdate` adds `dt` to, so the component renders each update. It is for a blink or a bob (`time % 1 < 0.66`), where a game
+  would otherwise write the clock out by hand.
 - **A shake is state: `const shake = useShake()`** (2026-11-11, replacing a `createShake()` object). The hook hands back its
   fields `{ strength, duration, elapsed }`; `shake.strength = 3; shake.duration = 0.25; shake.elapsed = 0` in a handler starts one, the hook's own update
   runs it down (`shakeOn`, the same object once over), and `<Camera shake={shake}>` draws it: the camera's offset is a pure
@@ -2061,7 +2062,7 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
   `createSquash()` object with a `start` method, which was the imperative shape). `squash.x = 0.6; squash.y = 1.4` in a
   handler, and `transform={{ scaleX: squash.x, scaleY: squash.y }}` on the sprite, which scales about its origin. It
   springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
-  the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
+  the same object at rest, so the state stops changing). `useSquash` is an engine-shipped custom hook: ordinary source
   (`useMutable` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
   from `@tsengine/runtime/jsx`, where it is declared for TypeScript.
 - **Per-instance objects.** A store in a module is global; an object that belongs to one entity is that component's own,
@@ -2076,10 +2077,10 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
   `const events = step(input, dt)` (`CalleeIR` `Action`, only as a handler's `const`; in JSX or a derived value it would run
   on every render), and then call plain functions and setters with it. Kite's character runs the step in its own
   `useUpdate`, plays the effects (`playEvents`) and sets its squash (`squashFor(events)`).
-- **Effects a game makes from the basics.** Afterimages (copies of a sprite left behind, fading) were an engine feature
-  briefly and are now Kite's own `<DashTrail>`: a list of ghosts in state, drawn as `<Sprite>`s with falling `opacity`. The
+- **Effects a game makes from the basics.** Afterimages (copies of a sprite left behind, fading) are Kite's own `<DashTrail>`
+  (they were briefly an engine feature): a list of ghosts in state, drawn as `<Sprite>`s with falling `opacity`. The
   engine keeps what a game cannot build from the rest.
-- **`moveActorX` / `moveActorY`** (runtime `move.ts`, for a game's rules): move any `{ x, y, rx, ry }` a pixel at a time
+- `moveActorX` / `moveActorY` (runtime `move.ts`, for a game's rules): move any `{ x, y, rx, ry }` a pixel at a time
   against a `blocked(x, y)` test, carrying the sub-pixel remainder; on a block the remainder is dropped, `onBlocked(direction)`
   is called (it may move the actor, which is how a game adds corner rules) and the move stops. Kite's body uses it, with its
   corner corrections as the callbacks.
@@ -2121,12 +2122,12 @@ cleared to the darkness, with the lights in it drawn with `childBlend="add"`, an
 ## Collider shapes (2026-11-15)
 
 `<Collider shape="circle">` is the circle inside its box; `shape="polygon" points={[…]}` a convex polygon in its own pixels, inside
-its box. Decided (2026-11-15) as the smaller of two scopes: shapes change what **touches**, not what **stops**.
+its box. Decided (2026-11-15) as the smaller of two scopes: shapes change what touches, not what stops.
 
 - **Boxes first, then the shape.** The tracker's sweep, its bands, the native broad phase and the incremental update all still find
   pairs by box; a pair in which either collider has a shape is then tested exactly (`shapesTouch` in `collide.ts`, the separating
   axis test in `runtime/src/shapes.ts`), with each collider turned and scaled with its object. Two plain boxes skip it, so a game that
-  uses no shapes pays one property read per pair, and a box is still upright against a box (its rotated bounds), as before. Against a
+  uses no shapes pays one property read per pair, and a box against a box is still tested upright (its rotated bounds). Against a
   shape, a turned box is exact.
 - **Body queries** (`touching`, `overlapping`) filter by shape the same way (`World.tagIn`, `collidersIn`), against the body's box.
 - **Decided 2026-11-15: circles and polygons only, for now.** Solid shapes (a body still stops at a solid collider's box: no slopes,
@@ -2151,24 +2152,24 @@ export function Player() { usePlatformerBody(); … }
 - **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `TSE1101` with the hook's name.
 - **What is left.** After expansion the hook's declaration and its import are removed, so a hooks-only file compiles to an empty module. Positions in later diagnostics are those of the expanded text. An unknown `use…` name is left alone, so the retired hooks keep their messages.
 
-The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useMutable` and friends, which throw only if actually run).
+The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useMutable` and friends, which throw only if run).
 
 ### Hooks that behave like functions, and functions in the body (2026-11-13)
 
 Inlining stays (it is what makes a hook free at run time and lets the compiler see every state it
 declares); what a function can do and a hook could not is closed:
 
-- **A destructured parameter** (`function useMover({ speed, limit: max }: Options)`) binds each name to that member of the
+- A destructured parameter (`function useMover({ speed, limit: max }: Options)`) binds each name to that member of the
   argument. From an object literal, each member is read where it is written (a literal or an import in place, as a plain
   argument is); from any other value, the value is bound once (`_useMover1_$arg0`) and read member by member.
-- **A returned name takes the caller's name** for `const r = useX()` as it already did for `[a, b]` and `{ a, b }`, so a hook
+- A returned name takes the caller's name for `const r = useX()`, as it does for `[a, b]` and `{ a, b }`, so a hook
   returns a ref (`return count;`) or a state as itself, not a copy.
-- **A callback argument.** An argument is bound to a `const` of the component body, and an arrow there is now a **function of
-  the component** (below), so `useEvery(1, () => setTicks(…))` works and the hook calls `fn()` in its handler.
-- **The recursion message names the chain** (`'useA' calls itself through useA → useB → useA`), and the depth limit is 12.
+- **A callback argument.** An argument is bound to a `const` of the component body, and an arrow there is a function of
+  the component (below), so `useEvery(1, () => setTicks(…))` works and the hook calls `fn()` in its handler.
+- The recursion message names the chain (`'useA' calls itself through useA → useB → useA`), and the depth limit is 12.
 
-**Functions in the component body.** `const add = (n: number) => { … }` was `TSE1301` ("an arrow function can only be…"). It is
-now an `OwnFunctionIR`: lowered as a handler (setters, sounds, actions allowed) with the parameter types written on it
+**Functions in the component body.** `const add = (n: number) => { … }` was `TSE1301` ("an arrow function can only be…"); it is
+an `OwnFunctionIR`: lowered as a handler (setters, sounds, actions allowed) with the parameter types written on it
 (`paramTypes: "declared"`), and kept in a field, `readonly add = (n: number) => { … };`, written before the element fields so a
 child can be given it. A call in a handler or callback is `this.add(…)` (callee `Own`); passed to an element's callback prop it
 becomes the arrow an author would write (`onPress: () => { this.press(); }`); passed to a component or a function it is
@@ -2192,7 +2193,7 @@ the games kept everything in the store. `createSave({ …, tree: true })` keeps 
   `World.flush`, once the tree the applied state builds has settled, takes it and runs `restoreHotState`, as a hot reload does.
 - **Keys.** A keyed list sets `hotKey` on each item it makes, and a path names such an item by its key (`Pack:0/Enemy[b]`)
   rather than by its place among siblings, so removing an earlier item does not move state between the others. Hot reload
-  gains the same.
+  uses the same paths.
 
 `version` and `migrate` apply to `data`; the tree is restored as it was saved, field by field where a value still fits
 (`hotFits`), as a hot reload restores across code changes.
@@ -2226,7 +2227,7 @@ Every method flushes the world after it, so what a test reads is what would be d
 `CollisionTracker` over every collider under the holder, so a battle whose shots hit its enemies is tested as one component
 (`render(Play, …, { collisions: true })`). `place({ tag, data, x, y, width, height })` puts another collider in the world, each in
 an entity of its own (colliders with the same parent are one thing's and never touch); `remove` takes it out. Without the option
-nothing collides on its own, and contacts are reported with `collide`, as before. Not done: compiling the component from
+nothing collides on its own, and contacts are reported with `collide`. Not done: compiling the component from
 its `.tsx` on demand (tests import the generated class, as `game.ts` does). It is packed (`npm run pack`) and a dev
 dependency of every new game, whose template tests its `Hero` with it.
 
@@ -2237,22 +2238,22 @@ Collisions are found after every step and reported to `onCollisionEnter` after t
 moving in plain functions over the tile grid (`moveActorX` / `moveActorY` with a `blocked(x, y)` the rules write). A body does the
 same for a component, against the world it is mounted in:
 
-- **`Body`** (`runtime/src/body.ts`) is a `PixelActor`: `move(dx, dy)` runs `moveActorX` then `moveActorY` with a `blocked` that
+- `Body` (`runtime/src/body.ts`) is a `PixelActor`: `move(dx, dy)` runs `moveActorX` then `moveActorY` with a `blocked` that
   asks the world, and returns `{ left, right, up, down, tags }`; `touching(tag)` asks whether a collider with that tag overlaps the
   box; `place(x, y)` moves it with no collision. Its box is in its owner's parent's space, offset by the parent's world position
   (not scaled or turned: bodies are boxes on the grid).
 - **What is solid.** The `World` keeps the colliders and tilemaps registered in it (`registerObject`), and answers `solidIn(box,
   ignore)`: a solid tile of a `<Tilemap solid>` (its `TileGrid.solidAt`, at the map's world position) or a `<Collider solid>` whose
-  box overlaps, not under the body's own component. Both `solid` props are new, default false.
+  box overlaps, not under the body's own component. Both `solid` props default to false.
 - **How a body knows its world.** A per-instance object a factory made (`useMutable({ body: createBody(…) })`, a "handle" state,
   marked `handle` in the IR) is listed by the generated `ownedHandles()`; `GameObject.attachToWorld` calls each one's
   `attachOwner(owner, world)` if it has one, and `detachFromWorld` its `detachOwner()`. Any runtime object may use this.
-- **`useBody`** is a shipped hook (`hooks/library.ts`): the body, `x` and `y` in its `useMutable`, and `move`,
+- `useBody` is a shipped hook (`hooks/library.ts`): the body, `x` and `y` in its `useMutable`, and `move`,
   `touching` and `place` as functions of the component (see "Hooks that behave like functions") that move the body and set `x` and `y`. So the component renders where
   the body is, in the step it moved.
-- **`overlapping(tag)`** (2026-11-13, for Hearth's towers): every collider with the tag that overlaps the box, as contacts (`tag`, `owner`, `data`),
+- `overlapping(tag)` (2026-11-13, for Hearth's towers): every collider with the tag that overlaps the box, as contacts (`tag`, `owner`, `data`),
   typed by tag through `ColliderData` (`ContactOf<Tag>`; the hook's function keeps its `<Tag extends string>`, as any function of
-  a component's own now keeps its type parameters). A Hearth tower keeps a body as big as its longest reach and asks it which
+  a component's own keeps its type parameters). A Hearth tower keeps a body as big as its longest reach and asks it which
   enemies are near; their colliders' `data` say where each is. `World` answers `tagIn`, `solidIn` and `collidersIn` from a cache
   of the colliders' world boxes, made once per update phase (dropped as a tick starts and after each flush): transforms change
   when the tree renders, so a query sees the colliders where they were when the step's updates began, the snapshot every update
@@ -2270,18 +2271,18 @@ drew an effect whose `<Collider>` existed for one step with the blast as its `da
 blast was meant for it (a target id, or a distance, the collider being a square) and took the damage, a step after the move
 landed. Two functions of the component replace that, still through colliders:
 
-- **`nearby(tag, x, y, radius)`**: the colliders with the tag whose world boxes come within a real circle, nearest first (by the
+- `nearby(tag, x, y, radius)`: the colliders with the tag whose world boxes come within a real circle, nearest first (by the
   distance from the point to the box, 0 inside it; ties in the order the colliders joined the world), each its contact (`tag`,
   `owner`, `data`, typed by `ColliderData` as `ContactOf<Tag>` is) with the middle of its box and that distance. It reads the
   same per-tag grid and per-phase box cache `useBody`'s queries use, so it costs what `overlapping` costs and sees boxes where
   they were when the step's updates began. It leaves out the colliders the asking component draws itself (the nearest component
   at or above a collider, a compiled component's class having no own `intrinsic`), not those of components inside it: a parent
   may ask about its children's colliders. Both hosts run it in JavaScript, so their results are identical.
-- **`send(tag, where, value)`** queues `value` for the colliders with the tag in a circle (`{ x, y, radius }`, resolved as
+- `send(tag, where, value)` queues `value` for the colliders with the tag in a circle (`{ x, y, radius }`, resolved as
   `nearby` resolves it) or for the one collider a `nearby` result is. A result keeps its collider in a `WeakMap`, so results stay
   plain objects, and one kept past its world, or whose collider left, reaches nothing. Addressing by a result rather than by an
   id in `data` needs no convention about `data`, and cannot reach a different collider that happens to carry the same id.
-- **`<Collider onReceive>`** is called with each value. Its type is the tag's `ColliderMessages` entry, declared beside
+- `<Collider onReceive>` is called with each value. Its type is the tag's `ColliderMessages` entry, declared beside
   `ColliderData`; `ColliderProps` and the `Collider` class take the tag as a type parameter, the generator names a literal tag in
   an element's field type (`Collider<{}, "foe">`) and in a `<Collider>` root's `extends`, and the manifest marks the parameter
   `contextual`, so the generated callback is left unannotated and typed from the props. `onReceive` is typed as a method so a
@@ -2298,7 +2299,7 @@ from `useInput` should still land. Delivery is in `World.tick`, so the Node play
 
 ## Tilemap, assets and the other built-ins
 
-`<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [PLAYER.md](PLAYER.md). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
+`<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [PLAYER.md](PLAYER.md). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
 
 **Build-time asset check.** `tse-compile --assets <dir>` (`checkAssets`, `TSE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. The files of a `createSounds({ … })` (a plain `.ts` module, found by scanning the source folder; `checkSoundStores`) are checked the same way, as a name or `{ src }` written as a literal. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
 
@@ -2341,13 +2342,13 @@ member is also described structurally (`PropDeclIR`: name, optional, default,
 role, and a `PropTypeIR` of number/string/boolean, literal unions, arrays,
 function or source text) so a scene schema (M6) needs no type checker.
 
-**Value or callback** is decided by the type: a function type or method
+Whether a prop is a value or a callback is decided by its type: a function type or method
 signature is a callback, anything else a value. A value reads as `this.props.x`
 (`PropRead`). A callback is only called (`onDefeated?.()`, `CalleeIR` `Prop`)
 or forwarded whole (`onDone={onDone}`); reading it as a value, or calling a
 value, is `TSE1301`.
 
-**The child's class** extends `Entity<EnemyProps>`, so `this.props` is
+The child's class extends `Entity<EnemyProps>`, so `this.props` is
 available to field initialisers, which run right after `super()` returns:
 
 ```ts
@@ -2365,7 +2366,7 @@ export class Enemy extends Entity<EnemyProps> {
 When every prop is optional the constructor parameter defaults to `{}`, so a
 parent may write `<Badge />`.
 
-**The parent** builds the child with every value prop (static or dynamic) and
+The parent builds the child with every value prop (static or dynamic) and
 its callbacks in the constructor call, and re-sends only the dynamic ones, in
 one call, from `render()`:
 
@@ -2407,8 +2408,8 @@ within the slot, as CSS's `transform` does. Both names are reserved members.
 
 ### Spread props (2026-11-11)
 
-`<Enemy key={e.id} {...e} />` and `<Box {...o} x={9} />`: on a **component** element an attribute may be a spread of any expression the
-compiler can read (state, a prop, the list item, a game-state selection). `PropIR` gains `SpreadPropIR { value, dependencies }`; the order
+`<Enemy key={e.id} {...e} />` and `<Box {...o} x={9} />`: on a component element an attribute may be a spread of any expression the
+compiler can read (state, a prop, the list item, a game-state selection). `PropIR` has `SpreadPropIR { value, dependencies }`; the order
 among the props is kept, so a later prop wins, as in React. The generated code spreads for real: `new Enemy({ ...(e) })`, and a render
 sends `updateProps({ ...(e) })`. TypeScript checks the object against the props type, the source type-check reports a missing prop at the
 author's line, and the runtime's `applyProps` compares key by key, so a render marks the child dirty only when a value changed: in a list,
@@ -2416,7 +2417,7 @@ only the items whose object was replaced (an immutable update) re-render. A spre
 a spread is among the props, `updateProps` carries every value prop, in order, so a named prop after the spread still wins on update
 (callbacks are made once and are not re-sent). A spread in a list item reads the item and gets the `Item` dependency.
 
-Not supported: a spread onto a **built-in** (`<Shape {...p} />`): its render writes each prop to a field one by one, so a spread needs the
+Not supported: a spread onto a built-in (`<Shape {...p} />`): its render writes each prop to a field one by one, so a spread needs the
 keys, from the manifest's `intrinsicMembers`. It is `TSE1203` with that reason, until a game spreads onto a built-in (Hearth does not).
 `<Box x={5} {...o} />` is TypeScript's own error (`x` is overwritten) when `o` always has `x`.
 
@@ -2429,7 +2430,7 @@ what it reads from a `.ts` file or the runtime), and components read it like a p
 handlers. One that holds JSX or reads the game state is `TSE1001` (that belongs in a component); `let` is `TSE1001` (a value that
 changes belongs in state). Render expressions may index (`ROW[kind] * 3 + level`, `pads[cursor]`, `found?.[i]`; `IndexRead`) and
 use TypeScript's `!` (`NonNull`, so the generated code type-checks as the source did). `Math.PI`, `Math.E` and `Math.SQRT2` are
-values, and `atan2`, `atan`, `tan`, `pow`, `hypot` and `trunc` join the allowed `Math` calls.
+values, and `atan2`, `atan`, `tan`, `pow`, `hypot` and `trunc` are among the allowed `Math` calls.
 
 ## Roots and component forms
 
@@ -2440,11 +2441,11 @@ after the declaration). A default export needs a name, because the generated
 class has one. The importer picks the local name: `import Monster from
 "./Enemy.tsx"` (alone or with `{ Boss }`) puts `Monster` in the generated
 import and in `new Monster(…)`, and the generated module ends with
-`export default Enemy;`. An arrow with an expression body is just its return.
+`export default Enemy;`. An arrow with an expression body is its return.
 
 **Props as an object.** `function Enemy(props: EnemyProps)` reads each prop as
 `props.speed` and calls callbacks as `props.onDefeated?.()`; the bare `props`
-cannot be used (no passing it on, no spreading). It lowers exactly like
+cannot be used (no passing it on, no spreading). It lowers like
 destructuring, but there is nowhere to write a default, so none is applied.
 Every member of the props type is a prop.
 
@@ -2473,10 +2474,10 @@ like any component. Details:
   `width`/`height`; the manifest's `intrinsicRequired`). `super()` runs before
   state exists, so when such a root prop is dynamic it gets `undefined as never`
   there and its real value in the first `render()`, which the constructor runs.
-* The class gains the root's own fields (the manifest's `intrinsicMembers`) and every object's (`reservedMembers`). A
+* The class has the root's own fields (the manifest's `intrinsicMembers`) and every object's (`reservedMembers`). A
   state, ref or sound whose name is one of them is kept in a field named `$name` instead, and its setter in `$setName` when
   that is one (`claimField`, 2026-11-13): the author writes `name`, the generated code reads
-  `this.$name`, and the entity's own `name` is untouched. Props never clashed: they live in `this.props`. Before, such a name
+  `this.$name`, and the entity's own `name` is untouched. Props cannot clash: they live in `this.props`. Before, such a name
   was `TSE1103`, a rule that followed from code the author never sees. `$` names are the compiler's own. Private fields
   (`#name`) were the plan's first idea; they would have hidden state from the tests and tools that read a component's state
   from outside, so only the names that clash are renamed.
@@ -2489,7 +2490,7 @@ like any component. Details:
 
 A root `<Entity>`, `<Game>` or fragment (and the container a component or condition root is held in) with no `name` prop gets
 the component's name in its `super()` call: `function Player() { return <Entity>…</Entity>; }` generates
-`super({ name: "Player" })`, exactly what `<Entity name="Player">` did. A written `name`, static or dynamic, wins. Nested
+`super({ name: "Player" })`, the same as `<Entity name="Player">`. A written `name`, static or dynamic, wins. Nested
 entities are not named. Every game wrote the component's name again on its root, and `name` is
 what a collision's `other.owner` reads, so leaving it out used to change game logic without a sign in the source. The games,
 the template and the guide no longer write it. Only `Entity` and `Game` take a `name` (`NAMED_ROOTS` in the generator).
@@ -2520,9 +2521,9 @@ without one) presses the focused one. A click on a focusable one focuses it befo
 code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
 
 **One mistake, one error, through an inlined hook** (2026-11-15). A custom or library hook is inlined text, and every error
-found inside its expansion maps back to exactly the call's range. A bad argument (`useBody({ x: nowhere })`) was the first
-error, and then the hook's own body failed for it: `'move' is not a method`, `'touching' is not an allowlisted call`, about
-names the author never wrote. `expandCustomHooks` now returns each call's range in the original text, and `compile` keeps only
+found inside its expansion maps back to exactly the call's range. Without a filter, a bad argument (`useBody({ x: nowhere })`) is
+the first error, and then the hook's own body fails for it: `'move' is not a method`, `'touching' is not an allowlisted call`,
+about names the author never wrote. `expandCustomHooks` returns each call's range in the original text, and `compile` keeps only
 the first error on each (`oneErrorPerHookCall`); warnings, and errors anywhere else, are kept.
 
 **Buttons, menus and `onAdjust`** (2026-11-15). Every game had written its own menu: a cursor in state, `useInput` reading up and down,
@@ -2536,17 +2537,17 @@ And focus taken by a modal is put aside (`#focusBeforeInert`) and given back whe
 `autoFocus`, as a browser does when a dialog closes: without it, Bramble's key prompt sent the settings cursor back to the top.
 
 Adding built-ins called `Button` and `Menu` would have broken every game with a component of either name (`TSE1206`), and so would
-any later built-in. So a name is now scoped as in React: a component declared in a file, or imported from another, shadows a
+any later built-in. So a name is scoped as in React: a component declared in a file, or imported from another, shadows a
 built-in of that name, and `TSE1206` is only for a file that also imports the built-in (or names a component `Entity` or `Game`,
 whose tags the compiler always reads as the built-ins).
 
 **Inert and modal** (2026-11-12: nothing let a component own or consume the keys). Input stays polled;
-what changed is who hears it, decided by subtree as in HTML. `inert` and `modal` are accessors on `GameObject` and props of
+these props decide who hears it, by subtree as in HTML. `inert` and `modal` are accessors on `GameObject` and props of
 `<Entity>`, `<Flex>` and `<Hud>` (`InputScopeProps`), so a component puts them on its root (`<Entity inert={disabled}>`) and they
 follow state like any prop. `inert` was already the router's mechanism (`World.setInert`, used on a screen being left); the prop
 calls it when set and when the object joins or leaves a world. `modal` calls `World.setModal`, which keeps a stack in mount order;
-the last modal still in the world is `World.modal`. `World.isInert(object)` is now: in an inert subtree, or a modal exists and the
-object is not inside it (ancestors included, as a dialog's page is). Everything that already asked `isInert` follows: `onInput` and
+the last modal still in the world is `World.modal`. `World.isInert(object)` holds when the object is in an inert subtree, or when a modal exists and the
+object is not inside it (ancestors included, as a dialog's page is). Everything that asks `isInert` follows: `onInput` and
 `onUpdate` get `NO_INPUT`, presses and hover skip it, `pressKey` and the focus look only at pressables that are not inert, so the
 focus stays inside a modal and leaves what it made inert. A modal is pushed before its children attach, so an inner modal is above
 an outer one. `inert` and `modal` are reserved member names; they are not in `intrinsicMembers`, which lists what an intrinsic
@@ -2567,14 +2568,16 @@ centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's o
 **Hover** (2026-11-11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
 `pointerenter` / `pointerleave`: each frame the player finds the topmost pressable under the mouse (last frame's draw order,
 the same search a press makes) and `World.reportHover` tells the one before it left and the new one it was entered; an inert one
-counts as none, and a mouse off the screen is over nothing. A `<Flex>` with only hover callbacks is collected for the mouse but
+counts as none, and a mouse off the screen is over nothing. Each pressable is asked where it is, which means where its parent
+is: neighbours in the list with one parent (the tiles of a board) share that answer (`containsIn`), so a board of 180 tiles
+walks up the tree once a frame, not 180 times. A `<Flex>` with only hover callbacks is collected for the mouse but
 lets a press through to what is under it. State is the component's: `onPointerEnter={() => setHovered(true)}`.
 
 **Functions passed whole** (2026-11-11). `onPress={resume}` where `resume` is a game-state action, and
 `<Flex onPress={onPress}>` where `onPress` is the component's own callback prop (or `props.onPress`): to a built-in, the
 compiler writes the arrow the author would have (`() => useGame.getState().resume()`, `() => this.props.onPress?.()`), with the
 parameters the manifest lists; to a component, an action is the store's own function (`ActionRef`), a static prop, since an action
-never changes. A sound or a setter is still not a value.
+never changes. A sound or a setter is not a value.
 
 **Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
 is a callback prop on a built-in, which the manifest lists in
@@ -2593,7 +2596,7 @@ code may read `other.tag` and `other.owner`, both strings, and `other.data`, and
 the comparison like any other string.
 
 * `data` is the `data` prop of the other `<Collider>` (any value; undefined when it has none), so a
-  coin says what it is worth and an enemy how much it hurts without the game state keeping a table by id
+  coin says what it is worth and an enemy how much it hurts without the game state keeping a table by id.
   Its type: `Contact` is `BaseContact` (`data: unknown`) until a game declares
   the global interface `ColliderData` (`declare global { interface ColliderData { coin: { value: number } } }`),
   then a union with one member per declared tag, so `other.tag === "coin"` narrows `other.data` in the
@@ -2621,7 +2624,7 @@ the comparison like any other string.
   itself left the world is not called (it is gone); the one still mounted is.
   Exits are reported before enters in the same frame.
 * The members are the manifest's `Contact` handle type, `intrinsicMembers.Collider`
-  lists the new fields, and the runtime's manifest test keeps both honest.
+  lists the fields, and the runtime's manifest test keeps both honest.
 
 ## Code generation
 
@@ -2662,7 +2665,7 @@ Decisions:
   real compiler. Revisit if we need source maps (the factory/printer route
   would give them for free).
 * **Static children are `readonly` field initialisers**, so "never recreated"
-  is enforced by the type system, not just by convention.
+  is enforced by the type system, not by convention alone.
 * **Conditional children are nullable fields**; descendants of a conditional
   are nullable too and are created together when it mounts and nulled when it
   unmounts.
@@ -2757,7 +2760,7 @@ a step does not close the window: the player stops stepping the world and draws 
 window pixels: a heading, `Name: message`, the stack (dimmer, wrapped to the window, cut with a line that says so), and a note
 at the bottom ("Close the window to quit."). `player.failure` holds the error while it is shown. `run` turns this on for a
 visible window and, once the window is closed, throws the error, so both hosts still print it and exit with status 1. A
-`hidden` window, and `createPlayer` unless asked, throw at once as before, which is what tests, tools, the parity runs and CI
+`hidden` window, and `createPlayer` unless asked, throw at once, which is what tests, tools, the parity runs and CI
 want. Because the error screen is drawn by the TypeScript player through the ordinary draw records, the Rust host needs no
 change. A host can also show its own error (`player.showError(error, note)`): the Node launcher shows a compile error this way.
 
@@ -2795,12 +2798,15 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
   call setters, so the compiler marks every class it generates `static readonly managed = true`. Its `render()` writes only what
   differs and reports it (`markMoved` for a transform, `markChanged` for anything else), and it declares `reportsChanges`, so a
   render that changes nothing keeps what was drawn, and one that only moves it lets the player move its records as a block.
-- **A hand-written class** that overrides `onInput` or `onUpdate` and is not marked is redrawn every frame, with everything under
+- A hand-written class that overrides `onInput` or `onUpdate` and is not marked is redrawn every frame, with everything under
   it, because it may write a transform or a colour from the hook and nothing would report it. The same write with no hook (from a
   collision callback, a test, a script holding a reference) is not seen: call `object.markChanged()` after it.
 - **What the walk must see every frame is never reused**: a `<Camera>`, `<Pointer>`, `<Hud>`, `<Flex>` (they feed lists besides the
   draw records, or lay out their children) and anything with a non-zero `z`. A subtree containing one is rebuilt, and so are its
   ancestors, though their other children are still copied.
+- **A `<Flex>`'s records are made again every frame, but its layout is not.** The same stamps say whether anything under a layout
+  root changed since it was laid out; when nothing did, the layout is kept (LAYOUT.md, "A layout that cannot have changed is
+  kept").
 - **Collisions follow it.** A collider in a reused subtree comes with the same `ColliderEntry` object as last frame, and one that is
   not gets a new one, so `CollisionTracker` tests again only the colliders whose entry is new (see its doc comment). An entry must not be
   changed after it is handed over.
@@ -2809,41 +2815,41 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
   it the tracker sweeps in script. The two find the same pairs, so a game cannot tell which ran.
 - **What changed is drawn the short way.** Under an object that changed this frame, a `<Shape>`, `<Sprite>` or `<Collider>` with no
   children, z, layout offset or placement is written by its parent's loop, not by a call of its own (most of a moving component is
-  such leaves). It draws exactly what the general walk draws; the tests compare the two.
+  such leaves). It draws the same as the general walk; the tests compare the two.
 - `retain: false` (on `PlayerConfig` or `FrameBuilderOptions`) turns it off; `retain: "check"` also rebuilds each frame and
   throws when the two differ, which is how an unreported change is found. The player's tests run reuse against a full rebuild
   over random changes.
 
 **A frame** (`createPlayer(...).step()`), in a fixed order:
 
-1. A new **left press** goes to the topmost `Pointer` that was under the mouse in the frame last
+1. A new left press goes to the topmost `Pointer` that was under the mouse in the frame last
    drawn (`world.reportPress`). One press, one pointer; if the topmost misses, the one below is tried.
 2. `world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure (as in "Handlers"). `dt` is
    what the backend measured, clamped to `[0, 0.1]` seconds so a stall cannot teleport things; the
    first frame's `dt` is 0. With a fixed step, as many ticks as the frame holds (`FixedDriver`).
-3. After **each** tick, its collisions: the tree is walked (`walkTree`, depth first) into draw records,
+3. After each tick, its collisions: the tree is walked (`walkTree`, depth first) into draw records,
    which is where colliders get their world boxes; contacts that started or ended are reported with
    `world.reportCollision` / `reportCollisionExit` (see "Collisions" below); and if any callback ran,
    `world.flush()` renders what it changed. The walk composes world transforms on the way down and treats
-   a `Camera` as transparent to its children, exactly as `GameObject.worldTransform()` and `childSpace()`
+   a `Camera` as transparent to its children, as `GameObject.worldTransform()` and `childSpace()`
    do, and a test holds the two equal over a real tree.
 4. The last step's walk is the frame's, unless a collision callback changed something after it; then the
    tree is walked again (cheap: only what changed is rebuilt, see "Reusing draw records").
-5. The backend draws and presents the frame, then writes the next frame's input.
+5. The backend draws and presents the frame, then writes the next frame's input. `step()` returns false once that input says the
+   window was closed (the frame is still drawn).
 
 **Why collisions are per step** (2026-11-12). They used to be found once a frame, after the walk, and their
 callbacks' effects rendered by the next tick. That had three costs: the frame that showed a contact did not
 show what it caused (a spike touched but the character still standing); with a fixed step, a contact that
 began and ended inside one frame's steps was missed; and the step a contact was seen in depended on the frame
-rate, so a replay could play differently on a slower machine. Now a contact is found in the step that made it,
+rate, so a replay could play differently on a slower machine. A contact is found in the step that made it,
 the next step's `useUpdate` sees its effects, the frame draws them, and a run collides at the same steps at
-any frame rate (`test/collide-timing.test.ts`). **What it costs:** a frame of one step walks the tree as before
+any frame rate (`test/collide-timing.test.ts`). **What it costs:** a frame of one step walks the tree once
 (plus a cheap second walk only when a callback ran); a frame that catches up with k steps walks it k times:
 2,000 moving colliders under Node went from 3.9 to 5.8 ms for a two-step frame. A walk that places only the
 colliders would remove that if it matters. **What it does not change:** a callback runs after the step's
 `useUpdate`, not inside it, so movement code that must stop at a wall reads tiles; and nothing sweeps a
 collider's path, so a very fast, thin one can pass through another between two steps.
-   `step()` returns false once that input says the window was closed (the frame is still drawn).
 
 **What is drawn.**
 
@@ -2852,11 +2858,11 @@ collider's path, so a very fast, thin one can pass through another between two s
   and `y` (`<Sprite transform={{ x: 10, z: 2 }} />`; scenes take it too): what has a higher `z` is drawn
   later, so on top, negative is behind, and 0 is the default. Like position it adds to the parent's
   (`placement.z + transform.z`, on top of the parent's), so raising a component raises everything in it as
-  one, and `global` cuts the chain (a global `transform` is just its own `z`; a global `placement`
+  one, and `global` cuts the chain (a global `transform` is its own `z`; a global `placement`
   ignores the parent's). A camera is transparent to it, as to position. Objects with equal `z` keep
   tree order, and the order is global across the tree, not within one parent: a child at an effective
   `z` of 6 is above an unrelated sibling of its parent at 5.5. Pointers follow the same order, so the
-  pointer drawn on top is pressed first. It is not a record field: the format is unchanged. The frame
+  pointer drawn on top is pressed first. It is not a record field, so the record format has no `z`. The frame
   builder notes where `z` changes as it writes records and, if it ever did, sorts them once after the walk
   (`DrawList.sortByZ`, a stable sort by `(z, record order)`; skipped when they are already in order, as
   when a HUD sits at the top); the view stays first and a screen's border bars stay last. A `z` that is
@@ -2896,8 +2902,7 @@ then the screen's scale and position (`viewToWindow`), in one view, and the bars
 view in window pixels. In both modes a press on the bars reaches no `Pointer`, and `input.pointerX/pointerY` come
 back through the window's map (`BuiltFrame.view`, which is the same in both modes), so handlers see game positions.
 A `<Screen>` anywhere else is a plain container, with one warning; one whose
-size is not positive is ignored, with one warning. Without a `<Screen>` the frame is exactly what it was
-before: the game is the window.
+size is not positive is ignored, with one warning. Without a `<Screen>`, the game is the window.
 
 **The HUD.** A `<Hud>` is a layer drawn after the world through a second `TSE_OP_VIEW` that ignores the camera:
 its contents are in game pixels under a `<Screen>` and in window pixels without one. The tree walk records each
@@ -2917,8 +2922,9 @@ fit sizes bottom-up, then sharing out space top-down, widths first and then heig
 slot). Sizing is per axis: `"fit"`, `"grow"`, a number or a percentage, with min and max; free space goes to the
 smallest growing child first and stops at each maximum. Only a `Flex` is resized by layout; a `Shape`, `Sprite` or
 `Text` keeps its own size. An `Entity` or component child is sized by the bounding box of what it draws. A root that
-grows fills the game's area (the canvas, else the window). Layout runs every frame, so conditional children and keyed
-lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
+grows fills the game's area (the canvas, else the window). Layout runs on every frame where something under the root
+changed (a root nothing has changed under keeps its layout: LAYOUT.md, "A layout that cannot have changed is kept"), so
+conditional children and keyed lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
 behind the children, at the box's size. Each child's offset is rounded to a whole pixel (sizes stay exact), so centred
 text is not blurred. A `Flex` with an `onPress` is pressable over its laid-out box, in the same draw-order list as
 `Pointer`s (both are a `Pressable`). A `<Text width={80} align="center">` is laid out as an 80-wide box and drawn
@@ -2941,7 +2947,7 @@ widths estimated (`estimateTextWidth`: 0.6 × size per character, a line as tall
 `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`,
 `"Alt"`, `"ArrowUp"`/`"ArrowDown"`/`"ArrowLeft"`/`"ArrowRight"`, `"F1"`–`"F12"` and the mouse buttons
 `"MouseLeft"`, `"MouseRight"`, `"MouseMiddle"`; any other name is never pressed and warns once.
-`input.pointerX/pointerY` are the mouse **in world space**: the window position taken back through the
+`input.pointerX/pointerY` are the mouse in world space: the window position taken back through the
 view of the frame last drawn, so a handler never needs the camera. A pointer or collider mounted this
 frame is not clickable until it has been drawn once.
 

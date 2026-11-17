@@ -6,7 +6,7 @@
   /* ---------- element reference data ---------- */
   var ELEMENTS = [
     { name: "Entity", kind: "container", sum: "A named container. The usual root of a component.",
-      props: [["name", "string", '""', "Shown as <code>other.owner</code> in collisions."], ["opacity", "number", "1", "0 to 1: the whole group, everything inside it at once (a popup or a card fading in), multiplied with faded parents. A prop on every element."], ["inert", "boolean", "false", "The subtree hears no input, as the HTML attribute: its <code>useInput</code> and <code>useUpdate</code> get no keys, and its buttons cannot be pressed, hovered or focused. It still updates and draws. See <a href=\"effects.html#who-hears\">Who hears the keys</a>."], ["modal", "boolean", "false", "While mounted, everything outside this subtree is inert, as a <code>&lt;dialog&gt;</code> opened with <code>showModal()</code>: a pause screen or a prompt takes the keys and the focus. The modal mounted last wins."]] },
+      props: [["name", "string", '""', "Shown as <code>other.owner</code> in collisions."], ["opacity", "number", "1", "0 to 1, applied to the whole group at once (a popup or a card fading in) and multiplied with faded parents. A prop on every element."], ["inert", "boolean", "false", "The subtree hears no input, as the HTML attribute: its <code>useInput</code> and <code>useUpdate</code> get no keys, and its buttons cannot be pressed, hovered or focused. It still updates and draws. See <a href=\"effects.html#who-hears\">Who hears the keys</a>."], ["modal", "boolean", "false", "While mounted, everything outside this subtree is inert, as a <code>&lt;dialog&gt;</code> opened with <code>showModal()</code>: a pause screen or a prompt takes the keys and the focus. The modal mounted last wins."]] },
     { name: "Game", kind: "container, root only", sum: "The game's root and configuration. Optional; each prop overrides a default only where written. Settings are literals.",
       props: [
         ["id", "string", "none", "The game's id (letters, digits, <code>_</code>, <code>-</code>): the folder its save and settings are kept in. Without it nothing is kept. See <a href=\"effects.html#saved\">Saved data</a>."],
@@ -82,7 +82,7 @@
         ["align", '"left" | "center" | "right"', '"left"', "Where each line sits inside <code>width</code> (else inside <code>maxWidth</code>). Without a width, <code>x</code> is the left edge, middle or right edge of each line: <code>&lt;Text x={x} align=\"center\"&gt;</code> centres a damage number on a point. A text a <code>&lt;Flex&gt;</code> lays out without a width keeps its own place."],
         ["maxWidth", "number", "none", "Wrap to lines no wider than this: breaks at spaces, inside a word only when the word alone is too wide; <code>\\n</code> always breaks. One text record (or run of glyphs) per line."],
         ["lineGap", "number", "0", "Extra pixels between wrapped lines."],
-        ["reveal", "number", "all", "Draw only the first <em>n</em> characters but lay out the whole text, so a box does not grow or rewrap as a page types out. The game's rules count it up."],
+        ["reveal", "number", "all", "Draw only the first <em>n</em> characters but lay out the whole text, so a box does not grow or rewrap as a page types out. Your game's code counts it up."],
         ["font", "string", "default", "A bitmap font image: ASCII 32–127 in 16 × 6 cells. <code>size</code> is then the cell height. <code>\"tse:small\"</code> is built in: 3 × 5 glyphs in 4 × 6 cells, 6 px a line, for small screens; no file needed."],
         ["shadow", "CSS colour", "none", "Draw the text again under itself in this colour, <code>shadowX</code> and <code>shadowY</code> pixels away. Takes no room in a layout, so leave padding for it."],
         ["shadowX / shadowY", "number", "1 / 1", "Where the shadow falls, in pixels right and down from the text (negative goes left and up). In the text's own axes, so it turns and scales with it."],
@@ -97,7 +97,7 @@
         ["color", "CSS colour", '"white"', ""],
         ["opacity", "number", "1", "0 to 1: this and everything inside it, multiplied with faded parents. A prop on every element."]
       ] },
-    { name: "Line", kind: "leaf", sum: "A straight line from where it is placed (<code>x</code>, <code>y</code>) to (<code>x2</code>, <code>y2</code>), both in the parent's space: a shot's trace, a tether. Square ends. Its own rotation and scale do not move the end; a parent's turn and scale the whole line, thickness too.",
+    { name: "Line", kind: "leaf", sum: "A straight line from where it is placed (<code>x</code>, <code>y</code>) to (<code>x2</code>, <code>y2</code>), both in the parent's space: a shot's trace, a tether. Square ends. Its own rotation and scale do not move the end, but a parent's rotation and scale apply to the whole line, thickness included.",
       props: [
         ["x2", "number", "–", "Where it ends, in the parent's space.", 1],
         ["y2", "number", "–", "", 1],
@@ -151,7 +151,7 @@
         ["alignItems", '"start" | "center" | "end" | "stretch"', '"stretch"', "Where children sit across the main axis."],
         ["justifyContent", '"start" | "center" | "end" | "space-between" | "space-around" | "space-evenly"', '"start"', "How children and free space share the main axis."],
         ["gap", "number", "0", "Pixels between children."],
-        ["wrap", "boolean", "false", "Start a new line when the next child will not fit (<code>direction=\"row\"</code> only; a column that asks to is warned of and does not): an inventory, a palette, a row of tags. Give the box a width (a number, a percentage or <code>\"grow\"</code>; a box that fits its children is one line). Lines stack downward, each as tall as its tallest child; <code>justifyContent</code> places each line's children and <code>alignItems</code> each child in its line's height. Children keep their size: a <code>\"grow\"</code> one is its content, none shrink, and one wider than the box is alone on its line."],
+        ["wrap", "boolean", "false", "Start a new line when the next child will not fit (<code>direction=\"row\"</code> only; a column with <code>wrap</code> gets a warning and does not wrap): an inventory or a row of tags. Give the box a width (a number, a percentage or <code>\"grow\"</code>; a box that fits its children is one line). Lines stack downward, each as tall as its tallest child; <code>justifyContent</code> places each line's children and <code>alignItems</code> each child in its line's height. Children keep their size: a <code>\"grow\"</code> one is its content, none shrink, and one wider than the box is alone on its line."],
         ["rowGap / columnGap", "number", "<code>gap</code>", "Pixels between the lines of a wrapping row, and between the children of a line; each overrides <code>gap</code> (for a column, <code>rowGap</code> is between its children)."],
         ["padding", "number", "0", "All four sides."],
         ["paddingX / paddingY", "number", "–", "Horizontal / vertical. Override <code>padding</code>."],
@@ -159,14 +159,14 @@
         ["width / height", '"fit" | "grow" | number | "N%"', '"fit"', "Sizing per axis."],
         ["minWidth / maxWidth / minHeight / maxHeight", "number", "–", "Bounds for a fit or grow size, in pixels."],
         ["background", "CSS colour", "none", "Filled rectangle behind the children, the size of the box."],
-        ["opacity", "number", "1", "How opaque the box and everything in it is drawn, 0 (gone) to 1: a panel that fades in and out. It multiplies into every colour under the box (a box in a box at 0.5 is at 0.25). Each part is drawn at that opacity by itself, so where parts overlap one shows through the other while the box is part way. A box at 0 draws nothing but is still laid out and takes the mouse. With a <code>transition</code> a change of opacity fades."],
+        ["opacity", "number", "1", "How opaque the box and everything in it is drawn, 0 (gone) to 1: a panel that fades in and out. It multiplies into every colour under the box (a box in a box at 0.5 is at 0.25). Each part is drawn at that opacity by itself, so while the box is partly transparent, overlapping parts show through each other. A box at 0 draws nothing but is still laid out and takes the mouse. With a <code>transition</code> a change of opacity fades."],
         ["backgroundImage", "image name", "–", "An image from the assets folder as the box's background, over <code>background</code> and under the children, cut into nine by <code>slice</code> so its corners keep their size and its edges and middle stretch: a bordered panel or button skin from one small picture. Without <code>slice</code> the whole image is stretched. A missing file is a compile error (and a magenta box if the name is computed)."],
         ["slice", "number", "0", "Pixels in from each edge of the image that are the corners and edges that do not stretch. A slice past the image is cut down to fit it, and a box smaller than its corners shrinks them together."],
         ["sliceTop / sliceRight / sliceBottom / sliceLeft", "number", "<code>slice</code>", "One side's slice. The four can differ: a panel with a deep bottom edge."],
         ["hoverBackgroundImage / focusBackgroundImage / pressedBackgroundImage / disabledBackgroundImage", "image name", "–", "<code>backgroundImage</code> in that state, in the same order as the colours (disabled over pressed over hover over focus). The slices stay; images change at once, a <code>transition</code> fades colours only."],
         ["overflow", '"visible" | "hidden" | "scroll"', '"visible"', "What happens to children outside the box. <code>\"hidden\"</code> clips them to it (a child cannot be pressed where it is cut off). <code>\"scroll\"</code> also lets the mouse wheel move the content, and stops the children shrinking to fit; give the box a size, or a <code>maxHeight</code>, smaller than its content."],
         ["scrollX / scrollY", "number", "0", "How far a scroll box's content is moved left / up, in pixels. The wheel changes it; setting the prop moves it there, clamped to the content (<code>scrollY={9999}</code> keeps a log at its end)."],
-        ["scrollbar", "boolean", "true", "A scroll box shows a thin bar along each axis its content overflows: as long as the box is to its content as the bar is to the box, and placed by how far it is scrolled. When the focus moves to something inside a scroll box (a menu's next item), the box scrolls it into view."],
+        ["scrollbar", "boolean", "true", "A scroll box shows a thin bar along each axis its content overflows. The bar's length is to the box as the box is to its content, and its position shows how far the box is scrolled. When the focus moves to something inside a scroll box (a menu's next item), the box scrolls it into view."],
         ["scrollbarColor / scrollbarWidth", "CSS colour / number", '"#ffffff80" / 3', "The scroll bar's colour and thickness in pixels."],
         ["borderWidth", "number", "0", "Pixels of border, drawn inside the edge in <code>borderColor</code>. It takes room: it counts as padding on every side. No border without a colour."],
         ["borderColor", "CSS colour", "none", "The border's colour."],
@@ -256,7 +256,7 @@
         ["context", "Context", "–", "The context (<code>createContext</code> in a <code>.ts</code> file). Written as the tag: <code>&lt;Theme.Provider&gt;</code>.", 1],
         ["value", "the context's type", "–", "What its readers read. A new value renders every reader again.", 1]
       ] },
-    { name: "Particles", kind: "leaf", sum: "An emitter of small squares: dust, trails, snow. No game object per particle. Runs from a seeded generator, so runs repeat.",
+    { name: "Particles", kind: "leaf", sum: "An emitter of small squares for dust, trails or snow. It makes no game object per particle, and it draws from a seeded generator, so runs repeat.",
       props: [
         ["rate", "number", "0", "Particles per second while <code>emitting</code>."],
         ["burst", "number", "0", "Made at once when <code>emitting</code> turns on, or on mount."],
@@ -283,7 +283,7 @@
         ["childBlend", '"normal" | "add" | "multiply" | "screen"', '"normal"', "How each child is drawn onto the layer: <code>add</code> makes overlapping lights add up."],
         ["clear", "CSS colour", '"transparent"', "What the layer holds before its children are drawn, each frame: black for a light map."],
         ["opacity", "number", "1", "How strongly the layer is laid over what is under it."],
-        ["shader", "string", "–", "A file under <code>assets</code> holding <code>vec4 effect(vec2 uv)</code> in GLSL, each of the layer's pixels going through it as it is laid over; see Shaders. None runs in the software renderer."],
+        ["shader", "string", "–", "A file under <code>assets</code> holding <code>vec4 effect(vec2 uv)</code> in GLSL. Each of the layer's pixels goes through it as the layer is laid over; see Shaders. The software renderer runs no shaders."],
         ["params", "number[]", "[]", "Up to eight numbers the shader reads as <code>params[0]</code> to <code>params[7]</code>."],
       ] },
     { name: "Light", kind: "leaf", sum: "A soft disc of light, brightest at its middle, falling off smoothly to nothing at <code>radius</code>. Put it in a <code>&lt;Lighting&gt;</code>, where lights that overlap add up; placed with <code>x</code> and <code>y</code> at its middle.",
@@ -292,7 +292,7 @@
         ["color", "CSS colour", '"#fff3dc"', "Its colour at the middle: a warm white by default."],
         ["intensity", "number", "1", "How strong it is, 0 to 1."],
       ] },
-    { name: "Lighting", kind: "container", sum: "The world as light reaches it: everything under it is darkened to <code>ambient</code>, except where its <code>&lt;Light&gt;</code> children shine. A <code>&lt;Layer blend=\"multiply\" childBlend=\"add\" clear={ambient}&gt;</code> set up for you. Put it after what it lights, before the HUD.",
+    { name: "Lighting", kind: "container", sum: "The world as light reaches it: everything under it is darkened to <code>ambient</code>, except where its <code>&lt;Light&gt;</code> children shine. It is a <code>&lt;Layer blend=\"multiply\" childBlend=\"add\" clear={ambient}&gt;</code> set up for you. Put it after what it lights, before the HUD.",
       props: [
         ["ambient", "CSS colour", '"#101018"', "The darkness where no light reaches; black for none at all."],
         ["opacity", "number", "1", "How strongly the darkness is laid over the world."],
@@ -306,7 +306,7 @@
         ["duration", "number", "0.25", "Seconds a full fade takes. 0 switches at once."],
         ["from", "number", "0", "How covered it starts, 0 to 1. <code>from={1}</code> fades in as the screen begins."]
       ] },
-    { name: "Music", kind: "leaf, no transform", sum: "Streamed, looping music. Plays while mounted, so put it in the root where screen changes do not touch it.",
+    { name: "Music", kind: "leaf, no transform", sum: "Streamed, looping music. It plays while mounted, so put it in the root, where screen changes do not unmount it.",
       props: [
         ["src", "string", "–", "File under <code>assets</code> (<code>.ogg</code>, <code>.mp3</code>, <code>.wav</code>).", 1],
         ["playing", "boolean", "true", "Off fades out then stops; on restarts from the beginning."],
@@ -368,14 +368,14 @@
       ["TSE1005", "A hook, element or runtime function used without importing it."]]],
     ["Hooks and state", [
       ["TSE1101", "A hook, or a custom hook, not called as a statement of the component body."],
-      ["TSE1102", "An unknown <code>use*</code> call. Old names (<code>onUpdate</code>, <code>onInput</code>, <code>onCollisionEnter</code> as a hook) say where they went; <code>useEffect</code> says what to write instead."],
+      ["TSE1102", "An unknown <code>use*</code> call. For <code>onUpdate</code>, <code>onInput</code> or <code>onCollisionEnter</code> called as a hook, the message names its replacement; for <code>useEffect</code>, it says what to write instead."],
       ["TSE1103", "<code>useMutable</code> not in the form <code>const s = useMutable({ a: 0 })</code>, or a name declared twice."],
       ["TSE1104", "State type the compiler cannot infer. Give arrays and records a type argument."],
       ["TSE1106", "<code>ref={…}</code> on an element: what is on screen follows state and props."],
       ["TSE1107", "<code>useSound</code> with a non-literal path, or a name already taken."],
       ["TSE1108", "A <code>useGame</code> selector that is not a valid path, or a bad import from <code>.ts</code>."],
       ["TSE1109", "A <code>GameState.ts</code> the compiler cannot read."],
-      ["TSE1303", "A non-constant initial state (no longer reported: an initial value may read state declared above it)."]]],
+      ["TSE1303", "A non-constant initial state. Not reported: an initial value may read state declared above it."]]],
     ["JSX and props", [
       ["TSE1201", "An unknown component tag."],
       ["TSE1202", "An unsupported JSX child (text, fragment, arbitrary expression)."],

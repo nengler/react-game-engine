@@ -127,10 +127,10 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <div class="topbar"><a href="index.html">Overview</a><a href="start.html"><strong>Getting started</strong></a><a href="recipes.html">Recipes</a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
 <main class="start">
 <h1>Getting started</h1>
-<p>From an empty folder to a packaged game, in eight steps. Every command below was run, in this order, in a folder outside the engine's repository. Nothing is published to a registry yet, so the engine is installed from tarballs made by the repository.</p>
+<p>Eight steps take you from an empty folder to a packaged game. Every command below was run, in this order, in a folder outside the engine's repository. Nothing is published to a registry yet, so the engine is installed from tarballs made by the repository.</p>
 
 <h2>0. What you need</h2>
-<ul><li>Node 22.18 or newer (the compiler and the tools run TypeScript directly). <strong>That alone is enough to write, test and check a game.</strong></li><li>A checkout of the engine's repository, once, to make the tarballs: <code>npm install &amp;&amp; npm run dist</code>. This writes <code>dist/packs/tsengine-*.tgz</code>. It builds what your machine can, keeps going when a piece is missing, and ends by saying what you have and what to install for the rest.</li></ul>
+<ul><li>Node 22.18 or newer (the compiler and the tools run TypeScript directly). Node alone is enough to write, test and check a game.</li><li>A checkout of the engine's repository, once, to make the tarballs: <code>npm install &amp;&amp; npm run dist</code>. This writes <code>dist/packs/tsengine-*.tgz</code>. It builds what your machine can, keeps going when a piece is missing, and ends by saying what you have and what to install for the rest.</li></ul>
 <div class="tablewrap"><table>
 <tr><th>You have</th><th>You get</th></tr>
 <tr><td>Node</td><td><code>tse create</code> and <code>tse check</code>: compile, type-check, tests, and a scripted run under Node</td></tr>
@@ -139,7 +139,7 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <tr><td>+ Rust (<a href="https://rustup.rs">rustup.rs</a>)</td><td><code>tse package --engine quickjs</code> (a few MB, no JIT), and <code>tse check</code> also plays the game under the Rust host and requires the same output</td></tr>
 </table></div>
 <p>Run <code>npm run dist</code> again after installing something; the builds are incremental.</p>
-<p><strong>In VS Code</strong>, install the engine's extension once from the same checkout: <code>npm run vscode:pack</code>, then <code>code --install-extension dist/tse-vscode-0.0.1.vsix</code>. It shows the compiler's <code>TSE</code> errors in your components as you type, beside TypeScript's own, with quick fixes for the common ones (a missing import, <code>useEffect(…, [])</code> to <code>useMount</code>, <code>useMemo</code> to the value, <code>&lt;Text text=…&gt;</code> to children). It runs your game's own <code>tse lsp</code>, so other editors can use that as a language server for <code>.tsx</code> files.</p>
+<p>In VS Code, install the engine's extension once from the same checkout: <code>npm run vscode:pack</code>, then <code>code --install-extension dist/tse-vscode-0.0.1.vsix</code>. It shows the compiler's <code>TSE</code> errors in your components as you type, beside TypeScript's own, with quick fixes for the common ones (a missing import, <code>useEffect(…, [])</code> to <code>useMount</code>, <code>useMemo</code> to the value, <code>&lt;Text text=…&gt;</code> to children). The extension runs your game's own <code>tse lsp</code>, which other editors can also use as a language server for <code>.tsx</code> files.</p>
 
 <h2>1. Make a game</h2>
 <pre class="code" data-lang="sh"><code>cd /path/to/engine &amp;&amp; node packages/cli/src/cli.ts create ~/my-game --packs dist/packs
@@ -147,7 +147,7 @@ cd ~/my-game &amp;&amp; npm install
 npm run check</code></pre>
 <p>To start from more than a moving square, add <code>--template menu</code> (a title, settings and a pause menu, built on <code>&lt;Menu&gt;</code> and <code>&lt;Button&gt;</code>) or <code>--template platformer</code> (running and jumping on solid blocks, with <code>useBody</code>). Each passes <code>npm run check</code> as it is.</p>
 <p><code>tse create</code> copies the template. <code>tse check</code> compiles, type-checks, runs the tests, and plays a short scripted run under Node and under the Rust host, which must print the same. The template passes it before you change anything.</p>
-<p>What is in the folder: <code>package.json</code> (its <code>"tse"</code> field names the entry and folders), <code>main.ts</code> (starts the player), <code>game.ts</code> (the root and the names a script may use), <code>src/Main.tsx</code> (the root), <code>src/Hero.tsx</code> (a component that keeps its own position and moves itself), <code>src/GameState.ts</code> (what the whole game shares), <code>test/</code>, <code>assets/</code>, <code>parity.ts</code>.</p>
+<p>The folder holds <code>package.json</code> (its <code>"tse"</code> field names the entry and folders), <code>main.ts</code> (starts the player), <code>game.ts</code> (the root and the names a script may use), <code>src/Main.tsx</code> (the root), <code>src/Hero.tsx</code> (a component that keeps its own position and moves itself), <code>src/GameState.ts</code> (what the whole game shares), <code>test/</code>, <code>assets/</code>, <code>parity.ts</code>.</p>
 
 <h2>2. A moving square</h2>
 <p><code>npm run dev</code> opens a window and hot reloads: save a file under <code>src/</code> and the window changes, keeping the state. The template's <code>src/Hero.tsx</code> already moves a sprite with the arrow keys. It keeps its own position, as a React component keeps its own state:</p>
@@ -178,7 +178,7 @@ step(s) {
   sfx.play(&quot;beep&quot;);
   s.steps += 1;
 },</code></pre>
-<p>Put <code>beep.wav</code> in <code>assets/</code>. A sound is an effect, not state: playing it renders nothing and is counted, so a test can check it.</p>
+<p>Put <code>beep.wav</code> in <code>assets/</code>. Playing a sound renders nothing. Each play is counted, so a test can check it.</p>
 
 <h2>5. A second screen</h2>
 <pre class="code" data-lang="tsx"><code>// src/Main.tsx
@@ -205,11 +205,11 @@ test(&quot;holding right moves the hero its speed a second&quot;, () =&gt; {
   t.input(&quot;ArrowRight*60&quot;);                   // an input script: one second of holding right
   assert.equal(t.state().x, start + 120);
 });</code></pre>
-<p>As React Testing Library tests one React component, <code>render</code> mounts one compiled component in a world with no window: step it, press keys, report collisions, and read its state and what it would draw (see <a href="effects.html#testing">Testing one component</a>). To play the whole game, <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@tsengine/player</code> runs an input script on a recording backend; the template's <code>test/play.test.ts</code> does that.</p>
+<p>As React Testing Library tests one React component, <code>render</code> mounts one compiled component in a world with no window: step it, press keys, report collisions, and read its state and what it would draw (see <a href="effects.html#testing">Testing one component</a>). To play the whole game, the template's <code>test/play.test.ts</code> calls <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@tsengine/player</code>, which runs an input script on a recording backend.</p>
 
 <h2>7. Check it</h2>
 <pre class="code" data-lang="sh"><code>npm run check</code></pre>
-<p>Compile, type-check, test, parity. A failing step prints its output and stops there.</p>
+<p>This compiles, type-checks, runs the tests and checks parity. A failing step prints its output and the check stops there.</p>
 
 <h2>8. Package it</h2>
 <pre class="code" data-lang="sh"><code>npm run package                 # dist/my-game/: the game as one executable on Node&#x27;s V8 (about 100 MB)
@@ -218,7 +218,7 @@ npx tse package --headless         # the software renderer, no window: for CI</c
 <p>The folder holds the executable, <code>lib/</code> (libtse) and <code>assets/</code>; copy it anywhere and run it. Saves and settings (<code>&lt;Game id="..."&gt;</code>, <a href="effects.html#saved">Saved data</a>) go to the user's data folder.</p>
 
 <h2>Where next</h2>
-<ul><li><a href="recipes.html">Recipes</a>: a menu, a settings screen, a health bar, things that come and go, a panel that takes children, pickups, a cooldown.</li><li><a href="language.html">The language</a>: what a component may contain, and what the compiler says when it may not.</li><li><a href="systems.html">Systems</a>: tilemaps, collisions, layout, the camera.</li><li><a href="reference.html">Reference</a>: every built-in, hook and error code.</li><li><code>games/bramble</code> in the repository is a whole small game made this way, with its <code>DESIGN.md</code> of what writing it found.</li></ul>
+<ul><li><a href="recipes.html">Recipes</a>: a menu, a settings screen, a health bar, things that come and go, a panel that takes children, pickups, a cooldown.</li><li><a href="language.html">The language</a>: what a component may contain, and what the compiler says when it may not.</li><li><a href="systems.html">Systems</a>: tilemaps, collisions, layout, the camera.</li><li><a href="reference.html">Reference</a>: every built-in, hook and error code.</li><li><code>games/bramble</code> in the repository is a whole small game made this way; its <code>DESIGN.md</code> records what writing it found.</li></ul>
 </main>
 </body>
 </html>

@@ -179,6 +179,22 @@ describe("keyed lists: generated code", () => {
     assert.match(code, /this\.addChild\(this\.sprite2, 2\);/, "static siblings get slots");
   });
 
+  it("names the index in the key's callback only when the key reads it: a game may check its generated code for unused parameters", () => {
+    // The boss's list is `(e, i) => <Sprite key={e.id} … x: i * 10 />`: the index places the item, the key does not read it.
+    const { code } = compile(PACK, "Pack.tsx");
+    assert.doesNotMatch(code, /\$list\.map\(\(e, i\) =>/);
+    assert.match(code, /for \(const \[i, e\] of \$list\.entries\(\)\)/, "the loop that reads it still has it");
+    const byIndex = getCompiler().compile(
+      "C.tsx",
+      withAuthoring(`interface Item { id: string }
+function C() {
+  const s = useMutable({ items: [] as Item[] });
+  return <Entity name="C">{s.items.map((e, i) => <Sprite key={i} image={e.id} />)}</Entity>;
+}`)
+    );
+    assert.match(byIndex.ok ? byIndex.code : "", /const \$keys = \$list\.map\(\(e, i\) => i\);/, "a key that is the index names it");
+  });
+
   it("reads the current item inside a callback, through a holder the item keeps", () => {
     const { code } = compile(PACK, "Pack.tsx");
     assert.match(code, /const \$rec = \{ current: e \};/);
