@@ -184,7 +184,7 @@ const x = useSpring(s.shown ? 0 : 24, { duration: 0.3, bounce: 0.15 });
 </script></pre>
 
   <h3>Freeze frames, shake, squash</h3>
-  <p>Kite also uses <code>&lt;Particles&gt;</code> directly: room-wide drifting dust (<code>width</code>, <code>height</code>, <code>prewarm</code>, <code>space="world"</code>) and dash sparks (<code>emitting={body.state === "dash"}</code>); and a list of ghost <code>Sprite</code>s in state, with falling <code>opacity</code>, for the dash trail.</p>
+  <p>Kite also uses <code>&lt;Particles&gt;</code> directly, for room-wide drifting dust (<code>width</code>, <code>height</code>, <code>prewarm</code>, <code>space="world"</code>) and dash sparks (<code>emitting={body.state === "dash"}</code>). Its dash trail is a list of ghost <code>Sprite</code>s in state, with falling <code>opacity</code>.</p>
   <ul>
     <li><code>freeze(steps)</code>, called in a handler or in plain TypeScript (Kite calls it from <code>playEvents</code>), skips every <code>useUpdate</code> for that many steps (a hit, a dash). <code>useInput</code> keeps running, and a press during the freeze is kept for the first step after.</li>
     <li><code>useShake()</code> and <code>useSquash()</code> are state: see <a href="language.html#logic">Custom hooks</a>.</li>
@@ -379,7 +379,7 @@ const paused = useGame((s) => s.paused);
 <Game fixedStep={60} timeScale={speed} paused={paused}> … </Game>
 </script></pre>
   <ul>
-    <li><code>timeScale={2}</code> runs two steps a frame, each with the same <code>dt</code>: the game plays exactly as at 1, twice as fast, and a replay is the same at either speed. It costs two steps a frame.</li>
+    <li><code>timeScale={2}</code> runs two steps a frame, each with the same <code>dt</code>: the game plays exactly as at 1, twice as fast, and a replay is the same at either speed.</li>
     <li><code>paused</code> stops every <code>useUpdate</code>. <code>useInput</code>, presses, <code>pressKey</code> and the focus still work, so the pause menu's buttons unpause it.</li>
     <li>Unlike the other <code>&lt;Game&gt;</code> settings, these two are read every frame, so they may be state.</li>
   </ul>
@@ -398,7 +398,7 @@ const paused = useGame((s) => s.paused);
     <li><strong>F2</strong> pauses. <strong>←</strong> and <strong>→</strong> go back and on a frame, <strong>↑</strong> and <strong>↓</strong> a second; a bar over the game shows where you are. <strong>F2</strong> again plays on from there with live input, and the recorded future is dropped. The inspector's page has the same timeline, with a slider.</li>
     <li>Going to a frame restores the snapshot before it and plays the recorded input again to it, silently and without drawing: under a tenth of a second.</li>
     <li>If you save a file while paused, the game is reloaded and the same input is played again with the new code, to the same frame, so you see the moment with the fix.</li>
-    <li><strong>F4</strong> saves the moment (from the snapshot before the paused frame to it) to <code>moments/</code>. A test plays it again with <code>replayMoment</code> from <code>@tsengine/player</code>: the bug becomes a replay test.</li>
+    <li><strong>F4</strong> saves the moment (from the snapshot before the paused frame to it) to <code>moments/</code>. A test plays it again with <code>replayMoment</code> from <code>@tsengine/player</code>, so the bug becomes a replay test.</li>
     <li>It relies on the game being a function of its input. Each frame's state is hashed as it is played; when a replay differs from the recording (<code>Math.random</code> or <code>Date.now</code> in the game, a timer used for gameplay), rewind names the first frame that differs, in the log, on the bar and on the page.</li>
   </ul>
 <pre class="code" data-lang="ts"><script type="text/plain">
@@ -437,7 +437,7 @@ test("an enemy goes down after three shots", () => {
     <li><code>render(Component, props, { tilemaps, controls, dt, collisions, keepGameState })</code>: the game state is put back to its start, the maps are registered, and the component is mounted. So a test sets up the game state after <code>render</code>, through its actions, or passes <code>keepGameState: true</code> to keep what it set before. Without <code>collisions: true</code> colliders never meet by themselves: a test reports the contacts it wants with <code>collide</code>. With <code>collisions: true</code> each step finds its own contacts, as the player does, so a component whose children collide (a battle's enemies and shots) is tested whole.</li>
     <li><code>place({ tag, data, x, y, width, height })</code> puts another collider in the world, for the component to find or touch (an enemy near a tower); <code>remove(collider)</code> takes it out.</li>
     <li><code>step(n)</code> runs steps with nothing pressed; <code>input("down, _, confirm")</code> runs an input script, through the game's <code>controls</code> when given.</li>
-    <li><code>stepUntil(() =&gt; !play.s.active, { maxSteps })</code> runs steps until the condition holds (asked before the first and after each) and returns how many it ran; not done within <code>maxSteps</code> (default 3600) it throws, or with <code>throws: false</code> returns <code>maxSteps</code>: a balance run where a wave that never ends is an answer, not a failure.</li>
+    <li><code>stepUntil(() =&gt; !play.s.active, { maxSteps })</code> runs steps until the condition holds (asked before the first and after each) and returns how many it ran; not done within <code>maxSteps</code> (default 3600) it throws, or with <code>throws: false</code> returns <code>maxSteps</code>, for a balance run where a wave that never ends is a result to record.</li>
     <li><code>collide(tagOrCollider, { tag, data, width, height }, times)</code> and <code>separate(…)</code> report contacts; <code>press(pointerOrName)</code> clicks a pressable in its middle; <code>setProps(props)</code> gives new props; <code>unmount()</code> runs its unmount handlers.</li>
     <li><code>state(component?)</code> is a component's state and refs by the names in its source; <code>texts()</code> the words of every <code>&lt;Text&gt;</code>; <code>find(nameOrClass)</code> and <code>findAll</code> search the tree.</li>
     <li>Outside <code>render</code>, a whole-game test, a replay check or a balance tool reads the running game the same way: <code>findComponent(Play)</code> (or <code>findComponent("Hero")</code>) is the component in the game's tree, <code>findComponents</code> every match, and <code>componentState(component)</code> its state by the names in its source, all from <code>@tsengine/testing</code>.</li>

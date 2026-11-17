@@ -128,7 +128,7 @@ mark { background: var(--accent-soft); color: inherit; }
   <nav id="nav"></nav>
 </aside>
 <main>
-<p style="margin:0 0 16px"><strong>New here?</strong> <a href="start.html">Getting started</a> takes you from an empty folder to a packaged game.</p>
+<p style="margin:0 0 16px">New here? <a href="start.html">Getting started</a> takes you from an empty folder to a packaged game.</p>
 <section id="overview" data-group="Start here" data-title="Overview">
   <h1>Write games as components.</h1>
   <p class="intro">tse is a native-first 2D engine that you write in React-like TSX. There is no React and no virtual DOM: a compiler turns each component into a TypeScript class whose children are persistent instances, updated in place when state changes.</p>
@@ -180,7 +180,7 @@ export function Player() {
 </section>
 <section id="react" data-group="Start here" data-title="Coming from React">
   <h2>Coming from React</h2>
-  <p>A component reads like React, and most of what you know carries over. The difference is that the component is compiled, never run as written. The compiler turns it into a class whose children live for as long as it does and are updated in place. The function body is a description for the compiler to read, and the compiler understands only the part of TypeScript it can turn into that class. Anything else is an error (<code>TSE####</code>) at build time, not a surprise at run time.</p>
+  <p>A component reads like React, and most of what you know carries over. What differs is that it is compiled, never run as written: the compiler turns it into a class whose children live as long as it does and are updated in place. The function body is a description for the compiler, which understands only the part of TypeScript it can turn into that class. Anything else is an error (<code>TSE####</code>) when you build.</p>
 
   <h3>What carries over</h3>
   <div class="tablewrap"><table>
@@ -209,7 +209,7 @@ export function Player() {
   </table></div>
 
   <h3>Three places code can go</h3>
-  <p>Most "why is this an error" questions come from code written in the wrong one of these places. Each place is checked by its own rules.</p>
+  <p>Each place is checked by its own rules, and most "why is this an error" questions come from code written in the wrong one.</p>
   <div class="tablewrap"><table>
     <tr><th>Where</th><th>May hold</th><th>For</th></tr>
     <tr><td>The component body</td><td>Hooks, then statements that work out what to draw (derived <code>const</code>s, loops, <code>let</code>), and one <code>return</code> of JSX. It calls no setters: the body describes the screen and changes nothing.</td><td>Describing what is on screen, from the component's state and props.</td></tr>

@@ -200,7 +200,7 @@ useUpdate(() => {
   <h2>Placing things</h2>
   <p>Anything laid out in rows or columns is a <code>&lt;Flex&gt;</code>, wherever it is (a menu over the world, a row of hearts, an inventory, a panel in a <code>&lt;Hud&gt;</code>). Anything the game moves (a character, a coin, a shot) is placed with <code>x</code> and <code>y</code> from its state.</p>
   <p><code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code> and <code>scaleY</code> are props of every built-in that has a transform: <code>&lt;Sprite image="coin.png" x={spot.x} y={spot.y} /&gt;</code>. They are the same as <code>transform={{ x: spot.x, y: spot.y }}</code>. You still need <code>transform</code> for <code>global</code> and for placing a component: on a component, <code>x</code> is whatever its props say (a component may declare an <code>x</code> of its own), so a component is placed with <code>transform</code>. Writing a field both ways is an error. Fading is <code>opacity={…}</code>, a prop on every element (see <a href="language.html#transform">Transform</a>).</p>
-  <p>A <code>Flex</code> works anywhere, not only in a <code>&lt;Hud&gt;</code>: in the world, or in a <code>&lt;Screen&gt;</code> as Bramble's menus are. Here is Bramble's menu with its rows placed by hand:</p>
+  <p>Bramble's menus sit in a <code>&lt;Screen&gt;</code>, outside any <code>&lt;Hud&gt;</code>. Here is one with its rows placed by hand:</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // Before: every row placed by hand, and the bar behind the cursor's row worked out the same way.
 <Entity>
@@ -428,7 +428,7 @@ export function Hero() {
   </ul>
   <h3>Moving with plain functions</h3>
   <p>A <code>useBody</code> component and plain functions produce the same movement. Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>packages/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceiling corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement. Use a component when only it does, and plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
-  <p>Movement written as plain functions over the grid (Kite's, which a search runs thousands of times) reads the same tile data:</p>
+  <p>Kite's plain movement functions read the same tile data as a <code>&lt;Tilemap&gt;</code>:</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // rules/rooms.ts: runs once when imported, before the game starts.
 // tse-compile --scenes writes generated/tilemaps.ts from your .tmj files.
@@ -459,7 +459,7 @@ moveActorX(actor, vx * dt, blocked, (dir) => { actor.vx = 0; });      // a pixel
     <li>Reading outside the map gives an empty cell, not an error.</li>
     <li>Kite puts gameplay data in a hidden layer (<code>Markers</code>: room start and exit tiles) and finds it with <code>find("Markers", gid)</code>. Only the visible <code>Tiles</code> layer is drawn.</li>
     <li>A map of any size costs what its view does: in the world, an unrotated, unscaled <code>&lt;Tilemap&gt;</code> writes only the cells the camera shows (and one more cell round them). Inside a <code>&lt;Hud&gt;</code>, or turned or scaled, it writes every cell.</li>
-    <li>You can still mount only what is needed, though a large map does not require it: Kite maps over its room list and mounts the current room and its neighbours.</li>
+    <li>A large map does not need splitting, but you can still mount part of it: Kite maps over its room list and mounts the current room and its neighbours.</li>
     <li><code>moveActorX</code> / <code>moveActorY</code> move <code>{ x, y, rx, ry }</code> a pixel at a time against <code>blocked(x, y)</code>, carrying the sub-pixel remainder. On a block the remainder is dropped and <code>onBlocked(direction)</code> runs; it may move the actor (a corner correction).</li>
     <li>Tilesets can be embedded, or external as JSON (<code>.tsj</code>) or XML (<code>.tsx</code>). Without <code>image</code>, a <code>&lt;Tilemap&gt;</code> draws each tile from its own tileset's sheet, with its margin and spacing, so keep the sheets in the assets folder; a tile larger than a cell sits on the bottom of it, as in Tiled. With <code>image</code>, every tile is cut from that one sheet.</li>
     <li>To use map objects as data, give an object layer the bool property <code>data</code> and its objects are for your rules, not prefabs: <code>getTilemap("room1").objects("door")</code> gives each one's position, size, name and custom properties, and the map's own properties are <code>property(name)</code>. Bramble reads its doors, people, items and enemies this way (<code>games/bramble/src/rules/maps.ts</code>), checking each one and naming the map and object when something is wrong.</li>
@@ -505,7 +505,7 @@ const byId = loadScene(world, scene, prefabs);   // Map of scene id → object, 
     <li>To draw, the tree is walked depth-first into draw records in tree order (or <code>z</code> order), with the camera applied. A contact and what it caused are drawn in the same frame.</li>
     <li>The backend draws and presents, then supplies next frame's input.</li>
   </ol>
-  <h3>Consequences worth knowing</h3>
+  <h3>What follows from this order</h3>
   <ul>
     <li>State set in a handler shows at the next render. Refs are immediate.</li>
     <li>Components see each other's changes a step apart. Every update in a step sees the state as the step began, so a value a child reports to its parent in a step (<code>onMove(x)</code>, then the parent's <code>setPlayerX</code>) reaches its siblings, by props or through context, in the next step. That is one step of lag between independent things, and it repeats exactly. Where it matters, a built-in reads its child directly, as <code>&lt;Camera&gt;</code> follows what it holds.</li>

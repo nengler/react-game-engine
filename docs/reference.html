@@ -151,7 +151,7 @@ mark { background: var(--accent-soft); color: inherit; }
     <li>For sharp pixel art, keep <code>smooth</code> off and use <code>Screen fit="integer"</code>.</li>
     <li><code>F11</code> or <code>Alt + Enter</code> goes full screen; <code>fullscreenKey={false}</code> disables F11.</li>
     <li>An effect store does nothing until you mount its <code>&lt;ParticleLayer&gt;</code>, next to the <code>Camera</code> rather than inside it.</li>
-    <li>Changing an imported constant never updates the screen, because constants do not re-render. Use <code>useGame</code> for a value that changes.</li>
+    <li>Changing an imported constant while the game runs updates nothing on screen: no component re-renders for it. Use <code>useGame</code> for a value that changes.</li>
     <li>To debug a hitbox, put a translucent <code>Shape</code> of the same size beside it.</li>
   </ul>
 </section>

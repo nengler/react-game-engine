@@ -344,13 +344,12 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
   <p>Call it as a statement in a handler (elsewhere is <code>TSE1305</code>); <code>playHit(0.5)</code> plays at half volume. A sound played again while sounding overlaps itself, up to four at once. Paths are relative to <code>&lt;Game assets&gt;</code>. Sounds preload.</p>
 
   <h3>What handler code may contain</h3>
-  <p>Handlers (hook bodies and callback props) use a narrow subset of TypeScript:</p>
+  <p>Handlers (hook bodies and callback props) may contain:</p>
   <div class="pair">
     <div class="yes"><h5>Statements</h5><ul>
-      <li>Writing a field: <code>s.x = 5</code>, <code>s.x += 1</code>, <code>s.x++</code></li>
       <li><code>if</code> / <code>else</code>, early <code>return</code></li>
       <li><code>const</code> locals</li>
-      <li>Field assignment: <code>s.n = …</code> (and <code>+=</code>, <code>%=</code>, <code>**=</code>, <code>??=</code>, <code>||=</code>, <code>&amp;&amp;=</code>, <code>s.n++</code>)</li>
+      <li>Writing a field: <code>s.x = 5</code>, <code>s.x += 1</code>, <code>s.x++</code> (and <code>%=</code>, <code>**=</code>, <code>??=</code>, <code>||=</code>, <code>&amp;&amp;=</code>)</li>
       <li><code>let</code> locals, optionally typed (<code>let best: Enemy | null = null</code>), assigned the same ways</li>
       <li><code>for (const e of enemies) { … }</code>, destructuring too: <code>for (const [i, { id }] of enemies.entries())</code></li>
       <li><code>for (let i = 0; i &lt; n; i++)</code>, <code>while</code> and <code>do…while</code>, all with <code>break</code> and <code>continue</code></li>
@@ -406,7 +405,7 @@ export function Player() {
   </ul>
 
   <h3>Hooks the engine ships</h3>
-  <p>Written as ordinary custom hooks and imported from <code>@tsengine/runtime/jsx</code>.</p>
+  <p>These are ordinary custom hooks, imported from <code>@tsengine/runtime/jsx</code>.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 const [squash, setSquash] = useSquash();          // springs back to 1 at 1.75 a second
 setSquash({ x: 0.6, y: 1.4 });                     // in a handler: thin and tall
@@ -659,12 +658,12 @@ function Player() {
     <li>An action may be passed whole: <code>onPress={resume}</code>.</li>
     <li>Call an action as a statement in a handler, not in JSX or a derived value.</li>
     <li>An action writes the state directly, nested objects and lists too (<code>s.run.time += dt</code>, <code>s.gems.push(id)</code>). It writes a draft; when it returns, only the values that changed are committed, and only their readers hear of it. An action called from another shares its draft. One that throws changes nothing.</li>
-    <li>Only components reading something that <em>changed</em> re-render. Every game starts from the initial state automatically.</li>
+    <li>Only components reading something that <em>changed</em> re-render. Every game starts from the initial state.</li>
     <li>The data must be an object literal: number, string and boolean literals, nested objects, and other values (arrays, <code>newRun()</code>) kept as values; no functions. The actions are an object literal of functions. Spreads, computed keys and a name in both are <code>TSE1109</code>.</li>
     <li>What a selector returns is read-only, deep: <code>run.time = 0</code> or <code>items.push(x)</code> in a component is <code>TSE1402</code> / <code>TSE1301</code>, whose message names the action to add, and a helper that takes a mutable <code>Item[]</code> is a type error for a selected list (take <code>readonly Item[]</code>).</li>
     <li>An action may call another (<code>useGame.actions().begin()</code>), and plain code it calls (a save's <code>pick</code>) reads what it has written so far through <code>useGame.getState()</code>.</li>
     <li><code>useGame.getState()</code> reads the state outside components. <code>useGame.setState({ … })</code> replaces part of it (shallow-merged) for tests, a story's <code>setup</code> and tools; game code uses actions, and <code>setState</code> while an action runs is an error.</li>
-    <li>The Zustand form, <code>createGameState&lt;State&gt;()((set) =&gt; ({ … }))</code>, is not supported (it was removed on 2026-11-15): <code>TSE1109</code> says what to write instead.</li>
+    <li>The Zustand form, <code>createGameState&lt;State&gt;()((set) =&gt; ({ … }))</code>, is not supported: <code>TSE1109</code> says what to write instead.</li>
   </ul>
   <p>Kite keeps <code>screen: "title" | "play" | "end"</code> in the game state and gives it to <code>&lt;Router route={screen}&gt;</code>, so any action (<code>begin</code>, <code>finished</code>) changes screens. Actions are plain TypeScript: they can call a sound store (<code>sfx.play("start")</code>) as well as write the state.</p>
   <div class="callout"><p><strong>useMutable, context or useGame?</strong> <code>useMutable</code> for what one component owns; context for what a component shares with everything below it; <code>useGame</code> for what the whole game shares.</p></div>
