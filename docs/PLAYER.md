@@ -384,8 +384,14 @@ Script time only, on the recording backend:
   sweep finds last sweep's pairs in the same order, the touching set is left alone (the pile went from 28 to 11 ms under QuickJS). Pair
   keys are small scrambled integers, because QuickJS-ng hashes an integer by one multiply and keeps the low bits. The broad phase runs
   in libtse when the host has `overlaps`; the script's sweep is the same algorithm and gives the same reports in the same order.
-- **Body queries** (`useBody`) are answered from a grid per tag (`World`'s `ColliderIndex`, 32-pixel cells) built on the first query
-  in an update phase; fewer than 16 colliders are scanned. Answers are sorted into join order, so replays do not move.
+- **Body queries** (`useBody`) and `nearby` are answered from an index per tag (`World`'s `ColliderIndex`) made on the first query in
+  an update phase; fewer than 16 colliders are scanned. Each collider is in one cell of a grid, the one its box's middle is in,
+  and a query looks at the cells its area covers, half a box wider. The boxes' edges are in one typed array in cell order, so a
+  row of cells is one run of it and a query reads memory that is next to itself. Cells are about one and a half times the median
+  box (16 to 64 pixels); colliders more than two cells wide go on a coarser grid of their own, and so on. Answers are sorted into
+  join order (`nearby`: nearest first, then join order), so replays do not move. Before 2026-11-17 a collider was an object in
+  every cell it touched: Swarm's `nearby` went from about 1,100 to 450 ns a query, and its step with 1,500 enemies from about 9.3 to
+  7.9 ms (games/swarm/DESIGN.md).
 - **Draw records** are reused for subtrees that did not change, a component that only moved has its records copied with the new
   transform, plain leaves are written in their parent's loop, and a still tilemap's records are copied in one `set`. See DESIGN.md,
   "Reusing draw records". Every reuse path is checked by `retain: "check"`, which builds each frame from nothing beside it and

@@ -1,4 +1,4 @@
-import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
+import type { BodySpace, Box } from "./body.ts";
 import { Collider, type Contact, type Nearby, type SendTarget } from "./components/Collider.ts";
 import { Menu } from "./components/Menu.ts";
 import type { Pressable } from "./components/Pointer.ts";
@@ -112,8 +112,9 @@ export class World implements BodySpace {
    */
   tick(dt: number, input: InputState = NO_INPUT, beforeUpdate?: () => void): number {
     countStep();
-    this.#boxes = null;
     this.#spaces = null;
+    this.#spaceObject = null;
+    this.#space = null;
     this.#indexes = null;
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
@@ -391,16 +392,18 @@ export class World implements BodySpace {
   /** The colliders and the solid tilemaps in this world, for bodies (`useBody`). */
   readonly #colliders = new Set<Collider>();
   /**
-   * The colliders' world boxes, worked out once per update phase: a body's queries (twenty towers each asking which of a hundred
-   * enemies are near) would otherwise compose each collider's transform up the tree every time. Transforms change when the tree
-   * renders, so the cache is dropped as a tick starts and after every flush: a query sees the colliders where they were when the
-   * step's updates began, as the step's state is a snapshot.
+   * The colliders by tag with their world boxes, on a grid, for queries (`#indexOf`): worked out once per update phase, as a body's
+   * queries (twenty towers each asking which of a hundred enemies are near) would otherwise compose each collider's transform up the
+   * tree every time. Transforms change when the tree renders, so they are dropped as a tick starts and after every flush: a query
+   * sees the colliders where they were when the step's updates began, as the step's state is a snapshot. Dropped too when a collider
+   * joins or leaves.
    */
-  #boxes: Map<Collider, Box> | null = null;
-  /** Objects' child spaces, for the boxes (`#spaceOf`): dropped with them. */
-  #spaces: Map<GameObject, WorldTransform> | null = null;
-  /** The colliders by tag on a grid, for queries (`#indexOf`): dropped whenever the boxes are, and when a collider joins or leaves. */
   #indexes: Map<string, ColliderIndex> | null = null;
+  /** The child spaces of objects with many children, for the boxes (`#spaceOf`): dropped with the indexes. */
+  #spaces: Map<GameObject, WorldTransform> | null = null;
+  /** The object `#spaceOf` last looked up in `#spaces`, and its space: a list's items ask for the list's one after another. */
+  #spaceObject: GameObject | null = null;
+  #space: WorldTransform | null = null;
   readonly #tilemaps = new Set<Tilemap>();
 
   /**
@@ -411,11 +414,20 @@ export class World implements BodySpace {
    */
   nearby<Tag extends string>(tag: Tag, x: number, y: number, radius: number, ignore: GameObject | null = null): Nearby<Tag>[] {
     if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
-    const found = this.#indexOf(tag).within(x, y, radius, ignore);
+    const index = this.#indexOf(tag);
+    const found = index.within(x, y, radius, ignore);
     const out: Nearby<Tag>[] = new Array(found);
+    const { colliders, boxes } = index;
     for (let i = 0; i < found; i++) {
-      const { collider, box } = NEAR_ENTRIES[i]!;
-      out[i] = new NearbyResult(collider, box.x + box.width / 2, box.y + box.height / 2, NEAR_DISTANCES[i]!) as unknown as Nearby<Tag>;
+      const at = NEAR[i] as number;
+      const b = at * 4;
+      out[i] = new NearbyResult(
+        colliders[at] as Collider,
+        index.ownerOf(at),
+        (boxes[b] as number) + (boxes[b + 2] as number) / 2,
+        (boxes[b + 1] as number) + (boxes[b + 3] as number) / 2,
+        NEAR_DISTANCES[i] as number
+      ) as unknown as Nearby<Tag>;
     }
     return out;
   }
@@ -471,9 +483,10 @@ export class World implements BodySpace {
   /** The colliders with `tag` within `radius` of a point, nearest first: whom a send to a circle reaches. */
   #collidersWithin(tag: string, x: number, y: number, radius: number): Collider[] {
     if (!(radius >= 0) || !Number.isFinite(x) || !Number.isFinite(y)) return [];
-    const found = this.#indexOf(tag).within(x, y, radius, null);
+    const index = this.#indexOf(tag);
+    const found = index.within(x, y, radius, null);
     const out: Collider[] = new Array(found);
-    for (let i = 0; i < found; i++) out[i] = NEAR_ENTRIES[i]!.collider;
+    for (let i = 0; i < found; i++) out[i] = index.colliders[NEAR[i] as number] as Collider;
     return out;
   }
 
@@ -491,22 +504,21 @@ export class World implements BodySpace {
       const bottom = Math.floor((box.y + box.height - 1 - at.y) / tileHeight);
       for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) if (grid.solidAt(col, row)) return "tile";
     }
-    for (const entry of this.#indexOf(SOLID).query(box)) if (!isUnder(entry.collider, ignore)) return entry.collider.tag;
+    for (const collider of this.#indexOf(SOLID).query(box)) if (!isUnder(collider, ignore)) return collider.tag;
     return null;
   }
 
   /** `BodySpace`: whether a collider with this tag overlaps `box` (a shaped one, by its shape). */
   tagIn(box: Box, tag: string, ignore: GameObject): boolean {
-    for (const entry of this.#indexOf(tag).query(box))
-      if (!isUnder(entry.collider, ignore) && shapeOverlaps(entry.collider, box)) return true;
+    for (const collider of this.#indexOf(tag).query(box)) if (!isUnder(collider, ignore) && shapeOverlaps(collider, box)) return true;
     return false;
   }
 
   /** `BodySpace`: every collider with this tag that overlaps `box` (a shaped one, by its shape), in the order the colliders joined the world. */
   collidersIn(box: Box, tag: string, ignore: GameObject): Contact[] {
     const out: Contact[] = [];
-    for (const entry of this.#indexOf(tag).query(box))
-      if (!isUnder(entry.collider, ignore) && shapeOverlaps(entry.collider, box)) out.push(entry.collider as unknown as Contact);
+    for (const collider of this.#indexOf(tag).query(box))
+      if (!isUnder(collider, ignore) && shapeOverlaps(collider, box)) out.push(collider as unknown as Contact);
     return out;
   }
 
@@ -519,46 +531,52 @@ export class World implements BodySpace {
     const indexes = (this.#indexes ??= new Map());
     let index = indexes.get(tag);
     if (index === undefined) {
-      const entries: IndexEntry[] = [];
-      let order = 0;
-      for (const collider of this.#colliders) {
-        if (tag === SOLID ? collider.solid : collider.tag === tag)
-          entries.push({ collider, box: this.#boxOf(collider), order, seen: 0, component: undefined });
-        order++;
+      const colliders: Collider[] = [];
+      for (const collider of this.#colliders) if (tag === SOLID ? collider.solid : collider.tag === tag) colliders.push(collider);
+      const boxes = new Float64Array(colliders.length * 4);
+      for (let i = 0; i < colliders.length; i++) {
+        const collider = colliders[i] as Collider;
+        const at = collider.parent === null ? collider.worldTransform() : collider.worldTransformIn(this.#spaceOf(collider.parent));
+        boxes[i * 4] = at.x;
+        boxes[i * 4 + 1] = at.y;
+        boxes[i * 4 + 2] = collider.width;
+        boxes[i * 4 + 3] = collider.height;
       }
-      index = new ColliderIndex(entries);
+      index = new ColliderIndex(colliders, boxes);
       indexes.set(tag, index);
     }
     return index;
   }
 
-  #boxOf(collider: Collider): Box {
-    const boxes = (this.#boxes ??= new Map());
-    let box = boxes.get(collider);
-    if (box === undefined) {
-      const at = collider.parent === null ? collider.worldTransform() : collider.worldTransformIn(this.#spaceOf(collider.parent));
-      box = { x: at.x, y: at.y, width: collider.width, height: collider.height };
-      boxes.set(collider, box);
-    }
-    return box;
-  }
-
   /**
-   * The space `object`'s children are placed in (`childSpace()`), remembered with the boxes: a thousand enemies' colliders share every
-   * object above their own entity, and composing each one's transform up the tree from scratch was most of making the index.
+   * The space `object`'s children are placed in (`childSpace()`). An object with more than a few children has its space remembered
+   * with the indexes: a thousand enemies' colliders share every object above their own entity, and composing each one's transform up
+   * the tree from scratch was most of making an index. One with a few is worked out each time it is asked for: an enemy's entity is
+   * asked once, by its one collider, and remembering it cost more than working it out.
    */
   #spaceOf(object: GameObject): WorldTransform {
-    const spaces = (this.#spaces ??= new Map());
-    let space = spaces.get(object);
-    if (space === undefined) {
-      // An object that places its children its own way (a `Camera` is transparent to them) is asked.
-      space =
-        object.childSpace !== GameObject.prototype.childSpace || object.worldTransform !== GameObject.prototype.worldTransform
-          ? object.childSpace()
-          : object.parent === null
-            ? object.worldTransform()
-            : object.worldTransformIn(this.#spaceOf(object.parent));
-      spaces.set(object, space);
+    if (object === this.#spaceObject) return this.#space as WorldTransform;
+    const shared = object.children.length > SHARED_SPACE;
+    let space: WorldTransform | undefined;
+    if (shared) {
+      space = (this.#spaces ??= new Map()).get(object);
+      if (space !== undefined) {
+        this.#spaceObject = object;
+        this.#space = space;
+        return space;
+      }
+    }
+    // An object that places its children its own way (a `Camera` is transparent to them) is asked.
+    space =
+      object.childSpace !== GameObject.prototype.childSpace || object.worldTransform !== GameObject.prototype.worldTransform
+        ? object.childSpace()
+        : object.parent === null
+          ? object.worldTransform()
+          : object.worldTransformIn(this.#spaceOf(object.parent));
+    if (shared) {
+      (this.#spaces as Map<GameObject, WorldTransform>).set(object, space);
+      this.#spaceObject = object;
+      this.#space = space;
     }
     return space;
   }
@@ -657,8 +675,9 @@ export class World implements BodySpace {
     // components take their saved state back. `restoreHotState` flushes again; the restore was taken, so it runs once.
     const restore = takeTreeRestore(this);
     if (restore !== null) restoreHotState(this, restore.root, restore.state);
-    this.#boxes = null;
     this.#spaces = null;
+    this.#spaceObject = null;
+    this.#space = null;
     this.#indexes = null;
     return renders;
   }
@@ -746,14 +765,6 @@ function componentOf(collider: Collider): GameObject | null {
   return null;
 }
 
-/** The distance from a point to a box (0 inside it). */
-function distanceToBox(x: number, y: number, box: Box): number {
-  const dx = box.x > x ? box.x - x : x > box.x + box.width ? x - (box.x + box.width) : 0;
-  const dy = box.y > y ? box.y - y : y > box.y + box.height ? y - (box.y + box.height) : 0;
-  // Not `Math.hypot`, which V8 runs several times slower: this is asked for every collider a query looks at.
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
 /**
  * A `nearby` result: the collider's contact (`tag`, `owner`, `data`), where its box's middle is and how far it is, and, hidden, the
  * collider itself, so `send` can reach that one. A private field and not a `WeakMap` from result to collider: putting each result in
@@ -770,10 +781,10 @@ class NearbyResult {
   readonly y: number;
   readonly distance: number;
 
-  constructor(collider: Collider, x: number, y: number, distance: number) {
+  constructor(collider: Collider, owner: string, x: number, y: number, distance: number) {
     this.#collider = collider;
     this.tag = collider.tag;
-    this.owner = collider.owner;
+    this.owner = owner;
     this.data = collider.data;
     this.x = x;
     this.y = y;
@@ -800,183 +811,368 @@ const SOLID = "\u0000solid";
 /** The sides a collider index's cells may have, in pixels: about one and a half times its boxes' typical side, as a power of two. */
 const MIN_CELL = 16;
 const MAX_CELL = 64;
-/** A collider whose box covers more cells than this is kept out of the cells and looked at by every query. */
-const MAX_CELLS = 64;
-/** Fewer entries than this, and a query looks at them all: a grid costs more than it saves. */
+/** An object with more children than this has its child space remembered while an index is made (`World.#spaceOf`). */
+const SHARED_SPACE = 4;
+/** Fewer entries than this are not put on a grid, and a query looks at them all: a grid costs more than it saves. */
 const SMALL = 16;
 
-interface IndexEntry {
-  readonly collider: Collider;
-  readonly box: Box;
-  /** Its place in the world's colliders: queries answer in this order. */
-  readonly order: number;
-  /** The query that last looked at it, so an entry in several cells is taken once. */
-  seen: number;
-  /** The component it belongs to (`componentOf`), worked out the first time a query needs it (undefined until then). */
-  component: GameObject | null | undefined;
-}
-
-let queries = 0;
-
 /**
- * What `ColliderIndex.within` found, nearest first: its entries and their distances, in arrays kept from one query to the next, so a
- * thousand enemies each asking for their neighbours make no garbage but the results they are given.
+ * What `ColliderIndex.within` found, nearest first: each one's place in the index's `colliders` and its distance, in arrays kept from
+ * one query to the next, so a thousand enemies each asking for their neighbours make no garbage but the results they are given.
  */
-const NEAR_ENTRIES: IndexEntry[] = [];
+const NEAR: number[] = [];
 const NEAR_DISTANCES: number[] = [];
 
-/**
- * `ColliderIndex.within`'s look at one entry: if it is not `ignore`'s own and comes within `radius` of (x, y), put it in its place in
- * the sorted run of `found` in `NEAR_ENTRIES` (a query finds a handful, so an insertion). Returns the new count.
- */
-function take(entry: IndexEntry, x: number, y: number, radius: number, ignore: GameObject | null, found: number): number {
-  if (ignore !== null && (entry.component === undefined ? (entry.component = componentOf(entry.collider)) : entry.component) === ignore)
-    return found;
-  const distance = distanceToBox(x, y, entry.box);
-  if (!(distance <= radius)) return found;
-  let i = found;
-  while (i > 0 && nearer(entry, distance, NEAR_ENTRIES[i - 1]!, NEAR_DISTANCES[i - 1]!)) {
-    NEAR_ENTRIES[i] = NEAR_ENTRIES[i - 1]!;
-    NEAR_DISTANCES[i] = NEAR_DISTANCES[i - 1]!;
-    i--;
-  }
-  NEAR_ENTRIES[i] = entry;
-  NEAR_DISTANCES[i] = distance;
-  return found + 1;
-}
-
-/** Whether entry `a` at distance `da` comes before `b` at `db`: nearer first, then in the world's order. */
-const nearer = (a: IndexEntry, da: number, b: IndexEntry, db: number): boolean => da < db || (da === db && a.order < b.order);
+/** An object with no component, in `ColliderIndex`'s list of them (null is a component looked for and not found). */
+const UNKNOWN = undefined;
 
 /**
- * The entries of one tag, on a grid. A cell is about one and a half times the boxes' typical side: in a crowd, a cell much bigger than
- * the boxes holds dozens of them, and every query looks at all of them (32-pixel cells under 10-pixel enemies looked at fifty entries
- * a query to find four).
+ * One grid of an index: some of its entries, each in the one cell its box's middle is in, with the boxes' edges in cell order in one
+ * array. A query looks at the cells its area covers, widened by half the widest and half the tallest box here (`reachX`, `reachY`):
+ * an entry is in one cell only, so none is met twice and nothing is written to say it was seen, and the edges of a cell's entries
+ * are next to each other in memory. (Entries used to be in every cell their boxes touched, each an object with its box another: in a
+ * crowd a query looked at twenty to find three, and each look was a read of memory that was not in the cache.)
  */
-class ColliderIndex {
-  readonly #entries: readonly IndexEntry[];
-  readonly #cells = new Map<number, IndexEntry[]>();
-  /** Entries too big (or not finite) to put in cells. */
-  readonly #wide: IndexEntry[] = [];
-  readonly #out: IndexEntry[] = [];
-  readonly #cell: number;
+class Grid {
+  readonly cell: number;
+  readonly reachX: number;
+  readonly reachY: number;
+  /** The entries here (their places in the index), in cell order; within a cell, in the index's order. */
+  readonly items: Int32Array;
+  /** Left, top, right and bottom of each of `items`' boxes. */
+  readonly edges: Float64Array;
+  /** Where each cell's run of `items` starts (and, one past the last cell, where the last ends). */
+  readonly #starts: Int32Array;
+  /** The cells are a rectangle of `#cols` by `#rows` from (`#left`, `#top`), unless that would be mostly empty: then `#sparse` has each cell's place in `#starts`. */
+  readonly #left: number;
+  readonly #top: number;
+  readonly #cols: number;
+  readonly #rows: number;
+  readonly #sparse: Map<number, number> | null;
 
-  constructor(entries: readonly IndexEntry[]) {
-    this.#entries = entries;
-    this.#cell = cellSideFor(entries);
-    if (entries.length < SMALL) return;
-    const CELL = this.#cell;
-    for (const entry of entries) {
-      const { box } = entry;
-      const left = Math.floor(box.x / CELL);
-      const right = Math.floor((box.x + box.width) / CELL);
-      const top = Math.floor(box.y / CELL);
-      const bottom = Math.floor((box.y + box.height) / CELL);
-      if (!Number.isFinite(left + right + top + bottom) || (right - left + 1) * (bottom - top + 1) > MAX_CELLS) {
-        this.#wide.push(entry);
-        continue;
+  /** `members`: places in `boxes` (x, y, width, height each), ascending, all finite and none wider or taller than two cells. */
+  constructor(members: readonly number[], boxes: Float64Array, cell: number) {
+    const n = members.length;
+    this.cell = cell;
+    // Doubles: a cell far from the origin has a number no 32-bit integer holds.
+    const cxs = new Float64Array(n);
+    const cys = new Float64Array(n);
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    let bottom = -Infinity;
+    let reachX = 0;
+    let reachY = 0;
+    for (let i = 0; i < n; i++) {
+      const b = (members[i] as number) * 4;
+      const halfW = (boxes[b + 2] as number) / 2;
+      const halfH = (boxes[b + 3] as number) / 2;
+      const cx = Math.floor(((boxes[b] as number) + halfW) / cell);
+      const cy = Math.floor(((boxes[b + 1] as number) + halfH) / cell);
+      cxs[i] = cx;
+      cys[i] = cy;
+      if (cx < left) left = cx;
+      if (cx > right) right = cx;
+      if (cy < top) top = cy;
+      if (cy > bottom) bottom = cy;
+      if (halfW > reachX) reachX = halfW;
+      if (halfH > reachY) reachY = halfH;
+    }
+    this.reachX = reachX;
+    this.reachY = reachY;
+    this.#left = left;
+    this.#top = top;
+    const cols = right - left + 1;
+    const rows = bottom - top + 1;
+    this.#cols = cols;
+    this.#rows = rows;
+    // Which cell each member is in, as a place in `#starts`.
+    const at = new Int32Array(n);
+    let cells: number;
+    if (cols * rows <= Math.max(1024, 16 * n)) {
+      this.#sparse = null;
+      cells = cols * rows;
+      for (let i = 0; i < n; i++) at[i] = ((cys[i] as number) - top) * cols + ((cxs[i] as number) - left);
+    } else {
+      // A few colliders far apart: only the cells that hold something are kept.
+      const sparse = (this.#sparse = new Map<number, number>());
+      for (let i = 0; i < n; i++) {
+        const key = cellKey(cxs[i] as number, cys[i] as number);
+        let id = sparse.get(key);
+        if (id === undefined) sparse.set(key, (id = sparse.size));
+        at[i] = id;
       }
-      for (let cy = top; cy <= bottom; cy++) {
-        for (let cx = left; cx <= right; cx++) {
-          const key = cellKey(cx, cy);
-          const cell = this.#cells.get(key);
-          if (cell === undefined) this.#cells.set(key, [entry]);
-          else cell.push(entry);
-        }
-      }
+      cells = sparse.size;
+    }
+    // A counting sort by cell, which keeps the members of a cell in their order.
+    const starts = (this.#starts = new Int32Array(cells + 1));
+    for (let i = 0; i < n; i++) starts[(at[i] as number) + 1]!++;
+    for (let c = 0; c < cells; c++) starts[c + 1]! += starts[c] as number;
+    const next = starts.slice(0, cells);
+    const items = (this.items = new Int32Array(n));
+    const edges = (this.edges = new Float64Array(n * 4));
+    for (let i = 0; i < n; i++) {
+      const to = next[at[i] as number]!++;
+      const member = members[i] as number;
+      const b = member * 4;
+      items[to] = member;
+      edges[to * 4] = boxes[b] as number;
+      edges[to * 4 + 1] = boxes[b + 1] as number;
+      edges[to * 4 + 2] = (boxes[b] as number) + (boxes[b + 2] as number);
+      edges[to * 4 + 3] = (boxes[b + 1] as number) + (boxes[b + 3] as number);
     }
   }
 
   /**
-   * The entries whose boxes overlap `box`, in the world's order (or in no order, with `sorted` false, for a caller that sorts them
-   * itself). The array is reused by the next query.
+   * The runs of `items` that hold every entry whose middle is in the cells from (`x0`, `y0`) to (`x1`, `y1`), in pixels: pairs of
+   * from and to in `RUNS`; returns how many numbers. All of `items` as one run when the area covers more cells than there are entries.
    */
-  query(box: Box, sorted = true): readonly IndexEntry[] {
-    const out = this.#out;
-    out.length = 0;
-    const entries = this.#entries;
-    const CELL = this.#cell;
-    const left = Math.floor(box.x / CELL);
-    const right = Math.floor((box.x + box.width) / CELL);
-    const top = Math.floor(box.y / CELL);
-    const bottom = Math.floor((box.y + box.height) / CELL);
-    const cells = (right - left + 1) * (bottom - top + 1);
-    if (entries.length < SMALL || !Number.isFinite(cells) || cells > entries.length) {
-      for (const entry of entries) if (boxesOverlap(box, entry.box)) out.push(entry);
-      return out;
+  runs(x0: number, y0: number, x1: number, y1: number): number {
+    const cell = this.cell;
+    let left = Math.floor(x0 / cell);
+    let right = Math.floor(x1 / cell);
+    let top = Math.floor(y0 / cell);
+    let bottom = Math.floor(y1 / cell);
+    const starts = this.#starts;
+    const sparse = this.#sparse;
+    let count = 0;
+    if (sparse === null) {
+      const cols = this.#cols;
+      left = Math.max(left - this.#left, 0);
+      right = Math.min(right - this.#left, cols - 1);
+      top = Math.max(top - this.#top, 0);
+      bottom = Math.min(bottom - this.#top, this.#rows - 1);
+      // Not a number (a query at infinity) fails every comparison and leaves no cells.
+      if (!(left <= right && top <= bottom)) return 0;
+      // The cells of a row are next to each other in `starts`: one run a row.
+      for (let cy = top; cy <= bottom; cy++) {
+        const from = starts[cy * cols + left] as number;
+        const to = starts[cy * cols + right + 1] as number;
+        if (from === to) continue;
+        RUNS[count++] = from;
+        RUNS[count++] = to;
+      }
+      return count;
     }
-    const stamp = ++queries;
+    const cells = (right - left + 1) * (bottom - top + 1);
+    if (!(cells <= this.items.length)) {
+      if (!(left <= right && top <= bottom)) return 0;
+      RUNS[0] = 0;
+      RUNS[1] = this.items.length;
+      return 2;
+    }
     for (let cy = top; cy <= bottom; cy++) {
       for (let cx = left; cx <= right; cx++) {
-        const cell = this.#cells.get(cellKey(cx, cy));
-        if (cell === undefined) continue;
-        for (const entry of cell) {
-          if (entry.seen === stamp) continue;
-          entry.seen = stamp;
-          if (boxesOverlap(box, entry.box)) out.push(entry);
+        const id = sparse.get(cellKey(cx, cy));
+        if (id === undefined) continue;
+        RUNS[count++] = starts[id] as number;
+        RUNS[count++] = starts[id + 1] as number;
+      }
+    }
+    return count;
+  }
+}
+
+/** What `Grid.runs` answers with: kept from one query to the next. */
+const RUNS: number[] = [];
+
+/**
+ * The colliders of one tag with their boxes, for queries. Each is on a grid whose cells are about one and a half times the typical
+ * box's side; those more than two cells wide or tall are on a coarser grid of their own, sized to them the same way, and so on; a
+ * last few (fewer than `SMALL`, or with a box that is not finite) are looked at by every query. In a crowd, a cell much bigger than
+ * the boxes holds dozens of them, and every query looks at all of them.
+ */
+class ColliderIndex {
+  /** The colliders, in the world's order: queries answer in this order, and a place here is what `NEAR` holds. */
+  readonly colliders: readonly Collider[];
+  /** Each collider's box: x, y, width and height. */
+  readonly boxes: Float64Array;
+  readonly #grids: Grid[] = [];
+  /** The entries on no grid. */
+  readonly #loose: number[] = [];
+  /** The component each collider belongs to (`componentOf`), worked out the first time a query needs it. */
+  #components: (GameObject | null | undefined)[] | null = null;
+  /** Each collider's `owner`, likewise: it is a walk up the tree, and a crowd's `nearby` results name the same few over and over. */
+  #owners: (string | undefined)[] | null = null;
+  readonly #hits: number[] = [];
+  readonly #out: Collider[] = [];
+
+  constructor(colliders: readonly Collider[], boxes: Float64Array) {
+    this.colliders = colliders;
+    this.boxes = boxes;
+    let rest: number[] = [];
+    for (let i = 0; i < colliders.length; i++) {
+      const b = i * 4;
+      if (Number.isFinite((boxes[b] as number) + (boxes[b + 1] as number) + (boxes[b + 2] as number) + (boxes[b + 3] as number)))
+        rest.push(i);
+      else this.#loose.push(i);
+    }
+    for (let level = 0; rest.length >= SMALL; level++) {
+      // Only the first grid's cells have a largest size: it keeps a query for a small area among large boxes to a few cells.
+      const cell = cellSideFor(rest, boxes, level === 0 ? MAX_CELL : Infinity);
+      const members: number[] = [];
+      const larger: number[] = [];
+      for (let i = 0; i < rest.length; i++) {
+        const b = (rest[i] as number) * 4;
+        if (Math.max(boxes[b + 2] as number, boxes[b + 3] as number) <= cell * 2) members.push(rest[i] as number);
+        else larger.push(rest[i] as number);
+      }
+      // Past the first grid a cell is at least as large as the box it was sized by, so something always goes on it and this ends.
+      if (members.length > 0) this.#grids.push(new Grid(members, boxes, cell));
+      rest = larger;
+    }
+    if (rest.length > 0) {
+      for (let i = 0; i < rest.length; i++) this.#loose.push(rest[i] as number);
+      this.#loose.sort(ascending);
+    }
+  }
+
+  /** The `owner` of the collider at `at`. */
+  ownerOf(at: number): string {
+    const owners = (this.#owners ??= new Array<string | undefined>(this.colliders.length).fill(undefined));
+    return (owners[at] ??= (this.colliders[at] as Collider).owner);
+  }
+
+  /** The colliders whose boxes overlap `box`, in the world's order. The array is reused by the next query. */
+  query(box: Box): readonly Collider[] {
+    const hits = this.#hits;
+    let found = 0;
+    const x0 = box.x;
+    const y0 = box.y;
+    const x1 = box.x + box.width;
+    const y1 = box.y + box.height;
+    const grids = this.#grids;
+    for (let g = 0; g < grids.length; g++) {
+      const grid = grids[g] as Grid;
+      const edges = grid.edges;
+      const items = grid.items;
+      const runs = grid.runs(x0 - grid.reachX, y0 - grid.reachY, x1 + grid.reachX, y1 + grid.reachY);
+      for (let r = 0; r < runs; r += 2) {
+        for (let i = RUNS[r] as number, end = RUNS[r + 1] as number; i < end; i++) {
+          const e = i * 4;
+          // `boxesOverlap`: touching edges do not.
+          if (x0 < (edges[e + 2] as number) && (edges[e] as number) < x1 && y0 < (edges[e + 3] as number) && (edges[e + 1] as number) < y1)
+            hits[found++] = items[i] as number;
         }
       }
     }
-    for (const entry of this.#wide) if (boxesOverlap(box, entry.box)) out.push(entry);
-    if (sorted && out.length > 1) out.sort(byOrder);
+    const loose = this.#loose;
+    const boxes = this.boxes;
+    for (let i = 0; i < loose.length; i++) {
+      const b = (loose[i] as number) * 4;
+      const bx = boxes[b] as number;
+      const by = boxes[b + 1] as number;
+      if (x0 < bx + (boxes[b + 2] as number) && bx < x1 && y0 < by + (boxes[b + 3] as number) && by < y1)
+        hits[found++] = loose[i] as number;
+    }
+    hits.length = found;
+    if (found > 1) hits.sort(ascending);
+    const out = this.#out;
+    out.length = found;
+    const colliders = this.colliders;
+    for (let i = 0; i < found; i++) out[i] = colliders[hits[i] as number] as Collider;
     return out;
   }
 
   /**
-   * The entries whose boxes come within `radius` of (`x`, `y`), not counting those `ignore` draws itself, into `NEAR_ENTRIES` and
+   * The entries whose boxes come within `radius` of (`x`, `y`), not counting those `ignore` draws itself, into `NEAR` and
    * `NEAR_DISTANCES`, nearest first (ties in the world's order); returns how many. One pass over the cells the circle's bounds
    * cover (a pixel wider, so a box that just touches the circle is looked at), with no object made per entry.
    */
   within(x: number, y: number, radius: number, ignore: GameObject | null): number {
-    const entries = this.#entries;
-    const CELL = this.#cell;
-    const left = Math.floor((x - radius - 1) / CELL);
-    const right = Math.floor((x + radius + 1) / CELL);
-    const top = Math.floor((y - radius - 1) / CELL);
-    const bottom = Math.floor((y + radius + 1) / CELL);
-    const cells = (right - left + 1) * (bottom - top + 1);
     let found = 0;
-    if (entries.length < SMALL || !Number.isFinite(cells) || cells > entries.length) {
-      for (let i = 0; i < entries.length; i++) found = take(entries[i]!, x, y, radius, ignore, found);
-    } else {
-      const stamp = ++queries;
-      for (let cy = top; cy <= bottom; cy++) {
-        for (let cx = left; cx <= right; cx++) {
-          const cell = this.#cells.get(cellKey(cx, cy));
-          if (cell === undefined) continue;
-          for (let i = 0; i < cell.length; i++) {
-            const entry = cell[i]!;
-            if (entry.seen === stamp) continue;
-            entry.seen = stamp;
-            found = take(entry, x, y, radius, ignore, found);
-          }
+    // The square the circle is in, a hair wider than rounding could move a box that touches it.
+    const pad = (Math.abs(x) + Math.abs(y) + radius) * 1e-9;
+    const x0 = x - radius - pad;
+    const x1 = x + radius + pad;
+    const y0 = y - radius - pad;
+    const y1 = y + radius + pad;
+    const grids = this.#grids;
+    for (let g = 0; g < grids.length; g++) {
+      const grid = grids[g] as Grid;
+      const edges = grid.edges;
+      const items = grid.items;
+      const reachX = radius + 1 + grid.reachX;
+      const reachY = radius + 1 + grid.reachY;
+      const runs = grid.runs(x - reachX, y - reachY, x + reachX, y + reachY);
+      for (let r = 0; r < runs; r += 2) {
+        for (let i = RUNS[r] as number, end = RUNS[r + 1] as number; i < end; i++) {
+          const e = i * 4;
+          const left = edges[e] as number;
+          const top = edges[e + 1] as number;
+          const right = edges[e + 2] as number;
+          const bottom = edges[e + 3] as number;
+          // Most of what the cells hold is out of reach, and which side of the point a box is on is a coin toss the processor cannot
+          // guess: one test of all four sides costs half of what working out the distance of each did. (`+` and `|`, so that it is
+          // one branch: `||`, or `? 1 : 0` on each, is four.)
+          if ((+(left > x1) | +(right < x0) | +(top > y1) | +(bottom < y0)) !== 0) continue;
+          // The distance from the point to the box (0 inside it). Not `Math.hypot`, which V8 runs several times slower.
+          const dx = left > x ? left - x : x > right ? x - right : 0;
+          const dy = top > y ? top - y : y > bottom ? y - bottom : 0;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance <= radius) found = this.#take(items[i] as number, distance, ignore, found);
         }
       }
-      const wide = this.#wide;
-      for (let i = 0; i < wide.length; i++) found = take(wide[i]!, x, y, radius, ignore, found);
+    }
+    const loose = this.#loose;
+    const boxes = this.boxes;
+    for (let i = 0; i < loose.length; i++) {
+      const b = (loose[i] as number) * 4;
+      const left = boxes[b] as number;
+      const top = boxes[b + 1] as number;
+      const right = left + (boxes[b + 2] as number);
+      const bottom = top + (boxes[b + 3] as number);
+      const dx = left > x ? left - x : x > right ? x - right : 0;
+      const dy = top > y ? top - y : y > bottom ? y - bottom : 0;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance <= radius) found = this.#take(loose[i] as number, distance, ignore, found);
     }
     return found;
   }
+
+  /**
+   * `within`'s entry `at`, `distance` away: unless it is `ignore`'s own, into its place in the sorted run of `found` in `NEAR` (a
+   * query finds a handful, so an insertion). Returns the new count.
+   */
+  #take(at: number, distance: number, ignore: GameObject | null, found: number): number {
+    if (ignore !== null) {
+      const components = (this.#components ??= new Array<GameObject | null | undefined>(this.colliders.length).fill(UNKNOWN));
+      let component = components[at];
+      if (component === UNKNOWN) component = components[at] = componentOf(this.colliders[at] as Collider);
+      if (component === ignore) return found;
+    }
+    let i = found;
+    // Nearer first, then in the world's order.
+    while (i > 0) {
+      const d = NEAR_DISTANCES[i - 1] as number;
+      if (!(distance < d || (distance === d && at < (NEAR[i - 1] as number)))) break;
+      NEAR[i] = NEAR[i - 1] as number;
+      NEAR_DISTANCES[i] = d;
+      i--;
+    }
+    NEAR[i] = at;
+    NEAR_DISTANCES[i] = distance;
+    return found + 1;
+  }
 }
 
-const byOrder = (a: IndexEntry, b: IndexEntry): number => a.order - b.order;
+const ascending = (a: number, b: number): number => a - b;
 
-/** A power of two about one and a half times the median longer side of the boxes, from `MIN_CELL` to `MAX_CELL`. */
-function cellSideFor(entries: readonly IndexEntry[]): number {
-  if (entries.length < SMALL) return MAX_CELL;
+/**
+ * A power of two about one and a half times the median longer side of the boxes at `members`, from `MIN_CELL` to `max`.
+ */
+function cellSideFor(members: readonly number[], boxes: Float64Array, max: number): number {
   // The median of a sample of up to 64 is enough to size the cells.
-  const step = Math.max(1, Math.floor(entries.length / 64));
+  const step = Math.max(1, Math.floor(members.length / 64));
   const sides: number[] = [];
-  for (let i = 0; i < entries.length; i += step) {
-    const { width, height } = entries[i]!.box;
-    const side = Math.max(width, height);
-    if (Number.isFinite(side)) sides.push(side);
+  for (let i = 0; i < members.length; i += step) {
+    const b = (members[i] as number) * 4;
+    sides.push(Math.max(boxes[b + 2] as number, boxes[b + 3] as number));
   }
-  if (sides.length === 0) return MAX_CELL;
-  sides.sort((a, b) => a - b);
-  const want = sides[sides.length >> 1]! * 1.5;
+  sides.sort(ascending);
+  const want = (sides[sides.length >> 1] as number) * 1.5;
   let cell = MIN_CELL;
-  while (cell < want && cell < MAX_CELL) cell *= 2;
+  while (cell < want && cell < max) cell *= 2;
   return cell;
 }
 

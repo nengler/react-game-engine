@@ -98,12 +98,25 @@ Engine, in the order found:
    every object**, on every step that anything mounted or unmounted. A reorder now writes the slot's run in place, and which
    hooks an object has is a field on it (`worldHandlers`).
 
+7. **A `nearby` query read memory that was not in the cache, and guessed wrong about every box.** After 3, a query still looked at
+   twenty colliders to find three. Each was an object with its box another object, in every cell its box touched, and marked as
+   seen so it was taken once; working out its distance branched on which side of the point it was, which a processor cannot
+   guess. `within` alone was 18 % of a step. A collider is now in one cell, the one its middle is in, and a query looks a
+   half-box wider; the boxes' edges are in one array in cell order, a row of cells is one run of it, and one test with one
+   branch drops what is out of reach before any distance is worked out. Colliders much larger than the rest go on a coarser grid
+   of their own. A result's `owner` (a walk up the tree) is worked out once per collider a step, not once per result, and making
+   the index no longer keeps a map entry for every collider and every enemy's entity. On a fixed crowd of 1,500, a query went
+   from about 1,100 to 450 ns and making the index from 0.5 to 0.2 ms.
+
+Measured A/B on the same game, the engine before and after 7 (2026-11-17, medians, old then new in turn): 1,000 enemies 5.5 to
+4.7 ms, 1,500 about 9.3 to 7.9, 1,500 armed about 14 to 12.9, 3,000 about 21.8 to 17. The table above was taken before 7.
+
 Measured A/B on the same game, the engine before and after 3 to 6: 14.0 to 11.0 ms without weapons, 19.0 to 16.3 ms armed. Before
 that, 1 and 2 took 2,000 enemies from 38 to 24 ms.
 
 The game, and what it says about writing one:
 
-7. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
+8. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
    speed (40 px/s, at most four neighbours), the crowd behind always won: one 32-pixel cell held 169 enemies and thirty stood on
    one pixel, and every `nearby` in the pile looked at all of them. Stopping at the player and stepping out of each overlap keeps
    the busiest cell under fifty. It is the largest single change here (15 to 11 ms). It is kept because the pile was wrong to
@@ -128,6 +141,12 @@ numbers above are for the game written that way; speed comes from the engine.
   copying its records is no cheaper than writing them.
 - **16-, 12- and 8-pixel cells against 32** on a fixed crowd: 16 was best, smaller was no better; the index now picks the size.
 
+- **A `limit` on `nearby`** (not built): a query here finds 3.1 colliders on average at 1,500 enemies and 4.5 at 3,000, and nine
+  in ten find six or fewer, which is all an enemy uses. There is nothing for a limit to cut; the cost was the twenty looked at to
+  find them (7 above).
+- **Cells of 8 and 4 pixels** under the new index, against 16: within the VM's noise on the crowd, and 4-pixel cells made a
+  query over 200 spread-out colliders four times slower. The rule for the cell's side is unchanged.
+
 ### Collisions without a draw walk (done, worth less than hoped)
 
 With interpolation on, every step used to build the whole frame only to find where the colliders are, keep none of what it drew, and
@@ -141,7 +160,6 @@ costs about the same whatever it does, so the remaining gains are in visiting fe
 
 In the order to try them:
 
-- **A `limit` on `nearby`**: an enemy wants its few nearest, but every result in reach is made and sorted.
 - **Fewer objects per enemy.** A sprite cannot hold children, so a component that draws and collides is at least three objects;
   a collider on the sprite itself would make it two.
 - **A data-oriented crowd**: one component drawing every enemy from arrays (as Hearth's backlog suggests for health bars). It is
