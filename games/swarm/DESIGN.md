@@ -128,14 +128,19 @@ numbers above are for the game written that way; speed comes from the engine.
   copying its records is no cheaper than writing them.
 - **16-, 12- and 8-pixel cells against 32** on a fixed crowd: 16 was best, smaller was no better; the index now picks the size.
 
+### Collisions without a draw walk (done, worth less than hoped)
+
+With interpolation on, every step used to build the whole frame only to find where the colliders are, keep none of what it drew, and
+build it again between steps. `FrameBuilder.colliders` now places the colliders without drawing anything (see docs/PLAYER.md).
+Estimated at 1 to 1.5 ms at 1,500 enemies; measured A/B, 0.1 to 0.6 ms without weapons, 0.3 to 1.0 ms armed, and Hearth's wave
+10 from about 0.94 to 0.86 ms. A walk that only places colliders still costs about 60 % of a build: it visits the same objects,
+and the walk is limited by reading them, not by drawing them. That is the lesson for what is left: a pass over the object tree
+costs about the same whatever it does, so the remaining gains are in visiting fewer objects, not in doing less at each.
+
 ### What would close the rest
 
 In the order to try them:
 
-- **Collisions without a draw walk.** With interpolation on, every step walks the whole tree to find the colliders, keeps nothing
-  of what it drew, and walks it again to draw between steps: 1 to 1.5 ms at 1,500. A walk that only places colliders must follow
-  the draw walk's rules exactly (a hidden route or tooltip is skipped, a `<Hud>`'s colliders come after the world's, a `<Flex>`
-  places its children by the layout the walk runs), so it needs its own change and parity tests.
 - **A `limit` on `nearby`**: an enemy wants its few nearest, but every result in reach is made and sorted.
 - **Fewer objects per enemy.** A sprite cannot hold children, so a component that draws and collides is at least three objects;
   a collider on the sprite itself would make it two.
