@@ -14,14 +14,13 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { compileArgs, SCREENSHOTS_FOLDER, storyFiles } from "@tsengine/player-node";
 
 import { bundleForHost } from "../bundle.ts";
 import { loadGame, type Game } from "../config.ts";
 import { findHost, findLibrary } from "../native.ts";
-import { node, run } from "../run.ts";
+import { cliScript, node, run } from "../run.ts";
 
 interface Outcome {
   readonly ok: boolean;
@@ -38,12 +37,6 @@ function tscPath(): string {
 function hasTests(game: Game): boolean {
   const dir = join(game.dir, "test");
   return existsSync(dir) && readdirSync(dir, { recursive: true }).some((file) => String(file).endsWith(".test.ts"));
-}
-
-/** This command line's own script, to run `tse preview --compare` in a process of its own. */
-function cliScript(): string {
-  const dir = dirname(dirname(fileURLToPath(import.meta.url)));
-  return [join(dir, "cli.ts"), join(dir, "cli.js")].find((path) => existsSync(path)) ?? join(dir, "cli.js");
 }
 
 function previews(game: Game): Outcome {

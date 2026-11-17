@@ -28,7 +28,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
 import {
@@ -42,7 +42,7 @@ import {
   type Pixels,
 } from "@tsengine/player-node";
 
-import { node } from "../run.ts";
+import { cliScript, node } from "../run.ts";
 
 const usage =
   'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
@@ -113,8 +113,7 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
         console.error("--gpu needs a display, and there is none: install Xvfb (`sudo apt install xvfb`) or run it in a desktop session.");
         return 2;
       }
-      const self = fileURLToPath(new URL("../cli.ts", import.meta.url));
-      const again = spawnSync("xvfb-run", ["-a", "-s", XVFB_SCREEN, process.execPath, self, "screenshot", ...argv], {
+      const again = spawnSync("xvfb-run", ["-a", "-s", XVFB_SCREEN, process.execPath, cliScript(), "screenshot", ...argv], {
         stdio: "inherit",
         env: { ...process.env, TSE_UNDER_XVFB: "1" },
       });
