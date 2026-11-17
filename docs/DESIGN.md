@@ -263,8 +263,10 @@ component's `component.s.vx` reads the committed value and `component.s.vx = 1` 
 write state as handlers do.
 
 **No `useRef`.** A ref was a field that never renders, readable in handlers only. A `useMutable` field nothing in render reads
-costs one comparison, not a redraw, since each part of `render()` is guarded by what it reads, so two hooks for one kind of value
-were not worth keeping. A field cannot be written in `useUnmount` (`TSE1402`), which a ref could; to tell the parent, call a
+costs no redraw: a write to it does run `render()`, but a render writes only what differs, and its parts that set a built-in's
+props are guarded by what they read. (A keyed list is not guarded: every render of its component goes through the list's items
+again, comparing each one's props. With a field written every step, such as a clock, that is a pass over every list each step:
+see NEXT_PRIORITIES.md, "Compiler and language".) So two hooks for one kind of value were not worth keeping. A field cannot be written in `useUnmount` (`TSE1402`), which a ref could; to tell the parent, call a
 callback prop (`onGone?.()`). There is no `ref={…}` on elements either (`TSE1106`).
 
 **Things to know.**

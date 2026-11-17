@@ -128,22 +128,11 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
    * negative or not a number), or a zero scale, is never hit.
    */
   contains(x: number, y: number): boolean {
-    return this.#containsAt(this.worldTransform(), x, y);
+    return pointerContains(this, this.worldTransform(), x, y);
   }
 
   containsIn(parentSpace: WorldTransform, x: number, y: number): boolean {
-    return this.#containsAt(this.worldTransformIn(parentSpace), x, y);
-  }
-
-  #containsAt(t: WorldTransform, x: number, y: number): boolean {
-    if (!(this.width > 0 && this.height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
-    const dx = x - t.x;
-    const dy = y - t.y;
-    const cos = Math.cos(t.rotation);
-    const sin = Math.sin(t.rotation);
-    const localX = (dx * cos + dy * sin) / t.scaleX + this.originX;
-    const localY = (dy * cos - dx * sin) / t.scaleY + this.originY;
-    return localX >= 0 && localX <= this.width && localY >= 0 && localY <= this.height;
+    return pointerContains(this, this.worldTransformIn(parentSpace), x, y);
   }
 
   /** The middle of the area, in its layer's coordinates (scale and rotation ignored). */
@@ -151,4 +140,19 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
     const t = this.worldTransform();
     return { x: t.x + this.width / 2 - this.originX, y: t.y + this.height / 2 - this.originY };
   }
+}
+
+/**
+ * Whether the point is in `pointer`'s area, with the pointer at `t` in the world. (A function, not a private method: QuickJS makes a
+ * private-method call slow, and hover asks every pointer each frame.)
+ */
+function pointerContains(pointer: Pointer, t: WorldTransform, x: number, y: number): boolean {
+  if (!(pointer.width > 0 && pointer.height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
+  const dx = x - t.x;
+  const dy = y - t.y;
+  const cos = Math.cos(t.rotation);
+  const sin = Math.sin(t.rotation);
+  const localX = (dx * cos + dy * sin) / t.scaleX + pointer.originX;
+  const localY = (dy * cos - dx * sin) / t.scaleY + pointer.originY;
+  return localX >= 0 && localX <= pointer.width && localY >= 0 && localY <= pointer.height;
 }

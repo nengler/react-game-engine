@@ -456,25 +456,12 @@ export class Flex<P extends object = {}> extends GameObject<P> {
    * part that many pixels in from every edge counts (what a clipping box shows: inside its border).
    */
   contains(x: number, y: number, inset = 0): boolean {
-    return this.#containsAt(this.worldTransform(), x, y, inset);
+    return boxContains(this, this.worldTransform(), x, y, inset);
   }
 
   /** `contains`, for a caller that already holds the `childSpace()` of this box's parent (see `Pressable.containsIn`). */
   containsIn(parentSpace: WorldTransform, x: number, y: number): boolean {
-    return this.#containsAt(this.worldTransformIn(parentSpace), x, y, 0);
-  }
-
-  #containsAt(t: WorldTransform, x: number, y: number, inset: number): boolean {
-    const width = this.box.size[0] as number;
-    const height = this.box.size[1] as number;
-    if (!(width > 0 && height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
-    const dx = x - t.x;
-    const dy = y - t.y;
-    const cos = Math.cos(t.rotation);
-    const sin = Math.sin(t.rotation);
-    const localX = (dx * cos + dy * sin) / t.scaleX;
-    const localY = (dy * cos - dx * sin) / t.scaleY;
-    return localX >= inset && localX <= width - inset && localY >= inset && localY <= height - inset;
+    return boxContains(this, this.worldTransformIn(parentSpace), x, y, 0);
   }
 
   /**
@@ -501,4 +488,21 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     const t = this.worldTransform();
     return { x: t.x + (this.box.size[0] as number) / 2, y: t.y + (this.box.size[1] as number) / 2 };
   }
+}
+
+/**
+ * Whether the point is on `flex`'s laid-out box, with the box at `t` in the world. (A function, not a private method: QuickJS makes
+ * a private-method call slow, and hover asks every box that can be pressed each frame.)
+ */
+function boxContains(flex: Flex, t: WorldTransform, x: number, y: number, inset: number): boolean {
+  const width = flex.box.size[0] as number;
+  const height = flex.box.size[1] as number;
+  if (!(width > 0 && height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
+  const dx = x - t.x;
+  const dy = y - t.y;
+  const cos = Math.cos(t.rotation);
+  const sin = Math.sin(t.rotation);
+  const localX = (dx * cos + dy * sin) / t.scaleX;
+  const localY = (dy * cos - dx * sin) / t.scaleY;
+  return localX >= inset && localX <= width - inset && localY >= inset && localY <= height - inset;
 }
