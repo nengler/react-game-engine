@@ -55,7 +55,9 @@ function Play() {
         y={originY}
       />
       <Level />
-      <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
+      <Entity x={GEM_AT.x} y={GEM_AT.y}>
+        <Gem />
+      </Entity>
       {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
       <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
         <Player

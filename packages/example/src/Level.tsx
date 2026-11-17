@@ -59,21 +59,28 @@ function Level() {
   return (
     <Entity>
       {st.spawns.map((s) => (
-        <Enemy
-          key={s.id}
-          speed={s.tint === "blue" ? st.wave * 2 : st.wave}
-          tint={s.tint}
-          transform={{ x: s.x }}
-          onDefeated={() => {
-            // `s` is the spawn's current value, looked up by its key.
-            st.score += s.tint === "blue" ? 5 : 1;
-            st.defeats = [...st.defeats, { tint: s.tint, wave: st.wave }];
-            st.spawns = st.spawns.filter((other) => other.id !== s.id);
-          }}
-        />
+        // A component is placed by an <Entity> around it.
+        <Entity key={s.id} x={s.x}>
+          <Enemy
+            speed={s.tint === "blue" ? st.wave * 2 : st.wave}
+            tint={s.tint}
+            onDefeated={() => {
+              // `s` is the spawn's current value, looked up by its key.
+              st.score += s.tint === "blue" ? 5 : 1;
+              st.defeats = [...st.defeats, { tint: s.tint, wave: st.wave }];
+              st.spawns = st.spawns.filter((other) => other.id !== s.id);
+            }}
+          />
+        </Entity>
       ))}
       {/* The camera follows its children: once the third enemy arrives the view centres on it, and zooms in from wave 6. */}
-      <Camera zoom={st.wave > 5 ? 2 : 1}>{st.wave >= 3 && <Enemy speed={st.wave} transform={{ x: 120 }} />}</Camera>
+      <Camera zoom={st.wave > 5 ? 2 : 1}>
+        {st.wave >= 3 && (
+          <Entity x={120}>
+            <Enemy speed={st.wave} />
+          </Entity>
+        )}
+      </Camera>
       {/* A hit area: a press inside it calls the handler. Pair it with a Shape to draw the button. */}
       <Shape kind="rect" width={48} height={16} color="gray" x={160} y={80} />
       <Pointer
@@ -85,14 +92,18 @@ function Level() {
           st.wave += 1;
         }}
       />
-      <Panel title="hud" transform={{ x: 160 }}>
-        <Coin value={st.score} />
-        <Trail value={st.wave} transform={{ x: 40, y: 20 }} />
-        {/* Text between the tags is the `text` prop: it follows `score` like any other value. */}
-        <Text size={12} color={st.score >= 5 ? "gold" : "white"} y={40}>
-          Score: {st.score} (wave {st.wave})
-        </Text>
-      </Panel>
+      <Entity x={160}>
+        <Panel title="hud">
+          <Coin value={st.score} />
+          <Entity x={40} y={20}>
+            <Trail value={st.wave} />
+          </Entity>
+          {/* Text between the tags is the `text` prop: it follows `score` like any other value. */}
+          <Text size={12} color={st.score >= 5 ? "gold" : "white"} y={40}>
+            Score: {st.score} (wave {st.wave})
+          </Text>
+        </Panel>
+      </Entity>
       {bossVisible && (
         <Entity name="Boss">
           <Sprite image={st.wave > 5 ? "boss-enraged.png" : "boss.png"} />

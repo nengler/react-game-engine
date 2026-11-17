@@ -1,4 +1,4 @@
-import { useSound, useMutable, Camera, Flex, Game, Hud, Screen, Text } from "@tsengine/runtime/jsx";
+import { useSound, useMutable, Camera, Entity, Flex, Game, Hud, Screen, Text } from "@tsengine/runtime/jsx";
 
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
@@ -23,9 +23,15 @@ export default function Main() {
       {/* The game is drawn at 640 × 360 and scaled up by whole numbers; a wider window gets a wider view (fit="expand"), not bars. */}
       <Screen width={640} height={360} fit="expand">
         <Ground />
-        <Beacon transform={{ x: -120, y: -60 }} />
-        <Spikes transform={{ x: 84, y: 10 }} />
-        <Coin transform={{ x: 60, y: 8 }} />
+        <Entity x={-120} y={-60}>
+          <Beacon />
+        </Entity>
+        <Entity x={84} y={10}>
+          <Spikes />
+        </Entity>
+        <Entity x={60} y={8}>
+          <Coin />
+        </Entity>
         {/* The HUD stays where it is while the camera follows the player, and is laid out, not placed by hand: a column holding the coin count and the button. */}
         <Hud x={16} y={16}>
           <Flex direction="column" gap={8}>

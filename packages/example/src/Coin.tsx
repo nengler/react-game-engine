@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, Sprite } from "@tsengine/runtime/jsx";
+import { useMutable, useUpdate, Entity, Sprite } from "@tsengine/runtime/jsx";
 
 interface CoinProps {
   value: number;
@@ -25,8 +25,12 @@ export function Trail(props: TrailProps) {
   return (
     <>
       <Coin value={props.value} />
-      <Coin value={props.value} transform={{ x: 16 }} />
-      <Coin value={props.value} transform={{ x: 32 }} spin={4} />
+      <Entity x={16}>
+        <Coin value={props.value} />
+      </Entity>
+      <Entity x={32}>
+        <Coin value={props.value} spin={4} />
+      </Entity>
     </>
   );
 }
