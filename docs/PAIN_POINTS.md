@@ -1,6 +1,6 @@
 # Pain points for a new author
 
-As of 2026-11-15. What still reads unlike React, or would confuse someone opening the engine for the first time. When an item is
+As of 2026-11-17. What still reads unlike React, or would confuse someone opening the engine for the first time. When an item is
 fixed it leaves this list; how it was fixed is in [DESIGN.md](DESIGN.md). What is planned next is in
 [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md).
 
@@ -60,6 +60,8 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - The macOS and Windows binaries are new. The release workflow builds and smoke-tests libtse and tse-host on Linux x64, macOS
   (arm64, x64) and Windows x64, and `@tsengine/native` carries them all, but only Linux has been played in a real window; CI on
   pull requests is Linux only. `tse package` makes a game for the platform it runs on, so a game is packaged once per platform.
+  Players on Windows need the Visual C++ runtime, and a macOS game is signed ad hoc but not notarized, so Gatekeeper asks the
+  first time (the README's Releases section says what to tell players).
   Only Node is needed to write, test and check a game; the window, screenshots and the Rust host need more, and `dist` says what.
 - The Rust host (`--engine quickjs`) reports errors in the bundled `game.js`, not the `.tsx` line; Node and the V8 package map
   them back.

@@ -137,6 +137,18 @@ workflow from the Actions tab with `dry_run` ticked: it builds, tests and packs 
 artifact, but neither releases nor publishes. A game made on the engine is packaged on the platform it is for: run
 `tse package` on each (for example in a matrix in the game's own CI).
 
+What a player needs besides the packaged game:
+
+- **Windows:** the Microsoft Visual C++ runtime (the "VC++ Redistributable", x64). libtse and tse-host link it dynamically,
+  and a Windows machine without it reports a missing `VCRUNTIME140.dll`. Many machines already have it; ship the
+  redistributable with the game, or point players to it.
+- **macOS:** `tse package` signs the game ad hoc (`codesign --sign -`). It is not notarized, so Gatekeeper refuses a
+  downloaded copy the first time ("cannot be opened because the developer cannot be verified"). The player opens it with
+  right-click, Open, or clears the quarantine flag: `xattr -d com.apple.quarantine <game>`. Notarizing needs an Apple
+  developer account and is not done by the engine.
+- **Linux:** x64 with glibc 2.38 or newer (Ubuntu 23.10 and 24.04 or later): the release builds on Ubuntu 24.04, and the
+  binaries ask for nothing newer than `GLIBC_2.38`.
+
 Publishing uses npm's trusted publishing: npm accepts the Release workflow's own identity, so no npm token is stored anywhere.
 It is set up once:
 
