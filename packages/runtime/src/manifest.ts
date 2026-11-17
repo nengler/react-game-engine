@@ -694,6 +694,7 @@ export const runtimeManifest: RuntimeManifest = {
     "resumeTimerIds",
     "stepTimers",
     "renderCount",
+    "worldHandlers",
     "reportsChanges",
     "selfChangedAt",
     "subtreeChangedAt",

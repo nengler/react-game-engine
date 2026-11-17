@@ -183,7 +183,7 @@ describe("keyed lists: generated code", () => {
     // The boss's list is `(e, i) => <Sprite key={e.id} … x: i * 10 />`: the index places the item, the key does not read it.
     const { code } = compile(PACK, "Pack.tsx");
     assert.doesNotMatch(code, /\$list\.map\(\(e, i\) =>/);
-    assert.match(code, /for \(const \[i, e\] of \$list\.entries\(\)\)/, "the loop that reads it still has it");
+    assert.match(code, /for \(let i = 0; i < \$list\.length; i\+\+\) \{\s*const e = \$list\[i\]!;/, "the loop that reads it still has it");
     const byIndex = getCompiler().compile(
       "C.tsx",
       withAuthoring(`interface Item { id: string }
@@ -303,6 +303,27 @@ describe("keyed lists: runtime behaviour", () => {
     );
     assert.equal(p.children[0], p.sprite);
     assert.equal(p.children.at(-1), p.sprite2);
+  });
+
+  it("updates the items' props when the keys are the same as last render, and still catches a duplicate after that", () => {
+    const { world, pack: p } = pack([
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+    ]);
+    const before = [...p.enemyItems.values()];
+    // The same keys in the same order: the bookkeeping is skipped, the props are not.
+    p.s.enemies = [
+      { id: "a", speed: 5 },
+      { id: "b", speed: 6 },
+    ];
+    world.flush();
+    assert.deepEqual(ids(p), ["bg.png", "5", "6", "fg.png"]);
+    assert.deepEqual([...p.enemyItems.values()], before, "same instances, same order");
+    p.s.enemies = [
+      { id: "a", speed: 5 },
+      { id: "a", speed: 6 },
+    ];
+    assert.throws(() => world.flush(), /Duplicate key "a" in the <Enemy> list of Pack/);
   });
 
   it("throws on a duplicate key without changing the list", () => {

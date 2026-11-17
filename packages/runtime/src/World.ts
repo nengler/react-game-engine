@@ -574,9 +574,15 @@ export class World implements BodySpace {
     const stack: GameObject[] = [this.root];
     while (stack.length > 0) {
       const object = stack.pop() as GameObject;
-      if (this.#onInput.has(object)) input.push(object);
-      if (this.#onUpdate.has(object)) update.push(object);
-      for (let i = object.children.length - 1; i >= 0; i--) stack.push(object.children[i] as GameObject);
+      const handlers = object.worldHandlers;
+      if ((handlers & HANDLES_INPUT) !== 0) input.push(object);
+      if ((handlers & HANDLES_UPDATE) !== 0) update.push(object);
+      const children = object.children;
+      for (let i = children.length - 1; i >= 0; i--) {
+        const child = children[i] as GameObject;
+        // A leaf with no hooks (a sprite, a collider) adds nothing: most of a crowd's objects.
+        if (child.children.length > 0 || child.worldHandlers !== 0) stack.push(child);
+      }
     }
     // An object registered but not under the root (it should not happen) still runs, after the rest, as it did before. Each object is
     // in the tree once, so when every registered one was found there is nothing to add, and no set of what was seen is needed.
@@ -597,8 +603,15 @@ export class World implements BodySpace {
       this.#indexes = null;
     } else if (object instanceof Tilemap) this.#tilemaps.add(object);
     if ("pressKey" in object && "focusable" in object) this.#pressables.add(object as GameObject & Pressable);
-    if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
-    if (object.onUpdate !== GameObject.prototype.onUpdate) this.#onUpdate.add(object);
+    object.worldHandlers = 0;
+    if (object.onInput !== GameObject.prototype.onInput) {
+      this.#onInput.add(object);
+      object.worldHandlers |= HANDLES_INPUT;
+    }
+    if (object.onUpdate !== GameObject.prototype.onUpdate) {
+      this.#onUpdate.add(object);
+      object.worldHandlers |= HANDLES_UPDATE;
+    }
     this.#order = null;
   }
 
@@ -613,6 +626,7 @@ export class World implements BodySpace {
     if (this.#pressed === (object as unknown as Pressable)) this.#pressed = null;
     this.#onInput.delete(object);
     this.#onUpdate.delete(object);
+    object.worldHandlers = 0;
     this.#order = null;
   }
 
@@ -773,6 +787,10 @@ class NearbyResult {
 
 /** The collider a `nearby` result is, or undefined for anything else (a circle, a copy of a result). */
 const colliderOfResult = (where: object): Collider | undefined => NearbyResult.colliderOf(where);
+
+/** `GameObject.worldHandlers`: the world runs its `onInput`, its `onUpdate`. */
+const HANDLES_INPUT = 1;
+const HANDLES_UPDATE = 2;
 
 /** More deliveries than this in one step is a loop of receivers sending to each other. */
 const MAX_DELIVERIES = 100_000;
