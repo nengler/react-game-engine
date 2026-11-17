@@ -29,7 +29,7 @@ const GID_START = 8;
 const GID_END = 9;
 
 /** What each room is called, for the screen. */
-export const ROOM_NAMES: readonly string[] = [
+const ROOM_NAMES: readonly string[] = [
   "First steps",
   "Stepping stones",
   "Dash across",
@@ -134,7 +134,7 @@ function layOut(): Room[] {
 export const ROOM_LIST: readonly Room[] = layOut();
 
 /** The part of a spike tile that hurts, as a rectangle in the room's pixels, or null for any other tile. Spikes are half a tile deep. */
-export function hazardRect(ch: string, col: number, row: number): { x: number; y: number; w: number; h: number } | null {
+function hazardRect(ch: string, col: number, row: number): { x: number; y: number; w: number; h: number } | null {
   const x = col * TILE;
   const y = row * TILE;
   const half = TILE / 2;

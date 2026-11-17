@@ -93,7 +93,7 @@ export function dashSlide(s: Step): void {
   duck(s);
 }
 
-export function endDash(s: Step): void {
+function endDash(s: Step): void {
   s.b.state = "normal";
   s.b.dashStarting = false;
   s.b.dashTime = 0;
