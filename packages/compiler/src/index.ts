@@ -269,7 +269,7 @@ export function generatedFileName(sourceFileName: string): string {
  * the first is the author's (a bad argument, `useBody({ x: nowhere })`); what follows is the hook's own body failing for it
  * (`'move' is not a method`, about names the author never wrote). Only the first error on each call is kept; warnings are kept.
  */
-export function oneErrorPerHookCall(
+function oneErrorPerHookCall(
   diagnostics: readonly CompilerDiagnostic[],
   calls: readonly { readonly start: number; readonly end: number }[]
 ): CompilerDiagnostic[] {

@@ -73,7 +73,7 @@ function writeBounds(width: number, height: number, world: WorldTransform, out: 
  * Whether two colliders whose boxes overlap touch by their shapes (`Collider.shape`): two plain boxes always do (their boxes are
  * what they are), and a pair in which either has another shape is tested exactly, turned and scaled with its object.
  */
-export function shapesTouch(a: Collider, worldA: WorldTransform, b: Collider, worldB: WorldTransform): boolean {
+function shapesTouch(a: Collider, worldA: WorldTransform, b: Collider, worldB: WorldTransform): boolean {
   if (a.shape === "box" && b.shape === "box") return true;
   const ga = geometryOf(a, worldA);
   const gb = geometryOf(b, worldB);

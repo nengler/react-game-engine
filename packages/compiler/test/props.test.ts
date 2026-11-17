@@ -522,7 +522,9 @@ export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Cap
 
   it("rejects a prop that clashes with state", () => {
     assert.ok(
-      codes(withProps(`interface P { n: number }`, `{ n }: P`, `const n = useMutable({ v: 0 });`)).includes(DiagnosticCode.InvalidUseState)
+      codes(withProps(`interface P { n: number }`, `{ n }: P`, `const n = useMutable({ v: 0 });`)).includes(
+        DiagnosticCode.InvalidUseMutable
+      )
     );
   });
 

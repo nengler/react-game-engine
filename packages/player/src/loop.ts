@@ -154,7 +154,7 @@ export const MAX_DT = 0.1;
 export { MAX_STEPS_PER_FRAME };
 
 /** How many times larger than a root `<Screen>` the window opens when nothing sets its size. */
-export const DEFAULT_SCREEN_SCALE = 3;
+const DEFAULT_SCREEN_SCALE = 3;
 
 const LEFT_BUTTON = KEY_INDEX.get("MouseLeft") as number;
 const ENTER_KEY = KEY_INDEX.get("Enter") as number;

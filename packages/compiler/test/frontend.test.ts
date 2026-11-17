@@ -129,7 +129,7 @@ describe("IR construction", () => {
         {
           kind: "Component",
           name: "Player",
-          hooks: [{ kind: "UseState", state: "Player.s.health", setterName: "$set_s_health" }],
+          hooks: [{ kind: "StateSlot", state: "Player.s.health", setterName: "$set_s_health" }],
           sounds: [],
           functions: [],
           props: [],
@@ -327,7 +327,7 @@ describe("diagnostics", () => {
       `function A() { const s = useMutable({ a: null }); return <Entity />; }`,
     ],
     // A state named like a runtime member is fine since 2026-11-13 (root-name.test.ts); one declared twice is not.
-    ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const s = useMutable({ a: 1, a: 2 }); return <Entity />; }`],
+    ["state declared twice", DiagnosticCode.InvalidUseMutable, `function A() { const s = useMutable({ a: 1, a: 2 }); return <Entity />; }`],
   ];
   for (const [name, code, source] of cases) {
     it(`reports: ${name}`, () => {

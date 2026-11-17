@@ -80,7 +80,7 @@ function hooks(source: string, name: string) {
 describe("useMount and useUnmount: IR and generated code", () => {
   it("lowers the hooks to handlers with no parameters", () => {
     const kinds = hooks(BOARD, "Badge").map((h) => h.kind);
-    assert.deepEqual(kinds, ["UseState", "UseState", "OnMount", "OnUnmount"]);
+    assert.deepEqual(kinds, ["StateSlot", "StateSlot", "OnMount", "OnUnmount"]);
     for (const h of hooks(BOARD, "Badge")) if (h.kind === "OnMount" || h.kind === "OnUnmount") assert.deepEqual(h.handler.params, []);
   });
 

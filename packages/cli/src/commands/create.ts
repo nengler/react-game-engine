@@ -29,7 +29,7 @@ export function pinEngine(pkg: Record<string, unknown>, version: string): Record
 }
 
 /** The starters `--template` takes, besides `blank` (the base alone). */
-export function templateNames(): string[] {
+function templateNames(): string[] {
   return existsSync(TEMPLATES) ? readdirSync(TEMPLATES).sort() : [];
 }
 

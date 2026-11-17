@@ -655,7 +655,7 @@ function hasDynamicProps(props: readonly PropIR[]): boolean {
  * The type of an element's field: its class, and for a `<Collider tag="foe">` that tag too (`Collider<{}, "foe">`), so its
  * `onReceive` is typed by the tag (`ColliderMessages`) where it is made.
  */
-export function fieldType(el: {
+function fieldType(el: {
   readonly component: { readonly kind: string; readonly name: string };
   readonly props: readonly unknown[];
 }): string {

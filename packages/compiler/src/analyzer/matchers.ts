@@ -162,7 +162,7 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   const mark = marked ? (callee as { name: { text: string } }).name.text : "";
   const via: UseStoreCallAnalysis["via"] = !marked ? "select" : mark === "$actions" ? "actions" : "whole";
   const group = via === "whole" ? Number(mark.slice("$whole".length)) : null;
-  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseMutable, message, call: init });
   const example = `const hp = ${storeName}((s) => s.player.hp);`;
   if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
   const selector = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
@@ -215,7 +215,7 @@ export function matchMutableStatement(statement: Statement): StatementMatch | nu
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useMutable") return null;
-  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseMutable, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name))
     return invalid("useMutable must be bound with a plain `const` name: `const s = useMutable({ x: 0 })`.");
   const arg = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
@@ -275,7 +275,7 @@ export function matchContextStatement(statement: Statement): StatementMatch | nu
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useContext") return null;
-  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseMutable, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0) return invalid("useContext must be bound with `const`: `const theme = useContext(Theme)`.");
   if (init.arguments.length !== 1)
     return invalid("useContext takes one context, made with `createContext` in a `.ts` file: `useContext(Theme)`.");

@@ -47,7 +47,7 @@ function layerColor(layer: string): number {
 }
 
 /** The components an object is in, outermost first (`Play › SidePanel › BuildMenu`). */
-export function componentPath(object: GameObject): string {
+function componentPath(object: GameObject): string {
   const names: string[] = [];
   for (let at: GameObject | null = object; at !== null; at = at.parent) if (isComponent(at)) names.unshift(at.constructor.name);
   return names.join(" › ");

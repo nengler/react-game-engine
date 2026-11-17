@@ -123,7 +123,7 @@ export function walkTree(
 }
 
 /** What a `walkTree` visit returns for an object that is not drawn at all (a hidden `<Tooltip>`): its subtree is not walked, and it is not left. */
-export const SKIP_SUBTREE: WorldTransform = Object.freeze({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 }) as WorldTransform;
+const SKIP_SUBTREE: WorldTransform = Object.freeze({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 }) as WorldTransform;
 
 /**
  * `walkTree` without default parameters, which QuickJS pays for on every call of a recursion that runs once per object.

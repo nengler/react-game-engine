@@ -335,7 +335,7 @@ export class HookLowering extends ExpressionLowering {
   }
 
   /**
-   * `const s = useMutable({ vx: 0, vy: 0 })`: each field is a state slot of its own, as if declared with `useState`; `s.vx` reads it
+   * `const s = useMutable({ vx: 0, vy: 0 })`: each field is a state slot of its own; `s.vx` reads it
    * and `s.vx = …` writes it. What differs is the handler's view: it reads its own writes at once (a `live` read), while render
    * and everything else sees the committed value, as with any state. The name is claimed as a field (`s`, or `$s` where the root
    * built-in has that member), since the class gets a getter of that name (`component.s.vx`). Each slot's id is `Hero.s.vx`: hot
@@ -343,7 +343,7 @@ export class HookLowering extends ExpressionLowering {
    */
   protected lowerUseMutable(hook: UseMutableCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
     if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
-      this.report(DiagnosticCode.InvalidUseState, `'${hook.name}' is already declared in this component.`, hook.declaration);
+      this.report(DiagnosticCode.InvalidUseMutable, `'${hook.name}' is already declared in this component.`, hook.declaration);
       return;
     }
     const view = this.claimField(hook.name, hook.declaration);
@@ -351,7 +351,7 @@ export class HookLowering extends ExpressionLowering {
     const fields = new Map<string, StateId>();
     for (const field of hook.fields) {
       if (fields.has(field.name)) {
-        this.report(DiagnosticCode.InvalidUseState, `useMutable has '${field.name}' twice.`, hook.declaration);
+        this.report(DiagnosticCode.InvalidUseMutable, `useMutable has '${field.name}' twice.`, hook.declaration);
         return;
       }
       const mutable: MutableFieldIR = { name: hook.name, view, field: field.name };
@@ -380,18 +380,18 @@ export class HookLowering extends ExpressionLowering {
     if (setterMethod === null) return null;
     const id = stateId(this.component.name, `${mutable.name}.${mutable.field}`);
     if (!source.initializer) {
-      this.report(DiagnosticCode.InvalidUseState, "A useMutable field needs an initial value.", hook.call);
+      this.report(DiagnosticCode.InvalidUseMutable, "A useMutable field needs an initial value.", hook.call);
       return null;
     }
     // Initial values are evaluated before any state exists: lower with the scope as it is so far,
-    // then reject any state reads. `useState(() => make())` is React's lazy initializer: the generated field is evaluated
+    // then reject any state reads. A field `useMutable({ body: () => make() })` reads like React's lazy initializer: the generated field is evaluated
     // once per instance anyway, so the arrow's body is the initial value (a per-instance object, such as an effect).
     const lazy = unwrapParens(source.initializer);
     let initializer = source.initializer;
     if (isArrowFunction(lazy)) {
       if (lazy.parameters.length > 0 || isBlock(lazy.body)) {
         this.report(
-          DiagnosticCode.InvalidUseState,
+          DiagnosticCode.InvalidUseMutable,
           "A field's lazy initial value is an arrow with no parameters returning the value: `squash: () => createSquash()`.",
           lazy
         );
@@ -401,8 +401,8 @@ export class HookLowering extends ExpressionLowering {
     }
     const initialValue = this.lowerNode(initializer);
     if (!initialValue) return null;
-    // It may read props, the game state (`useState(start)` with `const start = useGame((s) => s.titleCursor)`) and the
-    // component's state declared above it (`useState(() => startSpring(target))`): all are there when the component is made,
+    // It may read props, the game state (`{ cursor: start }` with `const start = useGame((s) => s.titleCursor)`) and the
+    // component's state declared above it (`{ spring: startSpring(target) }`): all are there when the component is made,
     // which is when the initial value is taken, as in a React first render. (The scope holds only what is declared above.)
     const type = this.hookStateType(source.typeNode, initialValue, hook.call);
     if (!type) return null;
@@ -417,7 +417,7 @@ export class HookLowering extends ExpressionLowering {
     if (handle && initialValue.callee.kind === "Function") this.runtimeHandleStates.add(id);
     state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}), mutable });
     this.stateTypes.set(id, type);
-    hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
+    hooks.push({ kind: "StateSlot", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
     return id;
   }
 
@@ -436,7 +436,7 @@ export class HookLowering extends ExpressionLowering {
     if (hook.body !== null) {
       if (this.componentScope.hasOwn(hook.valueName) || this.isCallableName(hook.valueName)) {
         this.report(
-          DiagnosticCode.InvalidUseState,
+          DiagnosticCode.InvalidUseMutable,
           `'${hook.valueName}' is already declared in this component (or reserved).`,
           hook.declaration
         );
@@ -452,7 +452,7 @@ export class HookLowering extends ExpressionLowering {
       return;
     }
     if (this.componentScope.hasOwn(hook.valueName)) {
-      this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
+      this.report(DiagnosticCode.InvalidUseMutable, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
       return;
     }
     const first = hook.path[0] as string;
@@ -496,7 +496,7 @@ export class HookLowering extends ExpressionLowering {
     if (this.usedNames.has(field)) {
       if (!this.isRuntimeMember(field)) {
         this.report(
-          DiagnosticCode.InvalidUseState,
+          DiagnosticCode.InvalidUseMutable,
           `'${hook.valueName}' is already declared or is reserved by the runtime.`,
           hook.declaration
         );
@@ -561,7 +561,7 @@ export class HookLowering extends ExpressionLowering {
     const globalKey = path.join(".");
     state.push({ kind: "State", id, name, type, initialValue, globalKey });
     this.stateTypes.set(id, type);
-    hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(at) });
+    hooks.push({ kind: "StateSlot", state: id, setterName: null, span: this.span(at) });
     if (!this.storePaths.has(globalKey)) this.storePaths.set(globalKey, id);
     this.storeNames.set(name, globalKey);
     return id;
@@ -645,7 +645,7 @@ export class HookLowering extends ExpressionLowering {
    * The provider marks the component dirty when its value changes. A destructuring reads members of the value.
    */
   protected lowerUseContext(hook: UseContextCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
-    const code = DiagnosticCode.InvalidUseState;
+    const code = DiagnosticCode.InvalidUseMutable;
     const context = this.lowerNode(hook.context);
     if (!context) return;
     if (context.kind !== "PlainRef") {
@@ -685,7 +685,7 @@ export class HookLowering extends ExpressionLowering {
     state.push({ kind: "State", id: valueId, name: valueField, type: valueType, initialValue: read, transient: true, refresh: read });
     this.stateTypes.set(valueId, valueType);
     this.contextValues.add(valueId);
-    hooks.push({ kind: "UseState", state: valueId, setterName: null, span: this.span(hook.declaration) });
+    hooks.push({ kind: "StateSlot", state: valueId, setterName: null, span: this.span(hook.declaration) });
     if (hook.name !== null) {
       this.componentScope.declare(hook.name, { kind: "state", id: valueId });
       return;
@@ -719,7 +719,7 @@ export class HookLowering extends ExpressionLowering {
   }
 
   /**
-   * The type of a `useState` value: its type argument (a primitive, an array,
+   * The type of a `useMutable` field: its `as` type (a primitive, an array,
    * or any type written in this file, such as a record interface), or
    * inferred from the initial value. An array or record needs the type
    * argument unless it comes from a prop, as in TypeScript, where `[]` alone
@@ -733,7 +733,7 @@ export class HookLowering extends ExpressionLowering {
       const decl = this.propDecls.find((p) => p.name === initial.name);
       if (decl?.role === "value") return propTypeToType(decl.type);
     }
-    // A value of the game state (`useState(battle)`): its type, as the store gives it.
+    // A value of the game state (`{ battle }` with `const battle = useGame(…)`): its type, as the store gives it.
     if (initial.kind === "StateRead") {
       const type = this.stateTypes.get(initial.state);
       if (type) return type;
@@ -831,7 +831,7 @@ function memoized(key: string, value: ExprIR): ExprIR {
 }
 
 /** `TextChild | readonly TextChild[]` (either order, either alone, `string` too): a props type's text children. */
-export function isTextChildrenType(text: string): boolean {
+function isTextChildrenType(text: string): boolean {
   const parts = text.split("|").map((part) => part.replace(/\s+/g, " ").trim());
   return (
     parts.length > 0 &&

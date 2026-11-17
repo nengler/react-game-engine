@@ -478,15 +478,15 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
   }
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement ${ctx.inRenderBlock() ? "in the component body" : "in a handler"} (${SyntaxKind[statement.kind]}). Supported: state setter calls, writes to \`useMutable\` fields and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
+    `Unsupported statement ${ctx.inRenderBlock() ? "in the component body" : "in a handler"} (${SyntaxKind[statement.kind]}). Supported: writes to \`useMutable\` fields and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
     statement
   );
   return null;
 }
 
 /**
- * Whether an arrow's expression body does something rather than computes a value: a setter, sound or action call, or an
- * assignment (`() => setN(1)`, `() => count.current++`). Such a body is a statement, not a returned value.
+ * Whether an arrow's expression body does something rather than computes a value: a sound or action call, or an
+ * assignment (`() => s.n = 1`, `() => s.count++`). Such a body is a statement, not a returned value.
  */
 function isEffect(ctx: LoweringContext, body: Node): boolean {
   const e = unwrapParens(body as Expression);
@@ -1144,7 +1144,7 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   return target && { kind: "Assign", target, operator, value: { kind: "NumberLiteral", value: 1 } };
 }
 
-/** `setX(value)`, `setX(prev => ...)`, an assignment, or an allowlisted call. */
+/** An assignment, `++`/`--`, a list method on a field, a sound or action call, or an allowlisted call. */
 function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, at: Node): StatementIR | null {
   const call = unwrapParens(expression);
   if (isBinaryExpression(call) && ASSIGNMENT_TOKENS.has(call.operatorToken.kind)) return lowerAssignment(ctx, call);
@@ -1189,7 +1189,7 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (lowered.kind !== "Call") {
     ctx.error(
       DiagnosticCode.UnsupportedStatement,
-      "Expression statements must be a state setter call, a write to a field or a `let` local, or an allowlisted call.",
+      "Expression statements must be a write to a field or a `let` local, or an allowlisted call.",
       at
     );
     return null;
