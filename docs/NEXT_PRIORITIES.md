@@ -25,6 +25,7 @@ backend and QuickJS performance are set aside for now.
 | 7 | Lighting: `<Lighting>` and `<Light>` (ABI v12), no shadows | Done (#154) |
 | 8 | Collider shapes: circles and convex polygons. Solid shapes and slopes are not planned | Done (#155, #157) |
 | 9 | Cutscenes: `sequence`, `wait`, `tween`, `parallel`; Bramble's first visit to the cave | Done (#156) |
+| 10 | A web backend (`@tsengine/player-web`, WebGL2) and `tse package --engine web`, so a game plays in a browser and on a phone | Done |
 
 Every step is done; the next order has not been set.
 
@@ -55,7 +56,6 @@ Each row waits because nothing above depends on it or no game has asked for it y
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Web backend (canvas) | Local first; draw records map straight onto canvas calls, so it stays cheap to add. Storage would add a `localStorage` implementation behind the player's `Storage` | Wanting a browser build to share, or runnable examples in the guide |
 | Windows | Link lists and Node packaging steps are written but unverified | Someone wanting to play there |
 | One-file executable, a smaller V8 build, signing | A package as a folder works; `--engine node` ships all of Node, about 125 MB | Handing a build to someone else, or open-sourcing |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating |

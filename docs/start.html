@@ -228,8 +228,10 @@ test(&quot;holding right moves the hero its speed a second&quot;, () =&gt; {
 <h2>8. Package it</h2>
 <pre class="code" data-lang="sh"><code>npm run package                 # dist/my-game/: the game as one executable on Node&#x27;s V8 (about 100 MB)
 npx tse package --engine quickjs   # a few MB, on the Rust host, no JIT
-npx tse package --headless         # the software renderer, no window: for CI</code></pre>
+npx tse package --headless         # the software renderer, no window: for CI
+npx tse package --engine web       # dist/my-game-web/: a page a browser (or a phone) plays</code></pre>
 <p>The folder holds the executable, <code>lib/</code> (libtse) and <code>assets/</code>; copy it anywhere and run it. Saves and settings (<code>&lt;Game id="..."&gt;</code>, <a href="effects.html#saved">Saved data</a>) go to the user's data folder.</p>
+<p>The web build is a folder of static files: put it on any static host (GitHub Pages, <code>npx serve dist/my-game-web</code>) and open it in a browser. On a phone, "Add to Home Screen" opens it full screen in landscape. Taps are clicks, and saves go to the browser's storage.</p>
 
 <h2>Where next</h2>
 <ul><li><a href="recipes.html">Recipes</a>: a menu, a settings screen, a health bar, things that come and go, a panel that takes children, pickups, a cooldown.</li><li><a href="language.html">The language</a>: what a component may contain, and what the compiler says when it may not.</li><li><a href="systems.html">Systems</a>: tilemaps, collisions, layout, the camera.</li><li><a href="reference.html">Reference</a>: every built-in, hook and error code.</li><li><code>games/bramble</code> in the repository is a whole small game made this way; its <code>DESIGN.md</code> records what writing it found.</li></ul>

@@ -6,6 +6,8 @@
  * - `node` (the default): `<name>` is a Node single executable application (Node's own binary with the bundled game inside it,
  *   so V8 and its JIT), `lib/` (libtse as a shared library), `node_modules/` (koffi, which loads it) and `assets/`. About
  *   100 MB, most of it Node; for desktops, where script time matters more than size.
+ * - `web`: `index.html`, `game.js` and `assets/` in `dist/<name>-web/`, a page any static host serves, which a phone plays in its
+ *   browser (see web.ts). Compiles the game first.
  * - `quickjs`: `<name>` is the Rust host (which with no arguments runs the `game.js` beside it), `game.js` and `assets/`. A few
  *   MB; an interpreter, so it goes where a JIT is not allowed, but script runs 10 to 30 times slower than under V8.
  *
@@ -24,6 +26,8 @@ import { build, type Plugin } from "esbuild";
 import { bundleForHost } from "../bundle.ts";
 import { loadGame, UsageError, type Game } from "../config.ts";
 import { findHost, findLibrary, type NativeFlavor } from "../native.ts";
+import { packageWeb } from "../web.ts";
+import { buildCommand } from "./build.ts";
 
 function option(args: readonly string[], name: string): string | undefined {
   const at = args.indexOf(name);
@@ -32,7 +36,7 @@ function option(args: readonly string[], name: string): string | undefined {
 
 export async function packageCommand(args: readonly string[]): Promise<number> {
   const engine = option(args, "--engine") ?? "node";
-  if (engine !== "node" && engine !== "quickjs") throw new UsageError("--engine is node or quickjs");
+  if (engine !== "node" && engine !== "quickjs" && engine !== "web") throw new UsageError("--engine is node, quickjs or web");
   const values = new Set(["--engine", "--entry", "--name"].map((flag) => args.indexOf(flag) + 1).filter((i) => i > 0));
   const folder = args.find((arg, i) => !arg.startsWith("--") && !values.has(i));
   const game = loadGame(folder);
@@ -41,19 +45,35 @@ export async function packageCommand(args: readonly string[]): Promise<number> {
   const name = option(args, "--name") ?? game.name;
   if (!existsSync(join(game.dir, entry))) throw new UsageError(`${join(game.dir, entry)} does not exist`);
 
-  const out = join(game.dir, "dist", name);
+  const out = join(game.dir, "dist", engine === "web" ? `${name}-web` : name);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  if (engine === "quickjs") await packageQuickJs(game, entry, name, flavor, out);
+  if (engine === "web") {
+    if (buildCommand([game.dir]) !== 0) return 1;
+    await packageWeb(game, entry, name, out, webBackground(game));
+  } else if (engine === "quickjs") await packageQuickJs(game, entry, name, flavor, out);
   else await packageNode(game, entry, name, flavor, out);
   if (existsSync(join(game.dir, "assets"))) cpSync(join(game.dir, "assets"), join(out, "assets"), { recursive: true });
   // libtse holds the built-in fonts, whose licenses go with it.
   const fonts = fontLicenses();
   if (fonts !== null) cpSync(fonts, join(out, "FONTS.md"));
   console.log(
-    `\npackaged ${entry} -> ${relative(process.cwd(), out) || out} (${engine === "node" ? "Node/V8" : "QuickJS-ng"}, ${flavor === "headless" ? "headless: no window" : "with a window"})`
+    engine === "web"
+      ? `\npackaged ${entry} -> ${relative(process.cwd(), out) || out} (a web page: serve the folder over HTTP, e.g. \`npx serve ${relative(process.cwd(), out) || out}\`)`
+      : `\npackaged ${entry} -> ${relative(process.cwd(), out) || out} (${engine === "node" ? "Node/V8" : "QuickJS-ng"}, ${flavor === "headless" ? "headless: no window" : "with a window"})`
   );
   return 0;
+}
+
+/** The page's colour around the game: the `<Game background>` if the root file says it plainly, else black. */
+function webBackground(game: Game): string {
+  for (const file of ["Main.tsx", "Game.tsx", "App.tsx"]) {
+    const path = join(game.dir, game.src, file);
+    if (!existsSync(path)) continue;
+    const found = /<Game\b[^>]*\bbackground="(#[0-9a-fA-F]{3,8}|[a-z]+)"/.exec(readFileSync(path, "utf8"));
+    if (found !== null) return found[1]!;
+  }
+  return "#000000";
 }
 
 const exeName = (name: string): string => (process.platform === "win32" ? `${name}.exe` : name);

@@ -16,6 +16,7 @@
     "@tsengine/native": "0.0.0",
     "@tsengine/player": "0.0.0",
     "@tsengine/player-node": "0.0.0",
+    "@tsengine/player-web": "0.0.0",
     "@tsengine/runtime": "0.0.0",
     "esbuild": "^0.28.2",
     "postject": "^1.0.0-alpha.6",
