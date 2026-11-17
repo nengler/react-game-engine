@@ -13,7 +13,7 @@ const SAMPLE = "The quick brown fox jumps over the lazy dog.";
 const DIALOGUE = "You found the old lantern! It is cold, but something inside still flickers. Take it to the keeper?";
 
 /**
- * The fonts built into the engine, to choose one for a game: `tse preview packages/demo` shows them at 320 × 180, 480 × 270 and
+ * The fonts built into the engine, to choose one for a game: `tse preview games/demo` shows them at 320 × 180, 480 × 270 and
  * 640 × 360 (F5 and F6 switch story). Each is drawn at its own size, a pixel of the font to a pixel of the screen.
  */
 export function FontSampler({ width, font, fonts = [] }: FontSamplerProps) {

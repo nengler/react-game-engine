@@ -4,7 +4,7 @@
  * a player presses: a pad is selected, then the build menu's key, the upgrade key, the wave key. `test/balance.test.ts` checks the table against `test/balance.expected.json`, so a change to a number in the rules shows
  * up as a change in difficulty. `--write` updates the expected table after a change you meant to make.
  *
- *   node packages/hearth/tools/balance.ts [--write]
+ *   node games/hearth/tools/balance.ts [--write]
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

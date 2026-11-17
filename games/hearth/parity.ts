@@ -4,7 +4,7 @@
  * rounded to 1e-9). It runs unchanged under Node and, bundled, under the Rust host (QuickJS-ng): the two outputs must be identical,
  * which `tse check` checks.
  *
- *   node packages/hearth/parity.ts
+ *   node games/hearth/parity.ts
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 

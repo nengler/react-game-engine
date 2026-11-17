@@ -60,7 +60,7 @@ describe("tse preview", () => {
   it("shows one story at a time, switches with F6 and F5, and hot reloads the shown story", async () => {
     mkdirSync(gameDir, { recursive: true });
     for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"])
-      cpSync(join(repo, "packages/demo", name), join(gameDir, name), { recursive: true });
+      cpSync(join(repo, "games/demo", name), join(gameDir, name), { recursive: true });
     mkdirSync(join(gameDir, "stories"));
     writeFileSync(join(gameDir, "stories/CoinCounter.stories.ts"), STORIES);
     const counterFile = join(gameDir, "src/CoinCounter.tsx");
@@ -131,7 +131,7 @@ describe("tse preview", () => {
     "renders Hearth's stories as their stored screenshots",
     { skip: headless === null ? "the headless libtse is not built" : false },
     async () => {
-      const hearth = join(repo, "packages/hearth");
+      const hearth = join(repo, "games/hearth");
       const cwd = process.cwd();
       const before = process.env["TSE_NATIVE_LIB"];
       process.env["TSE_NATIVE_LIB"] = headless!;

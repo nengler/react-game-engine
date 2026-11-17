@@ -59,7 +59,7 @@ describe("playWithReload", () => {
   it("swaps in each new build, keeps component and game state, and shows a compile error until it is fixed", async () => {
     mkdirSync(gameDir, { recursive: true });
     for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"])
-      cpSync(join(repo, "packages/demo", name), join(gameDir, name), { recursive: true });
+      cpSync(join(repo, "games/demo", name), join(gameDir, name), { recursive: true });
     const counterFile = join(gameDir, "src/CoinCounter.tsx");
     const original = readFileSync(counterFile, "utf8");
     assert.ok(original.includes("Coins: {coins}"));

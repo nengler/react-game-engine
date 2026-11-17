@@ -461,7 +461,7 @@ export function Player() {
 
 {ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} map={r.map} image="tiles.png" />)}
 </script></pre>
-  <p>This is how Kite, the platformer in <code>packages/kite</code>, is built, and why: a solver proves each room can be finished by stepping the character thousands of times from copied states, which plain functions make cheap. For anything else, keep the game in components (Hearth's enemies and towers), which <a href="effects.html#testing"><code>@tsengine/testing</code></a> tests as easily as a function.</p>
+  <p>This is how Kite, the platformer in <code>games/kite</code>, is built, and why: a solver proves each room can be finished by stepping the character thousands of times from copied states, which plain functions make cheap. For anything else, keep the game in components (Hearth's enemies and towers), which <a href="effects.html#testing"><code>@tsengine/testing</code></a> tests as easily as a function.</p>
   <ul>
     <li>The name must not start with <code>use</code>.</li>
     <li>A dynamic prop that calls a function re-evaluates when the state in its arguments changes.</li>

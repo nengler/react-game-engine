@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const parity = resolve(repo, "packages/demo/parity.ts");
+const parity = resolve(repo, "games/demo/parity.ts");
 
 /** The Rust host, when it has been built: `TSE_HOST_BIN` names it. CI sets TSE_REQUIRE_HOST=1 so a missing one fails. */
 const hostBin = process.env["TSE_HOST_BIN"];
@@ -50,7 +50,7 @@ describe("bundling for the host", () => {
   it("bundles the demo into one module with nothing from Node or a native package", () => {
     const dir = mkdtempSync(join(tmpdir(), "tse-bundle-"));
     try {
-      bundle("packages/demo/main.ts", join(dir, "game.js"));
+      bundle("games/demo/main.ts", join(dir, "game.js"));
       const text = readFileSync(join(dir, "game.js"), "utf8");
       assert.doesNotMatch(text, /node:|koffi/, "no Node or koffi import");
       assert.match(text, /__tseBackend/, "it asks the host for the backend");
@@ -73,7 +73,7 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
   it("produces byte-identical output to Node over 60 scripted frames", () => {
     const dir = mkdtempSync(join(tmpdir(), "tse-parity-"));
     try {
-      bundle("packages/demo/parity.ts", join(dir, "parity.js"));
+      bundle("games/demo/parity.ts", join(dir, "parity.js"));
       const underHost = execFileSync(hostBin as string, [join(dir, "parity.js")], {
         cwd: repo,
         encoding: "utf8",
@@ -88,7 +88,7 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
   it("keeps saved data: write, overwrite, read back (UTF-8), remove, and refuse names that could be paths (ABI v7)", () => {
     const dir = mkdtempSync(join(tmpdir(), "tse-storage-"));
     try {
-      bundle("packages/demo/test/storage-script.ts", join(dir, "storage.js"));
+      bundle("games/demo/test/storage-script.ts", join(dir, "storage.js"));
       const out = execFileSync(hostBin as string, [join(dir, "storage.js")], {
         cwd: repo,
         encoding: "utf8",

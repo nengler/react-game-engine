@@ -7,8 +7,8 @@ children are persistent instances, updated in place when state changes.
 
 It has a compiler, a runtime, and a native player that draws, plays sound and reads the keyboard, mouse and gamepads
 through raylib. The player runs under Node while you develop (with hot reload and rewind); a packaged game is one folder that
-runs on V8 or on a small Rust + QuickJS-ng host. Four games are built on it: [Kite](packages/kite) (a precision platformer),
-[Hearth](packages/hearth) (a tower defense), [Bramble](games/bramble) (a top-down adventure made from the template, outside
+runs on V8 or on a small Rust + QuickJS-ng host. Four games are built on it: [Kite](games/kite) (a precision platformer),
+[Hearth](games/hearth) (a tower defense), [Bramble](games/bramble) (a top-down adventure made from the template, outside
 the workspaces) and [Swarm](games/swarm) (a survivors-style game, the crowd test). The first three's art and sound effects are
 Kenney's free CC0 packs ([kenney.nl](https://kenney.nl)), laid out by each game's `tools/make-assets.ts` from the files in its
 `tools/kenney/`; Swarm's are drawn in code. Linux is the supported platform.
@@ -41,7 +41,7 @@ next to it as `Player.ir.json`).
 
 Game code lives in components, as in React: a component keeps its own state (`useMutable`, written directly as `s.hp -= 1`
 and read back at once in a handler, or `useBody` for a position that walls stop), steps itself in `useUpdate`, takes hits in its collider's `onCollisionEnter`, and tells its parent what happened through
-callback props. [Hearth](packages/hearth) is built that way: its enemies, towers and shots each keep their own state, and each is
+callback props. [Hearth](games/hearth) is built that way: its enemies, towers and shots each keep their own state, and each is
 tested alone with [`@tsengine/testing`](packages/testing), as React Testing Library tests one component. Plain functions in `.ts`
 files are for what you would extract in React too: tables, pure calculations, and code a search runs thousands of times.
 
@@ -98,14 +98,16 @@ packages/
   testing/    `@tsengine/testing`: mount one compiled component in a headless world and test it, as React Testing Library does
   language-server/ `tse lsp`: the compiler's TSE diagnostics in the editor (editors/vscode is the VS Code extension)
   native/     `@tsengine/native`: where the built libtse and host are found
-  demo/       a small playable game; `npm run play:demo`
-  kite/       a precision platformer: `npm run play:kite`, `npm run check:kite`
-  hearth/     a tower defense: `npm run play:hearth`, `npm run check:hearth`
   example/    example components (their generated output is not committed: `npm run generate`)
 native/       libtse, in C over raylib: the ABI every host calls (native/include/tse.h)
 host/         the small host: Rust + QuickJS-ng, linked statically against libtse, for `--engine quickjs`
-games/bramble a top-down adventure made from the template, checked from outside the repository by `npm run check:outside`
-games/swarm   a survivors-style game with up to 2,000 enemies, the engine's crowd test: `npm run play:swarm`, `npm run check:swarm`
+games/        the games, each in its own folder
+  demo/       a small playable game; `npm run play:demo`
+  kite/       a precision platformer: `npm run play:kite`, `npm run check:kite`
+  hearth/     a tower defense: `npm run play:hearth`, `npm run check:hearth`
+  swarm/      a survivors-style game with up to 2,000 enemies, the engine's crowd test: `npm run play:swarm`, `npm run check:swarm`
+  bramble/    a top-down adventure made from the template, outside the workspaces: checked from outside the repository by
+              `npm run check:outside`
 ```
 
 ## Usage
@@ -124,8 +126,8 @@ npm run example     # recompile packages/example/src → packages/example/genera
 # The native player (needs cmake and a C compiler; on Linux, the X11/GL dev packages for a real window)
 npm run native:build    # libtse with a real window → native/build
 npm run play:demo       # play the demo under Node, with hot reload: save a file under src/ and the window updates
-npm run package         # packages/demo/dist/demo/: the game on Node's V8 as one executable (~125 MB; 10-30x faster script)
-npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host (needs cargo), game.js and assets/; a few MB, no JIT
+npm run package         # games/demo/dist/demo/: the game on Node's V8 as one executable (~125 MB; 10-30x faster script)
+npm run package -- --engine quickjs   # games/demo/dist/demo/: the Rust host (needs cargo), game.js and assets/; a few MB, no JIT
 ```
 
 ### Releases

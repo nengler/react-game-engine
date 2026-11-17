@@ -261,7 +261,7 @@ npm test               # full pipeline tests
 npm run typecheck      # tsc over compiler, runtime, tests and generated output
 
 # Compile components: <srcDir> <outDir>
-node packages/compiler/src/cli.ts packages/demo/src packages/demo/generated
+node packages/compiler/src/cli.ts games/demo/src games/demo/generated
 npm run demo           # same, for the demo
 npm run example        # recompile the example and check its scenes
 
@@ -307,8 +307,8 @@ tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
     <tr><td><code>packages/player</code></td><td>Pure-TypeScript half of the player: object tree → draw records, collisions, layout, the frame loop.</td></tr>
     <tr><td><code>packages/player-node</code></td><td>Node host: koffi binding to <code>libtse</code>, and <code>play.ts</code>.</td></tr>
     <tr><td><code>host/</code>, <code>native/</code></td><td>The Rust + QuickJS-ng host and the C library <code>libtse</code> (raylib window, audio, input).</td></tr>
-    <tr><td><code>packages/kite</code></td><td>A precision platformer: a title screen, eight Tiled rooms and an end screen, with music, effects and gamepad. It is the best reference for a real game; read <code>src/Main.tsx</code> first.</td></tr>
-    <tr><td><code>packages/demo</code></td><td>A small playable game, the simplest end-to-end example.</td></tr>
+    <tr><td><code>games/kite</code></td><td>A precision platformer: a title screen, eight Tiled rooms and an end screen, with music, effects and gamepad. It is the best reference for a real game; read <code>src/Main.tsx</code> first.</td></tr>
+    <tr><td><code>games/demo</code></td><td>A small playable game, the simplest end-to-end example.</td></tr>
     <tr><td><code>packages/example</code></td><td>Example components that exercise every feature, with committed generated output and scenes.</td></tr>
   </table></div>
   <p>Design notes: <code>docs/DESIGN.md</code> (architecture, IR, decisions), <code>docs/LAYOUT.md</code> (Flex, Hud, Screen), <code>docs/PLAYER.md</code> (player and ABI), <code>docs/NEXT_PRIORITIES.md</code> (roadmap).</p>
@@ -342,7 +342,7 @@ tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
     <tr><td>Fade the screen, play music</td><td><a href="effects.html#effects"><code>Fade</code> in a <code>Hud</code>, <code>Music</code> in the root</a></td></tr>
     <tr><td>Camera shake, squash and stretch</td><td><a href="language.html#logic"><code>useShake</code>, <code>useSquash</code></a></td></tr>
     <tr><td>Freeze frames on a hit</td><td><code>freeze(steps)</code> in a handler</td></tr>
-    <tr><td>Many things that each act on their own (enemies, towers, shots)</td><td>Components that keep their own state in a keyed list, reporting up by callbacks: see Hearth (<code>packages/hearth</code>)</td></tr>
+    <tr><td>Many things that each act on their own (enemies, towers, shots)</td><td>Components that keep their own state in a keyed list, reporting up by callbacks: see Hearth (<code>games/hearth</code>)</td></tr>
     <tr><td>Logic a search runs thousands of times (a solver)</td><td>Plain functions in a <code>.ts</code> file, called from a component: see <a href="language.html#logic">Kite</a></td></tr>
     <tr><td>Name actions (<code>"jump"</code>) instead of keys</td><td><a href="effects.html#input"><code>createControls</code> + <code>&lt;Game controls&gt;</code></a></td></tr>
     <tr><td>Reuse logic, or call real TypeScript (loops, tables)</td><td><a href="language.html#logic">Custom hooks and plain functions</a></td></tr>

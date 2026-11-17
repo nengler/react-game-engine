@@ -3,7 +3,7 @@
  * a room, an animation or a camera slide without a window.
  *
  *   npm run native:build:headless   (in this repository; an installed game has libtse from @tsengine/native)
- *   tse screenshot packages/demo --script "right*30" --at 0,15,29 --out /tmp/shots
+ *   tse screenshot games/demo --script "right*30" --at 0,15,29 --out /tmp/shots
  *
  * The game folder holds `game.ts`, which exports `gameConfig` (what `run` takes) and may export `bindings` (the action names a
  * script may use, `jump`, `right`; see `parseInputScript`) and `screen` (how the canvas sits in the window, for `click@x,y`). The script is run with the folder as the working directory, so

@@ -2,7 +2,7 @@
  * Finds a replay that takes the gem: play the level's replays to the start of room 7, then search from there for a way to touch
  * the gem. Writes `test/gem-replay.ts`. The gem's place is `GEM` in `rules/rooms.ts`.
  *
- *   node packages/kite/tools/solve-gem.ts
+ *   node games/kite/tools/solve-gem.ts
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

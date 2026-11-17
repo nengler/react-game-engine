@@ -131,8 +131,8 @@ def outline_font(path, size):
 
 
 def caps():
-    """Kite's 5x7 capitals (packages/kite/assets/font.png, 5x8 cells), with a column of space after each."""
-    sheet = Image.open(os.path.join(ROOT, "packages/kite/assets/font.png")).convert("RGBA")
+    """Kite's 5x7 capitals (games/kite/assets/font.png, 5x8 cells), with a column of space after each."""
+    sheet = Image.open(os.path.join(ROOT, "games/kite/assets/font.png")).convert("RGBA")
     cw, ch_h = sheet.width // 16, sheet.height // 6
     glyphs = {}
     for i, ch in enumerate(CHARS):
