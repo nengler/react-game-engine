@@ -368,10 +368,10 @@ Script time only, on the recording backend:
 - Hearth's wave 10 (109 enemies; 2026-11-15): Node mean about 1.0 ms; QuickJS mean 11.1 ms, 99th percentile about 29 ms (a garbage
   collection). Most of it is every enemy re-rendering every step, then the walk; if the Rust host hitches in the last waves, that is
   where to look.
-- Swarm's stress scene (2026-11-17, a VM about 1.25 times slower than the one above), a crowd walking after the player and keeping
-  apart with `nearby`: median step 6.9 ms with 1,000 enemies, 10.2 ms with 1,500, 13.8 ms with 2,000; with every weapon (enemies hit,
-  dying and replaced every step) 10.8, 16.8 and 24.3 ms. About 7 µs an enemy, spread over its three objects' update, render, two
-  draw walks, collisions and interpolation. The tables, a breakdown and what is left are in
+- Swarm's stress scene (2026-11-17, in a run in which Hearth's wave 10 took 0.9 ms), a crowd walking after the player and keeping
+  apart with `nearby` every step: median step 6.0 ms with 1,000 enemies, 9.3 ms with 1,500, 14.5 ms with 2,000; with every weapon
+  (enemies hit, dying and replaced every step) 9.3, 14.8 and 18.1 ms. About 6 µs an enemy, spread over its three objects' update,
+  render, two draw walks, collisions and interpolation. The tables, a breakdown and what is left are in
   [games/swarm/DESIGN.md](../games/swarm/DESIGN.md), "Performance".
 - 200 styled animated sprites, re-rendered every step: 0.2 ms under Node, 2.2 ms under QuickJS (about 11 µs each, three times a plain
   rect), comfortable for games of this size.

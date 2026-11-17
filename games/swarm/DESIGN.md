@@ -36,26 +36,28 @@ node games/swarm/tools/frame-time.ts                    script time of the walki
 
 ## Performance
 
-Script time under Node on a 4-core cloud VM, 2026-11-17. The stress scene's player walks the replay's loop, so the crowd follows
-and the ground scrolls. "Armed" adds every weapon at its last level, so enemies are hit, die and are replaced every step. Each
-number is the best of three 15-second runs. The VM's speed wanders by 10 to 20 % over an hour, so compare changes A/B in the same
-window, never against a number written down earlier.
+Script time under Node on a 4-core cloud VM, 2026-11-17, with the game written plainly (see below). The stress scene's player
+walks the replay's loop, so the crowd follows and the ground scrolls. "Armed" adds every weapon at its last level, so enemies are
+hit, die and are replaced every step. Each number is the best of three 15-second runs. The VM's speed wanders by up to 25 % over
+an hour, so the same run timed Hearth's wave 10 as a yardstick: 0.90 ms, against about 1.0 ms on the machine the numbers in
+[docs/PLAYER.md](../../docs/PLAYER.md) were taken on. Compare changes A/B in the same window, never against a number written down
+earlier.
 
 | Enemies | Median step | 99th percentile | Armed, median | Armed, 99th percentile |
 | ------- | ----------- | --------------- | ------------- | ---------------------- |
-| 500     | 2.9 ms      | 7.3 ms          | 5.4 ms        | 10.3 ms                |
-| 1,000   | 6.9 ms      | 12.7 ms         | 10.8 ms       | 19.2 ms                |
-| 1,500   | 10.2 ms     | 19.0 ms         | 16.8 ms       | 28.4 ms                |
-| 2,000   | 13.8 ms     | 23.9 ms         | 24.3 ms       | 42.8 ms                |
-| 3,000   | 25.1 ms     | 49.5 ms         | 47.6 ms       | 92.3 ms                |
+| 500     | 3.0 ms      | 6.4 ms          | 4.6 ms        | 8.0 ms                 |
+| 1,000   | 6.0 ms      | 10.4 ms         | 9.3 ms        | 15.7 ms                |
+| 1,500   | 9.3 ms      | 17.3 ms         | 14.8 ms       | 24.3 ms                |
+| 2,000   | 14.5 ms     | 26.9 ms         | 18.1 ms       | 31.8 ms                |
+| 3,000   | 22.0 ms     | 37.0 ms         | 31.6 ms       | 52.7 ms                |
 
-When this game was first written, 1,500 took 18 ms without weapons and 22 ms armed, and 1,000 took 21 ms before the first
-fixes below. The walking replay (the real game, up to about 210 enemies) has a median step of 0.9 ms.
+When this game was first written, 1,500 took about 18 ms without weapons and 22 ms armed, and 1,000 took 21 ms before the first
+fixes below (on the same VM, at times when it ran about 1.25 times slower than here). The walking replay (the real game, up to
+about 210 enemies) has a median step of 0.9 ms.
 
-**Is 1,500 at 60 Hz there?** Without weapons, yes, with room: 10 ms of script on this VM, about 8 on the one the numbers in
-[docs/PLAYER.md](../../docs/PLAYER.md) were taken on, and libtse's drawing on top. Armed, not quite: a median of 17 ms here (about
-13 there) fits a 16.7 ms frame on average, but the slow steps do not. Past 2,000 it does not fit. Interpolation (drawing between
-steps, on by default in a window) is 1.2 ms of the 10: `--no-interpolate` gives 9.1 ms.
+**Is 1,500 at 60 Hz there?** Without weapons, yes: 9.3 ms of script, with libtse's drawing on top. Armed, not quite: a median of
+14.8 ms fits a 16.7 ms frame, but the slow steps (24 ms at the 99th percentile) do not. Past 2,000 it does not fit. Interpolation
+(drawing between steps, on by default in a window) is 1.9 ms of the 9.3: `--no-interpolate` gives 7.5 ms.
 
 ### Where a step goes, at 1,500 enemies
 
