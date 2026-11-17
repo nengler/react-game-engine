@@ -26,7 +26,7 @@ node games/swarm/tools/frame-time.ts                    script time of the walki
   gems. Each list item is a component with its own state (`Enemy`, `Shot`, `Gem`). Each reports up through a callback when it
   dies, is spent or is taken.
 - Enemies get the player's position as props (`px`, `py`) and walk straight at it until they touch the player, so the crowd rings
-  the player rather than piling onto one point. Every other step (half the crowd each step), each one asks
+  the player rather than piling onto one point. Every step, each one asks
   `nearby("enemy", x, y, SPACING)` for the enemies touching it and steps out of half of each overlap. An enemy left more than
   `DESPAWN_RADIUS` behind comes back on the other side of the player.
 - Bolts and blades hurt enemies through their colliders (`onCollisionEnter`). The aura is sent to every enemy inside its circle
@@ -104,12 +104,17 @@ The game, and what it says about writing one:
 7. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
    speed (40 px/s, at most four neighbours), the crowd behind always won: one 32-pixel cell held 169 enemies and thirty stood on
    one pixel, and every `nearby` in the pile looked at all of them. Stopping at the player and stepping out of each overlap keeps
-   the busiest cell under fifty. It is the largest single change here (15 to 11 ms), and it is a game fix: the engine's cost
-   follows the crowd's density.
-8. **Stagger what is expensive.** Separating every other step, half the crowd each step, halves the queries; nobody sees a crowd
-   settle a step later.
+   the busiest cell under fifty. It is the largest single change here (15 to 11 ms). It is kept because the pile was wrong to
+   look at (a blob, enemies stacked on one pixel), not for speed; the engine's cost follows the crowd's density either way.
+
+**Swarm is written plainly, on purpose.** It is the engine's test, so it does what a person writing the game would do: every enemy
+separates every step, and distances are `Math.hypot`. Making the game do less to hide what the engine costs measures nothing. The
+numbers above are for the game written that way; speed comes from the engine.
 
 ### Tried, and not kept
+
+- **Workarounds in the game**: separating every other step (half the crowd each step) and `Math.sqrt(dx * dx + dy * dy)` for
+  `Math.hypot` were together about 1.5 ms at 1,500 enemies. Both were taken out again: see "Swarm is written plainly".
 
 - **Remembering, in each item's getter, the list array it last looked in and where the item was**, so a live read is one
   comparison. The profile put the enemy's own time on the `px` read, but an A/B showed nothing: V8 inlines the getters, and the

@@ -21,7 +21,7 @@ export function Gem({ id, x, y, value, px, py, magnet, onTaken }: GemProps) {
   useUpdate((dt) => {
     const dx = px - s.x;
     const dy = py - s.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
+    const d = Math.hypot(dx, dy);
     if (d <= PICKUP) {
       onTaken(id, value);
       return;

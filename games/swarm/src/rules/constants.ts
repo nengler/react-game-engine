@@ -37,8 +37,6 @@ export const ENEMY_CAP = 2500;
 export const SPACING = 3;
 /** The part of each overlap with a neighbour an enemy steps out of in one step (both of a pair do). */
 export const PUSH = 0.5;
-/** Each enemy keeps apart every this many steps (staggered by id), stepping out of that much more of each overlap. */
-export const SEPARATE_EVERY = 2;
 /** How many of the enemies touching it each one steps away from. */
 export const NEIGHBOURS = 6;
 /** An enemy stops walking when its edge is this close to the player's middle: the crowd rings the player. */

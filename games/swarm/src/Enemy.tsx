@@ -1,6 +1,6 @@
 import { AnimatedSprite, Collider, Entity, nearby, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
-import { DESPAWN_RADIUS, FLASH, KNOCK_DECAY, NEIGHBOURS, PUSH, REACH, SEPARATE_EVERY, SPACING } from "./rules/constants.ts";
+import { DESPAWN_RADIUS, FLASH, KNOCK_DECAY, NEIGHBOURS, PUSH, REACH, SPACING } from "./rules/constants.ts";
 import { ENEMIES, type EnemyKind } from "./rules/enemies.ts";
 import type { Hit } from "./swarm.ts";
 
@@ -31,7 +31,7 @@ interface EnemyProps {
  * other side of the player. Bolts and blades hurt it through its collider; the aura is sent to it (`onReceive`).
  */
 export function Enemy({ id, kind, x: x0, y: y0, hp, px, py, onKilled }: EnemyProps) {
-  const s = useMutable({ x: x0, y: y0, hp: hp, kx: 0, ky: 0, flash: 0, step: id });
+  const s = useMutable({ x: x0, y: y0, hp: hp, kx: 0, ky: 0, flash: 0 });
   const k = ENEMIES[kind];
 
   const hurt = (hit: Hit) => {
@@ -39,7 +39,7 @@ export function Enemy({ id, kind, x: x0, y: y0, hp, px, py, onKilled }: EnemyPro
     s.flash = FLASH;
     const dx = s.x - hit.x;
     const dy = s.y - hit.y;
-    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const d = Math.hypot(dx, dy) || 1;
     // Brutes barely move when hit.
     const knock = kind === "brute" ? hit.knock * 0.25 : hit.knock;
     s.kx = (dx / d) * knock;
@@ -54,7 +54,7 @@ export function Enemy({ id, kind, x: x0, y: y0, hp, px, py, onKilled }: EnemyPro
     if (s.flash > 0) s.flash = Math.max(0, s.flash - dt);
     const dx = px - s.x;
     const dy = py - s.y;
-    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const d = Math.hypot(dx, dy) || 1;
     if (d > DESPAWN_RADIUS) {
       // Left behind: back on the far side, a little inside the ring.
       s.x = px + dx * 0.85;
@@ -66,17 +66,15 @@ export function Enemy({ id, kind, x: x0, y: y0, hp, px, py, onKilled }: EnemyPro
     let vx = (dx / d) * walk;
     let vy = (dy / d) * walk;
     // Keep apart from the ones touching it: step out of a part of each overlap at once, so the crowd behind cannot press a pile together
-    // (a push as a speed loses to enough enemies walking in). Every other step, half the crowd one step and half the next: asking for
-    // neighbours is most of an enemy's cost, and nobody sees a crowd settle a step later.
-    s.step += 1;
-    const near = s.step % SEPARATE_EVERY === 0 ? nearby("enemy", s.x, s.y, SPACING) : [];
+    // (a push as a speed loses to enough enemies walking in).
+    const near = nearby("enemy", s.x, s.y, SPACING);
     let sx = 0;
     let sy = 0;
     for (let i = 0; i < near.length && i < NEIGHBOURS; i++) {
       const o = near[i]!;
       const ox = s.x - o.x;
       const oy = s.y - o.y;
-      const od = Math.sqrt(ox * ox + oy * oy);
+      const od = Math.hypot(ox, oy);
       if (od < 0.01) {
         // On top of each other: each goes its own way (a turn by its id), so the two part.
         sx += Math.cos(id * 2.39996) * PUSH;
