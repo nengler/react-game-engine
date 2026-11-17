@@ -139,9 +139,9 @@ mark { background: var(--accent-soft); color: inherit; }
   hits={["item", "enemy"]}        // which layers it can touch (omit = all)
   onCollisionEnter={(other) => {
     if (other.tag === "coin") collect();
-    else if (other.owner === "Spikes") setHurt(true);
+    else if (other.owner === "Spikes") s.hurt = true;
   }}
-  onCollisionExit={(other) => { if (other.tag === "spikes") setHurt(false); }}
+  onCollisionExit={(other) => { if (other.tag === "spikes") s.hurt = false; }}
 />
 </script></pre>
   <div class="tablewrap"><table>
@@ -167,7 +167,7 @@ declare global {
 }
 export {};
 
-// in a component: if (other.tag === "coin") setCoins((c) => c + other.data.value);
+// in a component: if (other.tag === "coin") s.coins += other.data.value;
 </script></pre>
   <p>Once it is declared, every tag a game compares must be in it.</p>
   <div class="callout"><p><strong>Collider or tile?</strong> Contacts are found after every step, and whatever a callback changes is rendered before the next step and drawn in the same frame. A callback still runs <em>after</em> the step's <code>useUpdate</code>, though, so code that must know mid-step (movement against walls, a precise death) reads tiles instead: Kite reads spikes and exits as tiles inside its movement step, and uses <code>Collider</code> for the optional gem pickup.</p></div>
@@ -200,7 +200,7 @@ useUpdate(() => {
   <h2>Placing things</h2>
   <p>Anything laid out in rows or columns is a <code>&lt;Flex&gt;</code>, wherever it is (a menu over the world, a row of hearts, an inventory, a panel in a <code>&lt;Hud&gt;</code>). Anything the game moves (a character, a coin, a shot) is placed with <code>x</code> and <code>y</code> from its state.</p>
   <p><code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code> and <code>scaleY</code> are props of every built-in that has a transform: <code>&lt;Sprite image="coin.png" x={spot.x} y={spot.y} /&gt;</code>. They are the same as <code>transform={{ x: spot.x, y: spot.y }}</code>. You still need <code>transform</code> for <code>global</code> and for placing a component: on a component, <code>x</code> is whatever its props say (a component may declare an <code>x</code> of its own), so a component is placed with <code>transform</code>. Writing a field both ways is an error. Fading is <code>opacity={…}</code>, a prop on every element (see <a href="language.html#transform">Transform</a>).</p>
-  <p>A <code>Flex</code> works anywhere, not only in a <code>&lt;Hud&gt;</code>: in the world, or in a <code>&lt;Screen&gt;</code> as Bramble's menus are. Here is Bramble's menu with its rows placed by hand:</p>
+  <p>Bramble's menus sit in a <code>&lt;Screen&gt;</code>, outside any <code>&lt;Hud&gt;</code>. Here is one with its rows placed by hand:</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // Before: every row placed by hand, and the bar behind the cursor's row worked out the same way.
 <Entity>
@@ -239,11 +239,13 @@ useUpdate(() => {
   <Flex alignItems="center" gap={8}>
     <Sprite image="coin.png" />
     <Text size={20}>{coins}</Text>
-    <Flex width="grow" />                       {/* a spacer */}
+    {/* a spacer */}
+    <Flex width="grow" />
   </Flex>
+  {/* a button */}
   <Flex width={96} height={32} alignItems="center" justifyContent="center"
-        background="slategray" onPress={() => setPaused((p) => !p)}>
-    <Text>{paused ? "Resume" : "Pause"}</Text>  {/* a button */}
+        background="slategray" onPress={() => { s.paused = !s.paused; }}>
+    <Text>{s.paused ? "Resume" : "Pause"}</Text>
   </Flex>
 </Flex>
 </script></pre>
@@ -255,11 +257,11 @@ useUpdate(() => {
   <Text>Start</Text>
 </Flex>
 </script></pre>
-  <p><code>&lt;Slider&gt;</code> and <code>&lt;Toggle&gt;</code> are two controls that are <code>Flex</code> boxes with parts drawn in them, so they are sized, laid out, clipped, faded, disabled and styled like any other. A slider is <code>&lt;Slider value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} /&gt;</code>: a press puts the thumb under the mouse, a drag moves it (even once the mouse has left the box), and when it has the focus the left and right keys move it one step (a twentieth of the range with no <code>step</code>) while up and down move the focus on. The track is its <code>background</code>, so it takes a border, a radius, an image and a colour for each state; <code>fillColor</code> is the part left of the thumb. A toggle is <code>&lt;Toggle checked={sound} onChange={(on) => setSound(on)} /&gt;</code>: a press, the confirm key or its <code>pressKey</code> flips it. Each moves its own value and then calls <code>onChange</code> with the new one, only when it is different, so <code>value</code> and <code>checked</code> give the starting value and any value you set later. Both take the focus by default.</p>
+  <p><code>&lt;Slider&gt;</code> and <code>&lt;Toggle&gt;</code> are two controls that are <code>Flex</code> boxes with parts drawn in them, so they are sized, laid out, clipped, faded, disabled and styled like any other. A slider is <code>&lt;Slider value={s.volume} min={0} max={10} step={1} onChange={(v) => { s.volume = v; }} /&gt;</code>: a press puts the thumb under the mouse, a drag moves it (even once the mouse has left the box), and when it has the focus the left and right keys move it one step (a twentieth of the range with no <code>step</code>) while up and down move the focus on. The track is its <code>background</code>, so it takes a border, a radius, an image and a colour for each state; <code>fillColor</code> is the part left of the thumb. A toggle is <code>&lt;Toggle checked={s.sound} onChange={(on) => { s.sound = on; }} /&gt;</code>: a press, the confirm key or its <code>pressKey</code> flips it. Each moves its own value and then calls <code>onChange</code> with the new one, only when it is different, so <code>value</code> and <code>checked</code> give the starting value and any value you set later. Both take the focus by default.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Flex direction="column" gap={8} padding={10}>
-  <Slider width={160} value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} />
-  <Toggle checked={sound} onChange={(on) => setSound(on)} />
+  <Slider width={160} value={s.volume} min={0} max={10} step={1} onChange={(v) => { s.volume = v; }} />
+  <Toggle checked={s.sound} onChange={(on) => { s.sound = on; }} />
 </Flex>
 </script></pre>
   <p><code>&lt;Button&gt;</code> and <code>&lt;Menu&gt;</code> are the two pieces most screens need. A button is a <code>Flex</code> that takes the focus and has a look for each state, its label as children; any <code>Flex</code> prop replaces the default look. A menu is a column whose focusable children are its items: while one of them has the focus, up and down move it only among them, wrapping round at the ends (<code>loop={false}</code> stops there), confirm presses the focused one, and <code>back</code> (Escape or PadB without a <code>back</code> action) calls <code>onBack</code>. <code>autoFocus</code> says which item starts with the focus. <code>onAdjust</code> on any focusable box hears left and right while it has the focus (-1 or 1), for a row that changes a value in place; the focus stays. When a modal opens over a menu its focus is put aside, and given back when the modal closes. A component of your own called <code>Button</code> or <code>Menu</code> is still yours: a name declared or imported in a file shadows the built-in, unless the file imports the built-in too.</p>
@@ -322,13 +324,16 @@ export default function Main() {
   return (
     <Game name="Main" title="my game" width={640} height={360} background="#10131c" assets="assets">
       <Screen width={640} height={360} fit="expand">
-        <World />                              {/* your world: Ground, Coin, … */}
-        <Hud x={16} y={16}>                    {/* stays put while the camera moves */}
+        {/* your world: Ground, Coin, … */}
+        <World />
+        {/* stays put while the camera moves */}
+        <Hud x={16} y={16}>
           <Flex direction="column" gap={8}>
             <CoinCounter />
           </Flex>
         </Hud>
-        <Camera><Player /></Camera>            {/* the view follows its children */}
+        {/* the view follows its children */}
+        <Camera><Player /></Camera>
       </Screen>
     </Game>
   );
@@ -373,7 +378,8 @@ const screen = useGame((s) => s.screen);        // "title" | "play" | "end", cha
   <Route name="play"><Play /></Route>
   <Route name="end"><End /></Route>
 </Router>
-<Music src="theme.wav" volume={0.45} fade={1} />   {/* beside the router, so screen changes leave it alone */}
+{/* beside the router, so screen changes leave it alone */}
+<Music src="theme.wav" volume={0.45} fade={1} />
 </script></pre>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // transitions.ts: a plain function of progress (0 to 1). Fade out, switch behind the cover, fade in.
@@ -428,7 +434,7 @@ export function Hero() {
   </ul>
   <h3>Moving with plain functions</h3>
   <p>A <code>useBody</code> component and plain functions produce the same movement. Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>packages/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceiling corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement. Use a component when only it does, and plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
-  <p>Movement written as plain functions over the grid (Kite's, which a search runs thousands of times) reads the same tile data:</p>
+  <p>Kite's plain movement functions read the same tile data as a <code>&lt;Tilemap&gt;</code>:</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // rules/rooms.ts: runs once when imported, before the game starts.
 // tse-compile --scenes writes generated/tilemaps.ts from your .tmj files.
@@ -459,7 +465,7 @@ moveActorX(actor, vx * dt, blocked, (dir) => { actor.vx = 0; });      // a pixel
     <li>Reading outside the map gives an empty cell, not an error.</li>
     <li>Kite puts gameplay data in a hidden layer (<code>Markers</code>: room start and exit tiles) and finds it with <code>find("Markers", gid)</code>. Only the visible <code>Tiles</code> layer is drawn.</li>
     <li>A map of any size costs what its view does: in the world, an unrotated, unscaled <code>&lt;Tilemap&gt;</code> writes only the cells the camera shows (and one more cell round them). Inside a <code>&lt;Hud&gt;</code>, or turned or scaled, it writes every cell.</li>
-    <li>You can still mount only what is needed, though a large map does not require it: Kite maps over its room list and mounts the current room and its neighbours.</li>
+    <li>A large map does not need splitting, but you can still mount part of it: Kite maps over its room list and mounts the current room and its neighbours.</li>
     <li><code>moveActorX</code> / <code>moveActorY</code> move <code>{ x, y, rx, ry }</code> a pixel at a time against <code>blocked(x, y)</code>, carrying the sub-pixel remainder. On a block the remainder is dropped and <code>onBlocked(direction)</code> runs; it may move the actor (a corner correction).</li>
     <li>Tilesets can be embedded, or external as JSON (<code>.tsj</code>) or XML (<code>.tsx</code>). Without <code>image</code>, a <code>&lt;Tilemap&gt;</code> draws each tile from its own tileset's sheet, with its margin and spacing, so keep the sheets in the assets folder; a tile larger than a cell sits on the bottom of it, as in Tiled. With <code>image</code>, every tile is cut from that one sheet.</li>
     <li>To use map objects as data, give an object layer the bool property <code>data</code> and its objects are for your rules, not prefabs: <code>getTilemap("room1").objects("door")</code> gives each one's position, size, name and custom properties, and the map's own properties are <code>property(name)</code>. Bramble reads its doors, people, items and enemies this way (<code>games/bramble/src/rules/maps.ts</code>), checking each one and naming the map and object when something is wrong.</li>
@@ -505,14 +511,14 @@ const byId = loadScene(world, scene, prefabs);   // Map of scene id → object, 
     <li>To draw, the tree is walked depth-first into draw records in tree order (or <code>z</code> order), with the camera applied. A contact and what it caused are drawn in the same frame.</li>
     <li>The backend draws and presents, then supplies next frame's input.</li>
   </ol>
-  <h3>Consequences worth knowing</h3>
+  <h3>What follows from this order</h3>
   <ul>
-    <li>State set in a handler shows at the next render. Refs are immediate.</li>
+    <li>A field written in a handler shows at the next render; the handler reads it back at once.</li>
     <li>Components see each other's changes a step apart. Every update in a step sees the state as the step began, so a value a child reports to its parent in a step (<code>onMove(x)</code>, then the parent's <code>setPlayerX</code>) reaches its siblings, by props or through context, in the next step. That is one step of lag between independent things, and it repeats exactly. Where it matters, a built-in reads its child directly, as <code>&lt;Camera&gt;</code> follows what it holds.</li>
     <li>Objects attached mid-frame get hooks next frame.</li>
     <li>With <code>fixedStep</code>, steps 2 to 4 above run once per whole step, and drawing runs once per frame. See <a href="effects.html#input">Input and timing</a>.</li>
     <li><code>freeze(n)</code> skips <code>useUpdate</code> (not <code>useInput</code> or renders) for <code>n</code> steps.</li>
-    <li>Any number of setters means one render. <code>AnimatedSprite</code> costs no renders.</li>
+    <li>Any number of state writes in a frame means one render. <code>AnimatedSprite</code> costs no renders.</li>
     <li>Unchanged subtrees reuse last frame's draw records.</li>
     <li>Bad assets never crash: a missing image or unreadable colour draws magenta, with one warning.</li>
     <li>Colours are CSS: <code>#rgb</code>, <code>#rgba</code>, <code>#rrggbb</code>, <code>#rrggbbaa</code>, <code>rgb()</code>, <code>rgba()</code>, named colours, <code>transparent</code>.</li>

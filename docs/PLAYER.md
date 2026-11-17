@@ -43,8 +43,7 @@ reload, reusing draw records). The exact record layouts, key table and current A
 
 The tree walk, colour parsing, camera maths, layout, pointer hit testing and collision rules are where the bugs
 are, so they live in TypeScript, where tests run them without a window. The native side executes a list of draw records and reports
-input. Because the boundary is one call per frame with plain arrays, it costs the same in every host, and each host's adapter is
-small.
+input, through a boundary that costs the same in every host.
 
 ### The frame
 

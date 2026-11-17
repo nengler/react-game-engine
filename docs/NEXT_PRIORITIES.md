@@ -4,8 +4,8 @@ As of 2026-11-15: what is being worked on, what is open, and what waits. When so
 file; how it works and why goes into [DESIGN.md](DESIGN.md), [PLAYER.md](PLAYER.md) or [LAYOUT.md](LAYOUT.md), and the plans
 that led there are in git history. What still trips a new author is in [PAIN_POINTS.md](PAIN_POINTS.md).
 
-**Who it is for.** Mostly the author, making their own games; open-sourcing it is a goal for later. A real game comes first,
-readiness for other people second. **Local first:** a game is written, played and packaged on one desktop machine. There is no
+It is mostly for the author, making their own games; open-sourcing it is a goal for later. A real game comes first,
+readiness for other people second. It is local first: a game is written, played and packaged on one desktop machine. There is no
 web backend and no hosted build. A release publishes the `@tsengine/*` packs to npm (README, "Releases").
 
 ## Now (decided 2026-11-15)
@@ -32,19 +32,19 @@ Every step is done; the next order has not been set.
 
 These cannot be checked in a cloud container, and each has found bugs the tests did not.
 
-- **macOS** (decided 2026-11-15: the owner will make games on a Mac). Nobody has built or run anything on a Mac by hand: libtse's CMake build,
+- macOS (decided 2026-11-15: the owner will make games on a Mac). Nobody has built or run anything on a Mac by hand: libtse's CMake build,
   `tse dev`, `tse package` (both engines), the link lists in `host/build.rs` and the storage paths are written for it but
   unverified beyond what the release workflow's platform matrix runs (the builds, the C smoke test, the Node host on the software
   renderer and the demo's parity under tse-host, on macOS arm64 and x64 and on Windows x64; a `dry_run` dispatch runs it without
   releasing). PR CI is Linux only. Play the demo in a real window there (on a Retina screen: shapes and text should be sharp, layers and clipped panels in place), file what breaks.
-- **Play in a real window**: the demo and Hearth under Node and packaged (V8 and `--engine quickjs`); Bramble packaged; rewind in
+- Play in a real window: the demo and Hearth under Node and packaged (V8 and `--engine quickjs`); Bramble packaged; rewind in
   `tse dev`. Kite and Bramble have been played under Node on a Linux desktop, with sound.
-- **A save across a real quit** under both hosts (each host was only tested against libtse separately).
-- **A map saved by Tiled itself.** Every map so far was written by a tool, so the importer has never seen a file Tiled wrote.
+- A save across a real quit under both hosts (each host was only tested against libtse separately).
+- A map saved by Tiled itself. Every map so far was written by a tool, so the importer has never seen a file Tiled wrote.
   Open Bramble's overworld in Tiled, save it, and fix what breaks.
-- **The guide followed from scratch** by someone who did not write it, from an empty folder to a packaged game.
-- **The language server in a real editor** (`editors/vscode`); it is tested only through `tools/lsp-smoke.ts`.
-- **Hearth's balance**: the replay table holds at seed 1, but an early mortar's scatter decides some seeds. Worth a look when
+- The guide followed from scratch by someone who did not write it, from an empty folder to a packaged game.
+- The language server in a real editor (`editors/vscode`); it is tested only through `tools/lsp-smoke.ts`.
+- Hearth's balance: the replay table holds at seed 1, but an early mortar's scatter decides some seeds. Look at it when
   someone plays it.
 
 ## Backlog: not now, and what would pull it in
@@ -102,10 +102,10 @@ bars, nine-slice options, sliders, a sharp `<Hud>` over a pixel-art world, sever
 
 ## Held, or decided against
 
-- **`useEffect`** stays out; DESIGN.md, "Why there is no `useEffect`", says what replaces each use. `useChange(value, prev => …)`,
+- `useEffect` stays out; DESIGN.md, "Why there is no `useEffect`", says what replaces each use. `useChange(value, prev => …)`,
   the one use with no answer yet, is held for a separate discussion.
-- **Collision shapes** are circles and convex polygons only, for now (2026-11-15): no solid shapes or slopes.
-- **No macOS or Windows CI** until a build works there (2026-11-09; the macOS step above would change it).
-- **Actions as the only writers of the game state.** A shortcut for small writes (a `free: [...]` list) is open, but no game has
+- Collision shapes are circles and convex polygons only, for now (2026-11-15): no solid shapes or slopes.
+- No macOS or Windows CI until a build works there (2026-11-09; the macOS step above would change it).
+- Actions stay the only writers of the game state. A shortcut for small writes (a `free: [...]` list) is open, but no game has
   asked for one.
-- **Allowing a field write in `useUnmount`** (refused today, `TSE1402`) is open.
+- Allowing a field write in `useUnmount` (refused today, `TSE1402`) is open.

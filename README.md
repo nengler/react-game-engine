@@ -43,7 +43,7 @@ callback props. [Hearth](packages/hearth) is built that way: its enemies, towers
 tested alone with [`@tsengine/testing`](packages/testing), as React Testing Library tests one component. Plain functions in `.ts`
 files are for what you would extract in React too: tables, pure calculations, and code a search runs thousands of times.
 
-UI is laid out, not placed by hand. A `<Hud>` stays on screen while the camera moves, and a `<Flex>` in it places its
+UI is laid out with `<Flex>`. A `<Hud>` stays on screen while the camera moves, and a `<Flex>` in it places its
 children in a row or a column (see [docs/LAYOUT.md](docs/LAYOUT.md)):
 
 ```tsx

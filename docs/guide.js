@@ -370,12 +370,11 @@
       ["TSE1101", "A hook, or a custom hook, not called as a statement of the component body."],
       ["TSE1102", "An unknown <code>use*</code> call. For <code>onUpdate</code>, <code>onInput</code> or <code>onCollisionEnter</code> called as a hook, the message names its replacement; for <code>useEffect</code>, it says what to write instead."],
       ["TSE1103", "<code>useMutable</code> not in the form <code>const s = useMutable({ a: 0 })</code>, or a name declared twice."],
-      ["TSE1104", "State type the compiler cannot infer. Give arrays and records a type argument."],
+      ["TSE1104", "A <code>useMutable</code> field whose type the compiler cannot infer. Give it with <code>as</code>: <code>spawns: [] as Spawn[]</code>."],
       ["TSE1106", "<code>ref={…}</code> on an element: what is on screen follows state and props."],
       ["TSE1107", "<code>useSound</code> with a non-literal path, or a name already taken."],
       ["TSE1108", "A <code>useGame</code> selector that is not a valid path, or a bad import from <code>.ts</code>."],
-      ["TSE1109", "A <code>GameState.ts</code> the compiler cannot read."],
-      ["TSE1303", "A non-constant initial state. Not reported: an initial value may read state declared above it."]]],
+      ["TSE1109", "A <code>GameState.ts</code> the compiler cannot read."]]],
     ["JSX and props", [
       ["TSE1201", "An unknown component tag."],
       ["TSE1202", "An unsupported JSX child (text, fragment, arbitrary expression)."],
@@ -390,12 +389,9 @@
     ["Expressions and handlers", [
       ["TSE1301", "An unsupported expression."],
       ["TSE1302", "An unknown identifier."],
-      ["TSE1304", "<code>input</code> or <code>other</code> read outside a handler."],
       ["TSE1305", "A sound function called outside a handler."],
       ["TSE1401", "An invalid handler (wrong parameters, redeclaration, rebinding <code>Math</code>)."],
-      ["TSE1402", "An unsupported statement, an assignment to anything but a <code>useMutable</code> field or a <code>let</code>, or writing a field in <code>useUnmount</code>."],
-      ["TSE1403", "A duplicate handler where only one is allowed."],
-      ["TSE1404", "Conflicting writes to one ref."]]],
+      ["TSE1402", "An unsupported statement, an assignment to anything but a <code>useMutable</code> field or a <code>let</code>, or writing a field in <code>useUnmount</code>."]]],
     ["Scenes", [
       ["TSE1501", "A scene that is not valid JSON."],
       ["TSE1502", "A scene with the wrong shape."],
@@ -408,7 +404,12 @@
       ["TSE1509", "A Tiled import problem."]]],
     ["Type checks", [
       ["TSE9001", "A type error in generated code, reported at the line of the <code>.tsx</code> it was written for (and where it was found in the generated file)."],
-      ["TSE9002", "A type error in your TSX source."]]]
+      ["TSE9002", "A type error in your TSX source."]]],
+    ["Retired codes (never reported, never reused)", [
+      ["TSE1105", "<code>useTransform</code>. Place an element with its <code>x</code> and <code>y</code> props, or <code>transform={{ … }}</code>."],
+      ["TSE1204", "Props on a local or imported component. They are allowed."],
+      ["TSE1303", "A non-constant initial state. An initial value may read state declared above it."],
+      ["TSE1403", "A duplicate handler. A component may have several of one kind; they run in source order."]]]
   ];
   var dh = "";
   DIAG.forEach(function (g) {

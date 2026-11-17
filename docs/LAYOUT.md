@@ -108,8 +108,9 @@ One prop per axis, as in CSS and Clay. The compiler checks a literal through the
   kinds of tree cannot promise that, and are laid out every frame as before: one with an `overflow="scroll"` box in it (the
   wheel, a scroll bar and the focus move its children without a stamp), and one with a hand-written class that overrides
   `onInput` or `onUpdate` in it or above it (its hook may write to itself and to anything under it, and report nothing: the
-  rule draw records follow). The first frame that could keep a layout looks through the tree for those, once. `retain: false` keeps nothing; `retain: "check"` lays every kept root out after all and
-  throws when that moves or resizes anything (`FrameBuilder.keptLayouts` counts them, for tests).
+  rule draw records follow). The first frame that could keep a layout looks through the tree for those, once. `retain: false`
+  keeps nothing; `retain: "check"` lays every kept root out after all and throws when that moves or resizes anything
+  (`FrameBuilder.keptLayouts` counts them, for tests).
 
 ## How each child is measured
 
@@ -219,12 +220,12 @@ hovered or focused (or as `show` says).
 `wrap` on a row is an inventory grid: children keep their size and fall into lines, as CSS's `flex-wrap: wrap` without the parts
 that need a second sizing pass.
 
-- **Lines come from the settled widths**: a child starts a new line when it and the gap before it would not fit in what is left,
+- Lines come from the settled widths: a child starts a new line when it and the gap before it would not fit in what is left,
   unless it is first on its line. Along the row the box prefers one line, and its minimum is its widest child, so a parent short
   of room can narrow it and it wraps more. Its height is the lines stacked, with `rowGap` between.
-- **Children do not grow or shrink along a wrapping row** (CSS's per-line `flex-grow` is not here). Across, a stretching or
+- Children do not grow or shrink along a wrapping row (CSS's per-line `flex-grow` is not here). Across, a stretching or
   growing child fills its line's height.
-- **Each line is placed on its own**: `justifyContent` over the line's free space, so a short last line is not spread like a full
+- Each line is placed on its own: `justifyContent` over the line's free space, so a short last line is not spread like a full
   one; `alignItems` within the line's height.
 - `columnGap` is between a line's children, `rowGap` between lines (for a column, `rowGap` is between its children).
 - A wrapping column is warned of and laid out as one line: it would need the heights before the widths.
@@ -234,18 +235,18 @@ that need a second sizing pass.
 `overflow="hidden"` clips to the box; `"scroll"` also scrolls with the wheel. This uses ABI v2's scissor record, which is in target
 pixels, ignores the view and does not nest, so the player does the rest:
 
-- **A clip is a property of a draw record, like its z.** The walk tags each record with its innermost clipping box. After the z
+- A clip is a property of a draw record, like its z. The walk tags each record with its innermost clipping box. After the z
   sort, each box's corners go through the layer's final view to a pixel rectangle, cut down to the box around it, and a
   `SCISSOR` record is written wherever the clip changes (and a `SCISSOR_END` where it stops and at the end of a layer). A child's
   own z cannot lift it out of its clip. A turned box clips to the rectangle around it; a box with a border clips inside it, as
   CSS clips to the padding box.
-- **Layout:** a scroll box's children do not shrink, and it asks its parent for no more than its edges, so it can be squeezed.
+- A scroll box's children do not shrink, and it asks its parent for no more than its edges, so it can be squeezed.
   Positioning records where the children end (`box.contentEnd`) and so how far it can scroll (`box.scrollMax`), clamps
   `scrollX` / `scrollY` and moves the children by them. `scrollY={9999}` keeps a log at its end.
-- **The mouse:** a press or hover inside a clipping box must also be inside every box that clips it. The wheel goes to the topmost
+- A press or hover inside a clipping box must also be inside every box that clips it. The wheel goes to the topmost
   scroll box under the mouse that can still move that way (vertical first), and a box at its end passes it on. A notch is 32
   pixels.
-- **Scroll bars and focus:** a scroll box draws a thin bar along each axis it overflows, outside its own clip. When the focus
+- A scroll box draws a thin bar along each axis it overflows, outside its own clip. When the focus
   moves to something inside a scroll box, it scrolls just enough to show it, once per change.
 
 ## Nine-slice backgrounds
@@ -336,7 +337,6 @@ none), and Alt + Enter always (`tse_set_fullscreen`, a borderless window at the 
 | Text wrapped by the width layout gives it (a `Text` reporting its widest word as its minimum, so boxes can shrink) | A dialogue box or label that must fit a growing box without a hand-set `maxWidth` |
 | Aspect-ratio boxes | A portrait or minimap frame that keeps its shape while growing |
 | Layout transitions (size and position animated) | A menu that should slide or resize smoothly; `transform` can be animated today |
-| Caching the layout of unchanged subtrees | A menu of hundreds of items showing up in the bench |
 | Wrapping columns, `align-content`, per-line growing, a `Grid` | A layout a wrapping row of fixed-size children cannot express |
 | Dragging a scroll bar or the content; Shift + wheel for the other axis | A long list on a mouse without a horizontal wheel |
 | Tiled (not stretched) nine-slice edges, a corner scale, a tint | A skin that does not stretch well |
