@@ -143,6 +143,39 @@ describe("a layout that is kept", () => {
     }
   });
 
+  it("is never kept under a hand-written class with a per-tick hook: the hook may write to what is below it and report nothing", () => {
+    /** A scene class of the hand-written kind: it sets its HUD's label from its update, with no `markChanged`. */
+    class Scene extends Entity {
+      label: Text | null = null;
+      #gold = 5;
+      override onUpdate(): void {
+        this.#gold *= 10;
+        if (this.label !== null) this.label.text = `GOLD ${this.#gold}`;
+      }
+    }
+    const world = new World();
+    const root = new Scene();
+    const hud = new Hud();
+    const row = new Flex({ direction: "row", gap: 4 });
+    const left = new Text({ text: "GOLD 5", size: 10 });
+    const right = new Text({ text: "WAVE 1", size: 10 });
+    row.addChild(left);
+    row.addChild(right);
+    hud.addChild(row);
+    root.addChild(hud);
+    root.label = left;
+    world.mount(root);
+    const builder = builderFor();
+    let last = 0;
+    for (let i = 0; i < 4; i++) {
+      world.tick(1 / 60);
+      builder.build(world.root, 320, 180);
+      assert.equal(builder.keptLayouts, 0);
+      assert.ok(right.layoutX > last, "the second label is pushed along as the first grows by a digit");
+      last = right.layoutX;
+    }
+  });
+
   it("is found out by check mode when something under it changed without saying so", () => {
     const { world, left } = scene();
     const builder = builderFor("check");

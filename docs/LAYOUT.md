@@ -107,8 +107,8 @@ One prop per axis, as in CSS and Clay. The compiler checks a literal through the
   that stands still costs its walk and no layout (a still panel of 100 rows went from 0.25 to 0.09 ms a frame in the bench). Two
   kinds of tree cannot promise that, and are laid out every frame as before: one with an `overflow="scroll"` box in it (the
   wheel, a scroll bar and the focus move its children without a stamp), and one with a hand-written class that overrides
-  `onInput` or `onUpdate` in it (its hook may resize it and report nothing). The first frame that could keep a layout looks
-  through the tree for those, once. `retain: false` keeps nothing; `retain: "check"` lays every kept root out after all and
+  `onInput` or `onUpdate` in it or above it (its hook may write to itself and to anything under it, and report nothing: the
+  rule draw records follow). The first frame that could keep a layout looks through the tree for those, once. `retain: false` keeps nothing; `retain: "check"` lays every kept root out after all and
   throws when that moves or resizes anything (`FrameBuilder.keptLayouts` counts them, for tests).
 
 ## How each child is measured

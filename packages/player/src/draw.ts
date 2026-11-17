@@ -1036,7 +1036,7 @@ interface LaidOut {
   width: number;
   height: number;
   font: string | undefined;
-  /** `LAYOUT_UNSEEN` until a frame first wants to keep the layout and looks (`#keepsLayout`), then `LAYOUT_KEPT` or `LAYOUT_REDONE`. */
+  /** `LAYOUT_UNSEEN` until a frame first wants to keep the layout and looks (`keepsLayout`), then `LAYOUT_KEPT` or `LAYOUT_REDONE`. */
   keeps: number;
 }
 const LAYOUT_UNSEEN = 0;
@@ -1055,6 +1055,16 @@ function keepsLayout(object: GameObject): boolean {
   const children = object.children;
   for (let i = 0; i < children.length; i++) if (!keepsLayout(children[i] as GameObject)) return false;
   return true;
+}
+
+/**
+ * Whether `object` is under a hand-written class with a per-tick hook. Such a hook may write to anything below it and report
+ * nothing (a scene class that sets its HUD's texts each update), which is why no draw record under one is reused, and why no
+ * layout under one is kept. Asked every frame, as an object can be moved under one without a stamp of its own.
+ */
+function underHooked(object: GameObject): boolean {
+  for (let up = object.parent; up !== null; up = up.parent) if ((kindCode(up) & FLAG_HOOKED) !== 0) return true;
+  return false;
 }
 
 /** `object.worldTransform()` for an object whose parent's child space is `parentSpace`: what the walk works out on its way down. */
@@ -2222,7 +2232,8 @@ export class FrameBuilder {
     if (!(parent instanceof Flex)) {
       // A layout is a function of what is under the root, the box it is given and the game's font. Everything under the root that
       // changes says so with a stamp (the same stamps draw records are reused by), so a root with no stamp since the build that laid
-      // it out is still laid out right, and a HUD that stands still costs no layout. Not every tree can promise that: `keepsLayout`.
+      // it out is still laid out right, and a HUD that stands still costs no layout. Not every tree can promise that: `keepsLayout`
+      // and `underHooked`.
       const serial = this.#serial;
       const note = flex.box.laidOut as LaidOut | null;
       if (
@@ -2234,7 +2245,8 @@ export class FrameBuilder {
         note.height === availableHeight &&
         note.font === this.font &&
         (note.keeps === LAYOUT_KEPT ||
-          (note.keeps === LAYOUT_UNSEEN && (note.keeps = keepsLayout(flex) ? LAYOUT_KEPT : LAYOUT_REDONE) === LAYOUT_KEPT))
+          (note.keeps === LAYOUT_UNSEEN && (note.keeps = keepsLayout(flex) ? LAYOUT_KEPT : LAYOUT_REDONE) === LAYOUT_KEPT)) &&
+        !underHooked(flex)
       ) {
         this.#keptLayouts++;
         if (this.#options.retain === "check") this.#checkLayout(flex, availableWidth, availableHeight);
