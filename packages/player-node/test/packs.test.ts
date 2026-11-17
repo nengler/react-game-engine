@@ -2,7 +2,7 @@
 // no TypeScript source, nothing from the repository's node_modules. (Slow: it runs npm install.)
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -77,6 +77,15 @@ test("the packs install into an empty project and every entry point imports unde
       assert.ok(path.includes(join("node_modules", "@tsengine", "native", "lib")), `libtse came from ${path}`);
     }
     for (const entry of entries) assert.ok((counts[entry] ?? 0) > 0, `${entry} exports nothing`);
+    // What the command line runs again as itself (`screenshot --gpu` under xvfb-run, `check`'s previews) is a file the pack
+    // ships: the installed cli has dist/*.js and no src/cli.ts.
+    writeFileSync(
+      join(project, "self.mjs"),
+      `import { cliScript } from "./node_modules/@tsengine/cli/dist/run.js";\nconsole.log(cliScript());\n`
+    );
+    const self = execFileSync("node", ["self.mjs"], { cwd: project, encoding: "utf8" }).trim();
+    assert.equal(self, join(realpathSync(project), "node_modules", "@tsengine", "cli", "dist", "cli.js"));
+    assert.ok(existsSync(self), `${self} is not in the installed pack`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
