@@ -6,6 +6,7 @@ import { devCommand } from "./commands/dev.ts";
 import { mcpCommand } from "./commands/mcp.ts";
 import { packageCommand } from "./commands/package.ts";
 import { previewCommand } from "./commands/preview.ts";
+import { renderServerCommand } from "./commands/render-server.ts";
 import { screenshotCommand } from "./commands/screenshot.ts";
 import { sessionCommand } from "./commands/session.ts";
 /**
@@ -59,6 +60,8 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await sessionCommand(rest);
       case "mcp":
         return await mcpCommand(rest);
+      case "render-server": // tse session's screenshots; not for people
+        return await renderServerCommand(rest);
       case "create":
         return createCommand(rest);
       case "lsp": {

@@ -4,14 +4,23 @@
  * names the game states by their export names, and can compile and load the game again (`reload`) and play the same input with
  * the new code.
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { createInterface } from "node:readline";
+import type { Duplex } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { Session, type InputBindings, type PlayerConfig, type ScriptOptions, type Until } from "@tsengine/player";
+import {
+  packFrames,
+  Session,
+  type InputBindings,
+  type InputFrame,
+  type PlayerConfig,
+  type ScriptOptions,
+  type Until,
+} from "@tsengine/player";
 import { compileArgs, readGameSettings } from "@tsengine/player-node";
 import { GameStore, type DescribeOptions } from "@tsengine/runtime";
 
@@ -66,7 +75,14 @@ export const COMMANDS: Readonly<Record<string, { readonly args: string; readonly
   restore: { args: "name", does: "go back to a snapshot (fast; a built-in's own state, timers and particles start afresh)" },
   replay: { args: "", does: "start again and play this run's input from the start (exact)" },
   reset: { args: "", does: "start the game again from nothing" },
-  reload: { args: "", does: "compile the game, load the new code, and play this run's input again with it" },
+  reload: {
+    args: "",
+    does: "compile the game, load the new code, and play this run's input again with it; snapshots are kept, and a restore plays their input with the new code",
+  },
+  "save-test": {
+    args: "name, path?",
+    does: "write this run as a test (default test/session-<name>.test.ts): its input played again must end with the same game state, watched values and texts; the test is run once to check it passes",
+  },
   hash: { args: "", does: "a number for the game's state now: equal states hash equal (check that two ways to a moment agree)" },
   screenshot: {
     args: "out?, scale?",
@@ -94,6 +110,13 @@ export class SessionServer {
   readonly name: string;
   #version = 0;
   #session: Session | null = null;
+  /** The game states the session names, by export name, with the file that exports each: what a saved test imports. */
+  #storeFiles: [string, string][] = [];
+  /** The renderer of `screenshot`, and the input it has played. */
+  #renderer: RenderClient | null = null;
+  #rendered: InputFrame[] = [];
+  /** Whether game.ts exports `bindings`. */
+  #hasBindings = false;
 
   private constructor(gameDir: string) {
     this.gameDir = gameDir;
@@ -153,16 +176,26 @@ export class SessionServer {
     if (mod.gameConfig === undefined) throw new RequestError("game.ts does not export gameConfig.");
     // The game states, by export name: in the .ts files of src that make one.
     const storeNames = new Map<GameStore<unknown>, string>();
+    const storeFiles: [string, string][] = [];
     const src = join(this.gameDir, readGameSettings(this.gameDir).src ?? "src");
     for (const file of tsFiles(src)) {
       if (!readFileSync(file, "utf8").includes("createGameState")) continue;
       const exports = (await import(pathToFileURL(file).href)) as Record<string, unknown>;
       for (const [name, value] of Object.entries(exports)) {
         const store = (value as { store?: unknown } | null)?.store;
-        if ((typeof value === "function" || typeof value === "object") && store instanceof GameStore) storeNames.set(store, name);
+        if ((typeof value === "function" || typeof value === "object") && store instanceof GameStore) {
+          storeNames.set(store, name);
+          storeFiles.push([name, file]);
+        }
       }
     }
+    this.#storeFiles = storeFiles;
+    this.#hasBindings = mod.bindings !== undefined;
     this.#session?.close();
+    // The renderer runs the code it loaded: a new build needs a new one.
+    this.#renderer?.close();
+    this.#renderer = null;
+    this.#rendered = [];
     this.#session = new Session(mod.gameConfig, {
       ...(mod.bindings ? { bindings: mod.bindings } : {}),
       ...(mod.screen ? { screen: mod.screen } : {}),
@@ -312,68 +345,173 @@ export class SessionServer {
         return {};
       case "reload": {
         const history = [...session.history];
+        const snapshots = session.snapshotInputs();
         this.#compile();
         await this.#load();
+        this.session.adoptSnapshots(snapshots);
         this.session.play(history);
         this.session.takeLog();
         return { steps: history.length };
       }
+      case "save-test":
+        return this.#saveTest(request);
       case "hash":
         return { hash: session.hash() };
       case "screenshot":
-        return this.#screenshot(request);
+        return await this.#screenshot(request);
       default:
         throw new RequestError(`Unknown command '${request.cmd}'. The commands: ${Object.keys(COMMANDS).join(", ")}.`);
     }
   }
 
-  /** Draw the game as it is now: its run's input played again through the headless renderer, in a process of its own. */
-  #screenshot(request: SessionRequest): Record<string, unknown> {
+  /**
+   * Write this run as a test: its input, played again from the start, must end with the same game state, the same values of what is
+   * watched and the same texts on screen. The test is run once to check it passes (a run that does not repeat fails here).
+   */
+  #saveTest(request: SessionRequest): Record<string, unknown> {
+    const session = this.session;
+    const name = request["name"];
+    if (typeof name !== "string" || name.trim() === "") throw new RequestError('save-test needs "name": what the test checks, in words.');
+    const slug =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "session";
+    const path =
+      typeof request["path"] === "string" ? resolve(this.gameDir, request["path"]) : join(this.gameDir, "test", `session-${slug}.test.ts`);
+    const from = (file: string): string => {
+      const rel = relative(dirname(path), file).split(sep).join("/");
+      return rel.startsWith(".") ? rel : `./${rel}`;
+    };
+    const watched = session.watching.map((p) => [p, session.valueOf(p)] as const);
+    const imports = this.#storeFiles.map(([store, file]) => `import { ${store} } from "${from(file)}";`);
+    const storeNames = this.#storeFiles.map(([store]) => `[${store}.store, "${store}"]`).join(", ");
+    const options = [...(this.#hasBindings ? ["bindings"] : []), ...(storeNames === "" ? [] : [`storeNames: new Map([${storeNames}])`])];
+    const packed = packFrames(session.history);
+    const lines = [
+      `/** Written by \`tse session\` (save-test) at frame ${session.frame}: the run's input, played again from the start, must end as it did. */`,
+      'import assert from "node:assert/strict";',
+      'import { test } from "node:test";',
+      "",
+      'import { Session, unpackFrames } from "@tsengine/player";',
+      "",
+      `import { ${this.#hasBindings ? "bindings, " : ""}gameConfig } from "${from(join(this.gameDir, "game.ts"))}";`,
+      ...imports,
+      "",
+      `const frames = unpackFrames([\n${packed.map((f) => `  ${JSON.stringify(f)},`).join("\n")}\n] as const);`,
+      "",
+      "/** A value as plain data, as it was written here: what a class instance holds, without its class. */",
+      "const data = (value: unknown): unknown => JSON.parse(JSON.stringify(value ?? null)) as unknown;",
+      "",
+      `test(${JSON.stringify(name)}, () => {`,
+      `  const session = new Session(gameConfig${options.length > 0 ? `, { ${options.join(", ")} }` : ""});`,
+      "  try {",
+      "    session.play(frames);",
+      `    assert.equal(session.frame, ${session.frame});`,
+      `    assert.deepEqual(data(session.gameState()), ${JSON.stringify(session.gameState())});`,
+      ...watched.map(([p, v]) => `    assert.deepEqual(data(session.valueOf(${JSON.stringify(p)})), ${JSON.stringify(v ?? null)});`),
+      `    assert.deepEqual(session.texts(), ${JSON.stringify(session.texts())});`,
+      "  } finally {",
+      "    session.close();",
+      "  }",
+      "});",
+      "",
+    ];
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, lines.join("\n"));
+    // Under an outer `node --test`, NODE_TEST_CONTEXT would make this run report to it instead of printing.
+    const { NODE_TEST_CONTEXT: _outer, ...env } = process.env;
+    const ran = node(["--enable-source-maps", "--test", path], this.gameDir, env);
+    return {
+      path,
+      frames: session.history.length,
+      passes: ran.ok,
+      ...(ran.ok ? {} : { output: ran.output.trim().split("\n").slice(-30).join("\n") }),
+    };
+  }
+
+  /**
+   * Draw the game as it is now. A renderer process of its own (`tse render-server`) plays the run's input through the headless
+   * renderer, so the session's world is untouched; it is kept between pictures and sent only the frames since the last one. When the
+   * run's input is no longer what it was sent (a restore, a replay, a reset), or the game was reloaded, it starts again.
+   */
+  async #screenshot(request: SessionRequest): Promise<Record<string, unknown>> {
     const session = this.session;
     const library = findLibrary("headless");
     if (library === null)
       throw new RequestError(
         "screenshot needs the headless libtse (in this repository `npm run native:build:headless`; a game gets it from @tsengine/native)."
       );
-    const history = session.history.length > 0 ? session.history : [{}];
-    const work = mkdtempSync(join(tmpdir(), "tse-session-"));
-    try {
-      const framesFile = join(work, "frames.json");
-      writeFileSync(framesFile, JSON.stringify(history));
-      const out = typeof request["out"] === "string" ? resolve(request["out"]) : resolve("shots");
-      const target = out.endsWith(".png") ? out : join(out, `frame-${session.frame}.png`);
-      const shotsDir = join(work, "shots");
-      mkdirSync(shotsDir);
-      const scale = typeof request["scale"] === "number" ? String(request["scale"]) : "1";
-      const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
-      const r = spawnSync(
-        process.execPath,
-        [
-          cli,
-          "screenshot",
-          this.gameDir,
-          "--frames-file",
-          framesFile,
-          "--at",
-          String(history.length - 1),
-          "--out",
-          shotsDir,
-          "--scale",
-          scale,
-        ],
-        { cwd: this.gameDir, encoding: "utf8", env: { ...process.env, TSE_NATIVE_LIB: library } }
-      );
-      if (r.status !== 0) throw new RequestError(`screenshot failed:\n${`${r.stdout}${r.stderr}`.trim()}`);
-      mkdirSync(resolve(target, ".."), { recursive: true });
-      writeFileSync(target, readFileSync(join(shotsDir, `step-${history.length - 1}.png`)));
-      return { path: target };
-    } finally {
-      rmSync(work, { recursive: true, force: true });
+    const history = session.history;
+    const sent = this.#rendered;
+    const same =
+      sent.length <= history.length &&
+      sent.every((frame, i) => frame === history[i] || JSON.stringify(frame) === JSON.stringify(history[i]));
+    if (this.#renderer === null || !same) {
+      this.#renderer?.close();
+      this.#renderer = new RenderClient(this.gameDir, library);
+      this.#rendered = [];
     }
+    const fresh = history.slice(this.#rendered.length);
+    const out = typeof request["out"] === "string" ? resolve(request["out"]) : resolve("shots");
+    const target = out.endsWith(".png") ? out : join(out, `frame-${session.frame}.png`);
+    mkdirSync(dirname(target), { recursive: true });
+    const scale = typeof request["scale"] === "number" ? request["scale"] : 1;
+    await this.#renderer.ask({ play: packFrames(fresh), shot: target, scale });
+    this.#rendered = [...history];
+    return { path: target };
   }
 
   close(): void {
     this.#session?.close();
+    this.#renderer?.close();
+  }
+}
+
+/** A `tse render-server` process, asked a request at a time. */
+class RenderClient {
+  readonly #child: ChildProcess;
+  readonly #channel: Duplex;
+  readonly #answers: ((line: string | null) => void)[] = [];
+  #stderr = "";
+
+  constructor(gameDir: string, library: string) {
+    const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
+    // Requests and answers go over a pipe of their own (fd 3): see `tse render-server`.
+    this.#child = spawn(process.execPath, [cli, "render-server", gameDir], {
+      cwd: gameDir,
+      env: { ...process.env, TSE_NATIVE_LIB: library },
+      stdio: ["ignore", "ignore", "pipe", "pipe"],
+    });
+    this.#channel = this.#child.stdio[3] as Duplex;
+    this.#child.stderr?.on("data", (chunk: Buffer) => {
+      this.#stderr = (this.#stderr + chunk.toString()).slice(-4000);
+    });
+    createInterface({ input: this.#channel }).on("line", (line) => this.#answers.shift()?.(line));
+    this.#child.on("close", () => {
+      for (const answer of this.#answers.splice(0)) answer(null);
+    });
+  }
+
+  ask(request: unknown): Promise<void> {
+    return new Promise((done, fail) => {
+      this.#answers.push((line) => {
+        if (line === null) return fail(new RequestError(`screenshot: the renderer stopped.\n${this.#stderr.trim()}`));
+        let answer: { ok: boolean; error?: string };
+        try {
+          answer = JSON.parse(line) as typeof answer;
+        } catch {
+          return fail(new RequestError(`screenshot: the renderer said something unreadable: ${line.slice(0, 200)}`));
+        }
+        if (answer.ok) done();
+        else fail(new RequestError(`screenshot failed: ${answer.error}`));
+      });
+      this.#channel.write(`${JSON.stringify(request)}\n`);
+    });
+  }
+
+  close(): void {
+    this.#channel.end();
   }
 }
 
@@ -411,6 +549,7 @@ const MAIN_ARG: Readonly<Record<string, string>> = {
   snapshot: "name",
   press: "query",
   watch: "path",
+  "save-test": "name",
   unwatch: "path",
   restore: "name",
   screenshot: "out",

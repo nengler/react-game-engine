@@ -221,6 +221,18 @@ a request a line, and `tse mcp` as MCP tools (`packages/cli/src/session-server.t
 `tse screenshot --frames-file` in a process of its own, so the session's world is untouched. What a session reads as text is
 `describeScene` / `sceneText` in the runtime.
 
+Playing Hearth and Kite through it as an agent would (2026-11-17) added what that found missing. `map` (`sceneMap`) draws the
+tilemaps a character a tile, `#` for solid and the other tiles by how common they are, with the things marked by letter; a character
+covering several tiles is solid when most of them are. `press` clicks a thing by name through `Player.views` (last frame's world and
+HUD views, the screen's placement and the pressables): the inverse of how a click is taken back, played as two input frames so a
+replay has it. Every answer carries `SessionLog`: components that came and went, game-state leaves that changed and texts that
+appeared, a line a frame, with a kind that happens more than five times in one answer counted instead, sounds counted, and the
+changes of `watch`ed values. `reload` hands its snapshots on as input (`adoptSnapshots`), made when first restored by playing it with
+the new code. `save-test` writes the run as a `node:test` file (`packFrames` keeps a run of equal frames once) and runs it. A
+screenshot goes to a `tse render-server` process kept beside the session, sent only the frames since its last picture and drawing
+only the last of them (a picture at frame 1300 went from 11 s to under 0.1 s, pixel for pixel the same); it speaks over fd 3,
+because the native renderer's start reads stdin and raylib logs to stdout.
+
 ### The Node dev host (`@tsengine/player-node`)
 
 - `ffi.ts` is the only file that imports koffi. It finds the library (`TSE_NATIVE_LIB`, else the prebuilt one in `@tsengine/native`, else

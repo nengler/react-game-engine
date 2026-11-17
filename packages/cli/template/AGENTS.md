@@ -36,7 +36,7 @@ Run `npx tse check` before saying a change is done. Compiler errors are `TSE` co
 line of JSON on stdout. The game only moves when you play input or step it (60 steps a second of game time).
 
 ```sh
-printf '%s\n' 'input right*30, _*10' 'observe components' 'state Hero' 'snapshot here' quit | npx tse session
+printf '%s\n' 'input right*30, _*10' 'map' 'observe components' 'press StartButton' 'watch Hero.s.hp' 'step 600' quit | npx tse session
 ```
 
 | Request | Does |
@@ -44,13 +44,24 @@ printf '%s\n' 'input right*30, _*10' 'observe components' 'state Hero' 'snapshot
 | `input right*30, jump, _*10` | play an input script, one step a frame |
 | `step 60`, or `{"cmd":"step","until":{"text":"GAME OVER"},"maxSteps":600}` | run steps with nothing pressed, or until something holds |
 | `observe` / `observe components` | the scene as text: every object, its world position, texts, colliders, props and state, plus the game state |
+| `map` / `map Hero` | the level drawn in characters, a tile each (`#` solid, other tiles by symbol, with a legend), the game's things marked by letter with their positions |
+| `press StartButton` / `press Pad[key=7]` | click a thing by name, as a player would (2 steps); the error lists what can be pressed |
+| `watch Play.s.lives` | follow a value: every answer then lists its changes with their frames |
 | `state` / `state Hero` | the game state, or every `Hero`'s position and state |
 | `texts` | every `<Text>` on screen |
 | `snapshot name` / `restore name` | keep the game as it is, and go back to it |
-| `reload` | compile the changed source and play this run's input again with the new code |
+| `reload` | compile the changed source and play this run's input again with the new code (snapshots are kept) |
+| `save-test wave one leaks one enemy` | write this run as a test in `test/` (its input played again must end the same) and run it once |
 | `replay` / `reset` / `hash` | play the run again exactly / start over / a number for the state (equal states, equal hashes) |
 | `screenshot shots/now.png` | draw the game as it is now to a PNG (needs the headless libtse from @tsengine/native) |
 | `help` | every command and its arguments |
+
+Every answer also says what happened since the last one: `events` a line a frame (things that came and went, game-state changes,
+new texts), `often` (what happened too often to list, counted), `sounds`, and the changes to watched values. A long `step` therefore
+tells you what happened in it, not only how it ended.
+
+The usual loop for a bug: play to it (`input`, `step` with `until`), `watch` the value that goes wrong, find the frame, fix the
+source, `reload` (the same input plays with the new code), check the value, then `save-test` so it stays fixed.
 
 A request is a JSON object (`{"cmd": "input", "script": "right*30"}`) or a command and its argument as words. `until` takes
 `{"text"}`, `{"gone"}`, `{"component", "path"?, "equals"|"not"|"above"|"below", "absent"?}`, or `{"path", …}` on the game state

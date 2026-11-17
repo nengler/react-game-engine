@@ -94,6 +94,13 @@ const SCHEMAS: Readonly<Record<string, Record<string, unknown>>> = {
   replay: schema(),
   reset: schema(),
   reload: schema(),
+  "save-test": schema(
+    {
+      name: str("What the test checks, in words: its title, and the file's name."),
+      path: str("Where to write it, from the game's folder (default test/session-<name>.test.ts)."),
+    },
+    ["name"]
+  ),
   hash: schema(),
   screenshot: schema({
     out: str("Where to write the PNG (a folder or a .png path); default ./shots in the game's folder."),
@@ -104,7 +111,7 @@ const SCHEMAS: Readonly<Record<string, Record<string, unknown>>> = {
 export function mcpTools(): Tool[] {
   return Object.entries(COMMANDS)
     .filter(([cmd]) => cmd !== "help")
-    .map(([cmd, { does }]) => ({ name: `game_${cmd}`, description: does, inputSchema: SCHEMAS[cmd] ?? schema() }));
+    .map(([cmd, { does }]) => ({ name: `game_${cmd.replaceAll("-", "_")}`, description: does, inputSchema: SCHEMAS[cmd] ?? schema() }));
 }
 
 /** An answer as text a model reads easily: long strings (the scene) as they are, everything else as JSON. */
@@ -151,7 +158,7 @@ export async function mcpCommand(args: readonly string[]): Promise<number> {
     (JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version?: string }).version ?? "0.0.0";
 
   const call = async (name: string, input: Record<string, unknown>): Promise<Record<string, unknown>> => {
-    const cmd = name.startsWith("game_") ? name.slice(5) : name;
+    const cmd = (name.startsWith("game_") ? name.slice(5) : name).replaceAll("_", "-");
     if (!(cmd in COMMANDS) || cmd === "help") return { content: [{ type: "text", text: `No tool called ${name}.` }], isError: true };
     let game: SessionServer;
     try {

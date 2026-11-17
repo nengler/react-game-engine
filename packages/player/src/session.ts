@@ -127,6 +127,8 @@ export class Session {
   #mouse: { x: number; y: number } | undefined;
   #warnings: string[] = [];
   readonly #snapshots = new Map<string, SessionSnapshot>();
+  /** Snapshots known only by the input that led to them (from another build of the game): `restore` replays it. */
+  readonly #pending = new Map<string, readonly InputFrame[]>();
   readonly #log = new SessionLog();
 
   constructor(config: PlayerConfig, options: SessionOptions = {}) {
@@ -459,6 +461,7 @@ export class Session {
 
   /** Keep the game as it is now under `name`, to `restore` later. */
   snapshot(name: string): void {
+    this.#pending.delete(name);
     const root = this.#root();
     const hot = new Map<string, Record<string, unknown>>();
     if (root !== null) for (const [path, saved] of captureHotState(root)) hot.set(path, copyState(saved));
@@ -476,7 +479,28 @@ export class Session {
 
   /** The snapshots kept, by name, with the frame each was taken at. */
   snapshots(): { name: string; frame: number }[] {
-    return [...this.#snapshots].map(([name, s]) => ({ name, frame: s.frame }));
+    return [
+      ...[...this.#snapshots].map(([name, s]) => ({ name, frame: s.frame })),
+      ...[...this.#pending].map(([name, history]) => ({ name, frame: history.length })),
+    ].sort((a, b) => a.frame - b.frame || a.name.localeCompare(b.name));
+  }
+
+  /** Each snapshot's input from the start: what another session (a reload's, with the new code) needs to make them again. */
+  snapshotInputs(): Map<string, readonly InputFrame[]> {
+    const out = new Map<string, readonly InputFrame[]>(this.#pending);
+    for (const [name, snapshot] of this.#snapshots) out.set(name, snapshot.history);
+    return out;
+  }
+
+  /**
+   * Take snapshots by the input that led to them (from `snapshotInputs` of a session of an older build). They are made when first
+   * restored: the game starts again and plays that input, so they hold what the new code does with it.
+   */
+  adoptSnapshots(inputs: ReadonlyMap<string, readonly InputFrame[]>): void {
+    for (const [name, history] of inputs) {
+      this.#snapshots.delete(name);
+      this.#pending.set(name, history);
+    }
   }
 
   /**
@@ -485,10 +509,24 @@ export class Session {
    * `replay` plays the same input from the start instead, which is exact.
    */
   restore(name: string): void {
+    const pending = this.#pending.get(name);
+    if (pending !== undefined) {
+      this.replay(pending);
+      this.#pending.delete(name);
+      this.snapshot(name);
+      this.#log.take();
+      return;
+    }
     const snapshot = this.#snapshots.get(name);
     if (snapshot === undefined)
       throw new Error(
-        `No snapshot called '${name}'${this.#snapshots.size > 0 ? ` (there are: ${[...this.#snapshots.keys()].join(", ")})` : ""}.`
+        `No snapshot called '${name}'${
+          this.snapshots().length > 0
+            ? ` (there are: ${this.snapshots()
+                .map((s) => s.name)
+                .join(", ")})`
+            : ""
+        }.`
       );
     for (const [store, values] of snapshot.stores) store.restore(structuredClone(values));
     const hot = new Map<string, Record<string, unknown>>();
@@ -556,6 +594,35 @@ function middleOf(object: GameObject & { contains(x: number, y: number): boolean
   const oy = typeof fields.originY === "number" ? fields.originY : 0;
   const middle = { x: t.x + (width / 2 - ox) * t.scaleX, y: t.y + (height / 2 - oy) * t.scaleY };
   return object.contains(middle.x, middle.y) ? middle : { x: t.x, y: t.y };
+}
+
+/** Input frames packed for a file: a run of equal frames is `[count, frame]`, one frame alone is itself. */
+export type PackedFrames = readonly (InputFrame | readonly [number, InputFrame])[];
+
+/** Pack frames for a file (a saved test, a replay): runs of the same frame are written once, with their count. */
+export function packFrames(frames: readonly InputFrame[]): PackedFrames {
+  const out: (InputFrame | [number, InputFrame])[] = [];
+  let previous = "";
+  for (const frame of frames) {
+    const text = JSON.stringify(frame);
+    const last = out.at(-1);
+    if (text === previous && last !== undefined) {
+      if (Array.isArray(last)) last[0]++;
+      else out[out.length - 1] = [2, last as InputFrame];
+    } else out.push(frame);
+    previous = text;
+  }
+  return out;
+}
+
+/** The frames `packFrames` packed. */
+export function unpackFrames(packed: PackedFrames): InputFrame[] {
+  const out: InputFrame[] = [];
+  for (const item of packed) {
+    if (Array.isArray(item)) for (let i = 0; i < (item[0] as number); i++) out.push(item[1] as InputFrame);
+    else out.push(item as InputFrame);
+  }
+  return out;
 }
 
 /** The value at a dotted path: `s.hp`, `enemies.length`, `towers.0.level`. */

@@ -22,10 +22,11 @@ After changing a section of the HTML guide (`docs/*.html`), run `node tools/docs
 ## Seeing a game without a window
 
 - `node packages/cli/src/cli.ts session packages/hearth`: a game driven a request a line on stdin, one JSON answer a line
-  (`input right*30`, `step 60`, `observe components`, `state Play`, `snapshot x`, `restore x`, `reload`, `screenshot`, `help`).
+  (`input right*30`, `step 60`, `observe components`, `map`, `press Pad[key=7]`, `watch Play.s.lives`, `state Play`, `snapshot x`,
+  `restore x`, `reload`, `save-test name`, `screenshot`, `help`). Every answer carries what happened since the last (`SessionLog`).
   `tse mcp` is the same as an MCP server. The core is `Session` in `packages/player/src/session.ts`.
 - `describeScene` / `sceneText` (`packages/runtime/src/describe.ts`): any tree as indented text, with world positions, texts,
-  colliders, props and state. `render(…).describe()` in a component test.
+  colliders, props and state. `render(…).describe()` in a component test. `sceneMap` (`map.ts`): the tilemaps as characters.
 - `runScript` (`packages/player/src/harness.ts`): a whole scripted run on a recording backend, observing each step.
 - `node packages/cli/src/cli.ts screenshot packages/demo --script "right*20" --at 19 --out /tmp/shots`: PNGs through the software
   renderer.

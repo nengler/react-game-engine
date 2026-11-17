@@ -50,7 +50,8 @@ function onPath(command: string): boolean {
   return spawnSync("sh", ["-c", `command -v ${command}`], { encoding: "utf8" }).status === 0;
 }
 
-function enlarge(pixels: Pixels, scale: number): Pixels {
+/** A picture `scale` times larger, each pixel a square of pixels. */
+export function enlarge(pixels: Pixels, scale: number): Pixels {
   if (scale <= 1) return pixels;
   const rgba = new Uint8Array(pixels.width * scale * pixels.height * scale * 4);
   const width = pixels.width * scale;

@@ -177,6 +177,41 @@ test("session: screenshot draws the game as it is now", { skip: findLibrary("hea
   assert.deepEqual([...readFileSync(out).subarray(1, 4)].map((c) => String.fromCharCode(c)).join(""), "PNG");
 });
 
+test(
+  "session: save-test writes the run as a test that passes, and screenshots draw only what is new",
+  { skip: findLibrary("headless") === null && "no headless libtse" },
+  () => {
+    const shots = join(root, "shots");
+    const answers = session(
+      [
+        "input right*20, Z",
+        "watch Hero",
+        '{"cmd":"save-test","name":"right then a step"}',
+        `{"cmd":"screenshot","out":${JSON.stringify(join(shots, "a.png"))}}`,
+        "snapshot here",
+        "input down*5",
+        `{"cmd":"screenshot","out":${JSON.stringify(join(shots, "b.png"))}}`,
+        "restore here",
+        `{"cmd":"screenshot","out":${JSON.stringify(join(shots, "c.png"))}}`,
+      ],
+      ["--no-build"]
+    );
+    const saved = answers[3]!;
+    assert.equal(saved["ok"], true, String(saved["error"]));
+    assert.equal(saved["passes"], true, String(saved["output"]));
+    const file = saved["path"] as string;
+    assert.equal(file, join(game, "test/session-right-then-a-step.test.ts"));
+    const text = readFileSync(file, "utf8");
+    assert.match(text, /import \{ useGame \} from "\.\.\/src\/GameState\.ts";/);
+    assert.match(text, /assert\.deepEqual\(data\(session\.gameState\(\)\), \{"useGame":\{"steps":1\}\}\);/);
+    assert.match(text, /assert\.deepEqual\(data\(session\.valueOf\("Hero"\)\), /, "what is watched is checked");
+    rmSync(file);
+    for (const at of [4, 7, 9]) assert.equal(answers[at]?.["ok"], true, String(answers[at]?.["error"]));
+    assert.deepEqual(readFileSync(join(shots, "a.png")), readFileSync(join(shots, "c.png")), "back at the same moment, the same picture");
+    assert.notDeepEqual(readFileSync(join(shots, "a.png")), readFileSync(join(shots, "b.png")));
+  }
+);
+
 test("mcp: initializes, lists the game's tools, and calls them", () => {
   const rpc = (id: number, method: string, params: object = {}): string => JSON.stringify({ jsonrpc: "2.0", id, method, params });
   const ran = tse(

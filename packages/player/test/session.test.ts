@@ -136,6 +136,28 @@ describe("Session", () => {
   });
 });
 
+describe("snapshots across builds", () => {
+  it("hands its snapshots on as input, and a session that adopts them makes each by playing it when restored", () => {
+    const first = new Session(config, { bindings });
+    first.input("right*5");
+    first.snapshot("early");
+    first.input("right*5, jump");
+    const inputs = first.snapshotInputs();
+    first.close();
+    const second = new Session(config, { bindings });
+    second.adoptSnapshots(inputs);
+    assert.deepEqual(second.snapshots(), [{ name: "early", frame: 5 }]);
+    second.input("right*30");
+    second.restore("early");
+    assert.equal(second.frame, 5);
+    assert.deepEqual(second.find("Walker")[0]?.state, { x: 10, typed: "" });
+    second.input("right");
+    second.restore("early");
+    assert.equal(second.frame, 5, "made once, a snapshot like any other");
+    second.close();
+  });
+});
+
 describe("Session's log", () => {
   it("lists what changed by frame, counts what happens often, and follows watched values", () => {
     const session = new Session(config, { bindings });
