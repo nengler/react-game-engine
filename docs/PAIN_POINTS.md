@@ -31,8 +31,8 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - Input is polled. Every `useInput` sees every key; `inert` and `modal` on `<Entity>`, `<Flex>` and `<Hud>` decide which subtrees
   hear it, as in HTML. A press goes in `useInput`; movement reads held keys in `useUpdate((dt, input) => …)`.
 - Frame timing differs: a write in a handler is read back at once by that handler, and drawn at the next render; objects attached
-  mid-frame get hooks next frame; collision callbacks run after `useUpdate`, which is why the guide says to read tiles, not colliders,
-  for movement and deaths.
+  mid-frame get hooks next frame; collision callbacks run after `useUpdate`, which is why the guide says to move with `useBody`, whose
+  `move`, `touching` and `overlapping` answer in the same step.
 - Props are read live in handlers everywhere but a callback prop (a function, made once) and a list inside a list item.
 - Placement: built-ins take `x` / `y`; a component is placed with `transform={{ x, y }}` (its own props may say `x`). The origin is
   top-left except where `originX` / `originY` exist, and `z` adds to the parent's.

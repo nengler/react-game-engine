@@ -337,7 +337,6 @@ none), and Alt + Enter always (`tse_set_fullscreen`, a borderless window at the 
 | Text wrapped by the width layout gives it (a `Text` reporting its widest word as its minimum, so boxes can shrink) | A dialogue box or label that must fit a growing box without a hand-set `maxWidth` |
 | Aspect-ratio boxes | A portrait or minimap frame that keeps its shape while growing |
 | Layout transitions (size and position animated) | A menu that should slide or resize smoothly; `transform` can be animated today |
-| Caching the layout of unchanged subtrees | A menu of hundreds of items showing up in the bench |
 | Wrapping columns, `align-content`, per-line growing, a `Grid` | A layout a wrapping row of fixed-size children cannot express |
 | Dragging a scroll bar or the content; Shift + wheel for the other axis | A long list on a mouse without a horizontal wheel |
 | Tiled (not stretched) nine-slice edges, a corner scale, a tint | A skin that does not stretch well |

@@ -525,10 +525,10 @@ leaves its world, after its `useUnmount` handlers; anything else is ignored. Wit
 game state (`settings`, `controls`) needs no mirror in a module:
 
 ```tsx
-useMount(() => settings.subscribe(() => setVolume(settings.get().music)));   // the call's result is the cleanup
+useMount(() => settings.subscribe(() => { s.volume = settings.get().music; }));   // the call's result is the cleanup
 useMount(() => {
-  const stop = controls.subscribe(() => setKeys(controls.toJSON()));
-  return () => { stop(); waiting.current = false; };                          // or return an arrow
+  const stop = controls.subscribe(() => { s.keys = controls.toJSON(); });
+  return () => { stop(); };                                                        // or return an arrow
 });
 ```
 
@@ -555,7 +555,7 @@ override onMount(): void {
   this.#onMount1();
 }
 #onMount0(): (() => void) | void {
-  return settings.subscribe(() => { this.setVolume(settings.get().music); });
+  return settings.subscribe(() => { this.$set_s_volume(settings.get().music); });
 }
 ```
 
@@ -589,9 +589,9 @@ out by hand (two state fields and a `useMount` that subscribed and set both), wh
 ## Why there is no `useEffect` (2026-11-12)
 
 `useEffect` is the first hook a React author reaches for, and it stays out on purpose; each of its uses has a replacement,
-listed below. The question came up again on 2026-11-12, after a review of what trips new authors:
-the worry is not that it cannot be built (the compiler knows what every expression reads, so it could even work out the
-dependencies itself) but that it would be used for everything, including what it should not be used for.
+listed below. The question came up again on 2026-11-12, after a review of what trips new authors. It could be built: the
+compiler knows what every expression reads, so it could even work out the dependencies itself. The worry is that it would be
+used for everything, including what it should not be used for.
 
 **What it would give.** It is familiar, and a few needs have no good answer without something like it: subscribing to
 something outside the game state *with a cleanup* (Bramble mirrors `settings` into `useGame` at module level because
@@ -1187,7 +1187,7 @@ placeholder for (as `Sprite.image` does), and `text`, `size` and `color` become
 names a state, ref or prop may not use.
 
 **Text wrappers** (2026-11-13). React shares a text style with a component, `<Label>Coins: {coins}</Label>`;
-here it failed five ways (no `TextChild` type to import, `children` had to be `Child`, `{children}` inside `<Text>` meant nothing,
+here it failed four ways (no `TextChild` type to import, `children` had to be `Child`, `{children}` inside `<Text>` meant nothing,
 and a component could not take text). A props type with `children: TextChild | readonly TextChild[]` (`isTextChildrenType`,
 which also takes `string`) makes `children` an ordinary value prop rather than a slot. At a use site, `childrenKind` sorts what is
 between a component's tags: words, and `{expressions}` that hold no JSX and are not a forwarded `{children}` slot, are text, and
@@ -1318,8 +1318,8 @@ export const gameConfig: PlayerConfig = { root: () => new Main() };
 through the `<Game>` for it (`rootScreen`), as it does for a `<Screen>` that is the root itself. Either is optional
 without the other.
 
-**Optional.** A game with an `<Entity>` or fragment root, or any root object, works without one: the player's own config and
-the defaults apply. A `<Game>` root overrides them, each prop only where it is written; a field it does not write is
+**Optional.** A game with an `<Entity>` or fragment root, or any root object, works without a `<Game>`: the player's own config
+and the defaults apply. A `<Game>` root overrides them, each prop only where it is written; a field it does not write is
 `undefined` on the object, which is how the player knows to fall back.
 
 **Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
@@ -1336,8 +1336,8 @@ with or without a `<Game>`, so `state` is not one of its props.
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`TSE1206`). The demo's root is `Main`.
 
 **Fast-forward and pause: `timeScale` and `paused`** (2026-11-13). Hearth's 2× speed used to run its rules
-twice per engine step, and its pause skipped them: both were the rules' business, and with the battle in components there is no
-one function to call twice. So they belong to the world. Each frame the player reads the current root's `timeScale` (default 1) and
+twice per engine step, and its pause skipped them. Once the battle moved into components there was no one function to call
+twice, so both now belong to the world. Each frame the player reads the current root's `timeScale` (default 1) and
 `paused`: the frame's time is multiplied by `timeScale` before it reaches the fixed-step driver, so `2` runs two whole steps of
 the same `dt` (a fast-forward that plays exactly as at 1; the cap on steps a frame grows with it), and `paused` sets
 `World.paused`, under which `tick` runs `onInput` and the presses but no `onUpdate` (the key edges of a paused step are not kept
@@ -1364,7 +1364,7 @@ e`, `y' = b·x + d·y + f`), and `worldToView` / `viewToWorld` apply it and its
 inverse (the second turns a click into a world position). The point the camera
 is at lands on the centre of the viewport: the renderer knows the viewport's
 size, the camera does not. Moving a camera never changes any object's
-`worldTransform()`: the view is applied on top of the world, not into it.
+`worldTransform()`: the view is applied on top of the world.
 Reading the view with a zoom that is not positive, a scale of 0, or a position,
 rotation or scale that is not finite throws a `RangeError` (the view would be
 singular or NaN). Assigning one does not throw: a prop that varies with state can
@@ -1578,8 +1578,8 @@ directly (`<Camera>`).
 
 ## Context (2026-11-13)
 
-Context is React's API, compiled. It was left out while props covered every tree; with game code in components, a parent sharing its
-state with a deep subtree is the React answer.
+Context is React's API, compiled. It was left out while props covered every tree. Once game code moved into components, a parent
+needed to share its state with a deep subtree, and context is how React does that.
 
 - `createContext(default)` (`runtime/src/context.ts`), in a `.ts` file, returns `{ default, Provider }`; `Provider` is only for
   the type-checker (a method, so a context of any value type fits `Context<unknown>`).
@@ -1929,8 +1929,8 @@ override render(): void {
 ```
 
 - The mask is built in `render()`, by comparing each input with its value at the last render (`$in`, a fresh object in each slot
-  at first, so the first render runs everything). Nothing else changes: setters, `updateProps`, the game state's notifications,
-  context and hot reload are unchanged, and a new instance (hot reload, rewind) starts unguarded.
+  at first, so the first render runs everything). Setters, `updateProps`, the game state's notifications, context and hot reload
+  work as before, and a new instance (hot reload, rewind) starts unguarded.
 - Inputs are what `inputsOf` finds: state fields (game-state and context fields are state fields), and props. A part that reads
   an element's own field (`route.active`), a ref, a handle, or calls the component's own function, a callback prop, an action or a
   local function is not guarded: its reads are not followed. Imported functions are pure, as everywhere in the compiler.
@@ -1960,7 +1960,7 @@ override render(): void {
   members are names no component's props or state may take, and `<Layer>` (an `Entity`) has an `opacity` that means something
   else. Scenes (`.scene.json`) keep `opacity` in their `transform`: that is data, not JSX.
 - **Not on components.** The compiler compiles one file at a time and does not know whether an imported component declares an `x`,
-  so on a component `x` is always its own prop, and placement is `transform`. One rule, with no case that depends on another file.
+  so on a component `x` is always its own prop and placement is `transform`: one rule, with no case that depends on another file.
 - `<Flex>` in world space needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and
   it draws the same pixels as the hand-placed version (its stories' screenshots did not change).
 
@@ -2046,7 +2046,7 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
   into its emitter's list of burst colours (emptied whenever no particle is alive), so one preset serves every colour. A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. `<ParticleLayer particles={fx}>` holds
   one emitter per preset and attaches itself to the store while mounted (the last mounted wins); a burst's point is in the
   layer's space. It follows the world: frozen with it, gone with it. With no layer mounted a burst is counted, not drawn.
-  Put the layer **next to** a `<Camera>`, not inside it, since a camera follows its children.
+  Put the layer next to a `<Camera>`, not inside it, since a camera follows its children.
 - `createSounds(entries)` → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
   Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
   a `.ts` file are not checked at build time (only literals in components are).
@@ -2075,7 +2075,7 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 - **Reacting to what happened: call, and use the result.** No event emitter (one was tried, 2026-11-11, and removed as a
   workaround): the component that runs a step answers it. A handler may use a game-state action's result,
   `const events = step(input, dt)` (`CalleeIR` `Action`, only as a handler's `const`; in JSX or a derived value it would run
-  on every render), and then call plain functions and setters with it. Kite's character runs the step in its own
+  on every render), and then call plain functions and write state with it. Kite's character runs the step in its own
   `useUpdate`, plays the effects (`playEvents`) and sets its squash (`squashFor(events)`).
 - **Effects a game makes from the basics.** Afterimages (copies of a sprite left behind, fading) are Kite's own `<DashTrail>`
   (they were briefly an engine feature): a list of ghosts in state, drawn as `<Sprite>`s with falling `opacity`. The
@@ -2163,17 +2163,17 @@ declares); what a function can do and a hook could not is closed:
   argument. From an object literal, each member is read where it is written (a literal or an import in place, as a plain
   argument is); from any other value, the value is bound once (`_useMover1_$arg0`) and read member by member.
 - A returned name takes the caller's name for `const r = useX()`, as it does for `[a, b]` and `{ a, b }`, so a hook
-  returns a ref (`return count;`) or a state as itself, not a copy.
+  returns its `useMutable` (`return s;`) as itself, not a copy.
 - **A callback argument.** An argument is bound to a `const` of the component body, and an arrow there is a function of
-  the component (below), so `useEvery(1, () => setTicks(…))` works and the hook calls `fn()` in its handler.
+  the component (below), so `useEvery(1, () => { s.ticks += 1; })` works and the hook calls `fn()` in its handler.
 - The recursion message names the chain (`'useA' calls itself through useA → useB → useA`), and the depth limit is 12.
 
 **Functions in the component body.** `const add = (n: number) => { … }` was `TSE1301` ("an arrow function can only be…"); it is
-an `OwnFunctionIR`: lowered as a handler (setters, sounds, actions allowed) with the parameter types written on it
+an `OwnFunctionIR`: lowered as a handler (state writes, sounds, actions allowed) with the parameter types written on it
 (`paramTypes: "declared"`), and kept in a field, `readonly add = (n: number) => { … };`, written before the element fields so a
 child can be given it. A call in a handler or callback is `this.add(…)` (callee `Own`); passed to an element's callback prop it
 becomes the arrow an author would write (`onPress: () => { this.press(); }`); passed to a component or a function it is
-`this.add`. Calling one while rendering is an error: it may set state. An arrow's expression body that does something (a setter,
+`this.add`. Calling one while rendering is an error: it may write state. An arrow's expression body that does something (a
 sound, action or own-function call, an assignment, `++`) is a statement; any other is the value it returns (`returns: "any"`).
 
 Not done: diagnostics inside a hook still point at the expanded text's mapping, not "the hook's line, called from the component's".
@@ -2313,7 +2313,8 @@ interface EnemyProps {
 }
 
 function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
-  useUpdate(() => { if (hp <= 0) onDefeated?.(); });
+  const s = useMutable({ hp: 3 });
+  useUpdate(() => { if (s.hp <= 0) onDefeated?.(); });
   return <Entity name="Enemy"><Sprite image={tint === "red" ? "red.png" : "blue.png"} /></Entity>;
 }
 
@@ -2568,13 +2569,13 @@ the same search a press makes) and `World.reportHover` tells the one before it l
 counts as none, and a mouse off the screen is over nothing. Each pressable is asked where it is, which means where its parent
 is: neighbours in the list with one parent (the tiles of a board) share that answer (`containsIn`), so a board of 180 tiles
 walks up the tree once a frame, not 180 times. A `<Flex>` with only hover callbacks is collected for the mouse but
-lets a press through to what is under it. State is the component's: `onPointerEnter={() => setHovered(true)}`.
+lets a press through to what is under it. State is the component's: `onPointerEnter={() => { s.hovered = true; }}`.
 
 **Functions passed whole** (2026-11-11). `onPress={resume}` where `resume` is a game-state action, and
 `<Flex onPress={onPress}>` where `onPress` is the component's own callback prop (or `props.onPress`): to a built-in, the
 compiler writes the arrow the author would have (`() => useGame.getState().resume()`, `() => this.props.onPress?.()`), with the
 parameters the manifest lists; to a component, an action is the store's own function (`ActionRef`), a static prop, since an action
-never changes. A sound or a setter is not a value.
+never changes. A sound is not a value.
 
 **Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
 is a callback prop on a built-in, which the manifest lists in
@@ -2841,10 +2842,10 @@ show what it caused (a spike touched but the character still standing); with a f
 began and ended inside one frame's steps was missed; and the step a contact was seen in depended on the frame
 rate, so a replay could play differently on a slower machine. A contact is found in the step that made it,
 the next step's `useUpdate` sees its effects, the frame draws them, and a run collides at the same steps at
-any frame rate (`test/collide-timing.test.ts`). **What it costs:** a frame of one step walks the tree once
+any frame rate (`test/collide-timing.test.ts`). The cost: a frame of one step walks the tree once
 (plus a cheap second walk only when a callback ran); a frame that catches up with k steps walks it k times:
 2,000 moving colliders under Node went from 3.9 to 5.8 ms for a two-step frame. A walk that places only the
-colliders would remove that if it matters. **What it does not change:** a callback runs after the step's
+colliders would remove that if it matters. Two things stay as they were: a callback runs after the step's
 `useUpdate`, not inside it, so movement code that must stop at a wall reads tiles; and nothing sweeps a
 collider's path, so a very fast, thin one can pass through another between two steps.
 
