@@ -9,12 +9,19 @@ import type { World } from "./World.ts";
  */
 export type HotState = ReadonlyMap<string, Record<string, unknown>>;
 
+/**
+ * The key in an object's saved state that holds the id its next timer gets (`GameObject.nextTimerId`), when it has set any: its
+ * state may keep timer ids, so the object that takes the state over numbers on from there. Not a name generated state can have.
+ */
+const NEXT_TIMER_ID = "$$nextTimerId";
+
 /** Each object under `root` (included) with state to keep, by path. */
 export function captureHotState(root: GameObject): HotState {
   const saved = new Map<string, Record<string, unknown>>();
   walk(root, rootPath(root), (object, path) => {
     const state = object.saveHotState();
-    if (state !== null) saved.set(path, state);
+    if (state === null) return;
+    saved.set(path, object.nextTimerId > 1 ? { ...state, [NEXT_TIMER_ID]: object.nextTimerId } : state);
   });
   return saved;
 }
@@ -38,6 +45,8 @@ export function restoreHotState(world: World, root: GameObject, saved: HotState)
       const state = saved.get(path);
       if (state === undefined) return;
       done.add(path);
+      const next = state[NEXT_TIMER_ID];
+      if (typeof next === "number") object.resumeTimerIds(next);
       object.loadHotState(state);
       restored++;
     });

@@ -74,12 +74,14 @@ import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./stateme
 
 /** What to write instead of a call the browser or Node has and a component does not: the game's clock and its replays decide. */
 const TIMERS_INSTEAD =
-  "runs on the game's clock in a component: `after(seconds, () => …)` calls once and `every(seconds, () => …)` repeats, both pausing with the game and stopping when the component leaves (`cancelTimers()` stops them sooner).";
+  "runs on the game's clock in a component: `after(seconds, () => …)` calls once and `every(seconds, () => …)` repeats, both pausing with the game and stopping when the component leaves. Each returns an id: `cancelTimer(id)` stops that one sooner, `cancelTimers()` all of them.";
 const INSTEAD: Readonly<Record<string, string>> = {
   setTimeout: `There is no \`setTimeout\`: a delay ${TIMERS_INSTEAD}`,
   setInterval: `There is no \`setInterval\`: a repeat ${TIMERS_INSTEAD}`,
-  clearTimeout: "There is no `clearTimeout`: `cancelTimers()` stops the component's `after` and `every` timers.",
-  clearInterval: "There is no `clearInterval`: `cancelTimers()` stops the component's `after` and `every` timers.",
+  clearTimeout:
+    "There is no `clearTimeout`: `cancelTimer(id)` stops the timer whose id `after` returned (`cancelTimers()` stops them all).",
+  clearInterval:
+    "There is no `clearInterval`: `cancelTimer(id)` stops the timer whose id `every` returned (`cancelTimers()` stops them all).",
   requestAnimationFrame: "There is no `requestAnimationFrame`: `useUpdate((dt, input) => …)` runs every step, with the step's time.",
   "Math.random":
     "`Math.random` would make every replay and test play differently. Roll from a seed you keep in state, with a function in a `.ts` file (Hearth's `rules/rng.ts`), so the same input plays the same game.",
