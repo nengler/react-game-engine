@@ -259,7 +259,8 @@ export class ElementEmitter extends HandlerEmitter {
     const lookups = records ? [...this.mode.itemLookups, { id: list.item.id, text: `${rec}.current` }] : this.mode.itemLookups;
     const item = list.item.name;
     const position = list.index?.name ?? "$n";
-    const params = list.index ? `${item}, ${list.index.name}` : item;
+    // The key's callback names the index only when the key reads it: an unused parameter fails a game's `noUnusedParameters`.
+    const params = list.index && readsParam(list.key, list.index.id) ? `${item}, ${list.index.name}` : item;
     const where = `in the <${el.component.name}> list of ${this.c.name}`;
     // The item's own children (`<MenuButton key …><Icon …/>{d.locked && <Lock …/>}</MenuButton>`) live in its record (`$rec.kids`), one
     // field each, made with the item and updated like a conditional subtree's on every render, from the item's current value.
@@ -586,7 +587,7 @@ export class ElementEmitter extends HandlerEmitter {
         return body.startsWith("{") ? `() => (${body})` : `() => ${body}`;
       }
       const item = around.item.name;
-      const params = around.index ? `${item}, ${around.index.name}` : item;
+      const params = around.index && readsParam(around.key, around.index.id) ? `${item}, ${around.index.name}` : item;
       const source = emit(() => this.expr(this.live(around.source), true));
       const test = around.condition !== null ? emit(() => this.arrowBody(this.live(around.condition!))) : null;
       const key = emit(() => this.arrowBody(around.key));

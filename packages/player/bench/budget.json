@@ -18,6 +18,9 @@
     "80 enemies, 20 towers, 50 shots": 3,
     "200 x 200 tilemap scrolled": 3,
     "200 rects spawned and removed a frame": 3,
+    "a HUD of 100 rows, still": 3,
+    "a HUD of 100 rows, one label changing": 3,
+    "900 press targets in a grid": 3,
     "100 paths on an 80 x 48 map": 200,
     "mount 5000 rects": 40,
     "mount 20000 rects": 150

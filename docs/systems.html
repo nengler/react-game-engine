@@ -130,7 +130,7 @@ mark { background: var(--accent-soft); color: inherit; }
 <main>
 <section id="collisions" data-group="Systems" data-title="Collisions and pointer presses">
   <h2>Collisions and presses</h2>
-  <p>There is no physics: the player detects boxes starting and stopping touching and calls your callbacks. A <code>Collider</code> is an invisible box with its top-left at the object's position. Pair it with a <code>Shape</code> to see it.</p>
+  <p>There is no physics: the player notices when boxes start and stop touching and calls your callbacks. A <code>Collider</code> is an invisible box with its top-left at the object's position. Pair it with a <code>Shape</code> to see it.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Collider
   width={24} height={24}
@@ -149,17 +149,17 @@ mark { background: var(--accent-soft); color: inherit; }
     <tr><td><code>other.tag</code></td><td>The other collider's <code>tag</code> (<code>""</code> when none). Tells apart colliders on one prefab.</td></tr>
     <tr><td><code>other.owner</code></td><td>The <code>name</code> of the nearest <code>&lt;Entity name&gt;</code> at or above the other collider, or its component's class name. Tells apart prefabs.</td></tr>
     <tr><td><code>other.data</code></td><td>What the other collider's <code>data</code> prop holds: <code>&lt;Collider tag="coin" data={{ value }} /&gt;</code> lets the player read <code>other.data.value</code>. Typed by tag once the game declares <code>ColliderData</code> (below); <code>unknown</code> until then.</td></tr>
-    <tr><td><code>layer</code> / <code>hits</code></td><td>A pair is tested only when <strong>each side's</strong> <code>hits</code> allows the other's <code>layer</code>. Use them to skip pairs cheaply (bullets ignore bullets). Unrelated to <code>tag</code>.</td></tr>
+    <tr><td><code>layer</code> / <code>hits</code></td><td>A pair is tested only when each side's <code>hits</code> allows the other's <code>layer</code>. Use them to skip pairs cheaply (bullets ignore bullets). Unrelated to <code>tag</code>.</td></tr>
     <tr><td><code>onCollisionExit</code></td><td>Fires once when a touching pair separates, or when the other leaves the world. It does not fire for a collider that itself left.</td></tr>
     <tr><td>In a <code>&lt;Hud&gt;</code></td><td>Colliders never touch anything.</td></tr>
   </table></div>
   <h3 id="shapes">Shapes</h3>
-  <p>A collider is a box unless it says otherwise. <code>shape="circle"</code> is the circle inside its box (centred, half the shorter side across); <code>shape="polygon"</code> with <code>points={[0, 16, 16, 16, 16, 0]}</code> is a convex polygon in its own pixels, inside its box (a ramp, a blade). Colliders are found by their boxes first, then a pair in which either has a shape is tested exactly, turned with its objects, so two coins whose boxes meet at the corners do not touch. A pair of plain boxes is tested as boxes, upright, as always. <code>useBody</code>'s <code>touching</code> and <code>overlapping</code> see a shape too; a body is still a box, and a <code>solid</code> collider stops bodies at its box whatever its shape (no slopes yet).</p>
+  <p>A collider is a box unless it says otherwise. <code>shape="circle"</code> is the circle inside its box (centred, half the shorter side across); <code>shape="polygon"</code> with <code>points={[0, 16, 16, 16, 16, 0]}</code> is a convex polygon in its own pixels, inside its box (a ramp, a blade). Pairs are found by their boxes first. A pair in which either collider has a shape is then tested exactly, rotated with its objects, so two round coins whose boxes meet at the corners do not touch. A pair of plain boxes is tested as upright boxes. <code>useBody</code>'s <code>touching</code> and <code>overlapping</code> see a shape too. A body is always a box, and a <code>solid</code> collider stops bodies at its box whatever its shape, so there are no slopes.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Collider shape="circle" width={12} height={12} tag="orb" />
 <Collider shape="polygon" width={16} height={16} points={[0, 16, 16, 16, 16, 0]} tag="ramp" />
 </script></pre>
-  <p>Handlers can read exactly <code>tag</code>, <code>owner</code> and <code>data</code> on <code>other</code>, nothing else. To type <code>data</code>, declare once, in any <code>.ts</code> file, what each tag carries; comparing <code>other.tag</code> then narrows <code>other.data</code>:</p>
+  <p>On <code>other</code>, handlers can read <code>tag</code>, <code>owner</code> and <code>data</code> and nothing else. To type <code>data</code>, declare once, in any <code>.ts</code> file, what each tag carries; comparing <code>other.tag</code> then narrows <code>other.data</code>:</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // colliders.ts
 declare global {
@@ -170,9 +170,9 @@ export {};
 // in a component: if (other.tag === "coin") setCoins((c) => c + other.data.value);
 </script></pre>
   <p>Once it is declared, every tag a game compares must be in it.</p>
-  <div class="callout"><p><strong>Collider or tile?</strong> Contacts are found after every step, and what a callback changes is rendered before the next step and drawn in the same frame. But a callback still runs <em>after</em> the step's <code>useUpdate</code>, so code that must know mid-step (movement against walls, a precise death) reads <strong>tiles</strong> instead: Kite reads spikes and exits as tiles inside its movement step, and uses <code>Collider</code> for the optional gem pickup.</p></div>
+  <div class="callout"><p><strong>Collider or tile?</strong> Contacts are found after every step, and whatever a callback changes is rendered before the next step and drawn in the same frame. A callback still runs <em>after</em> the step's <code>useUpdate</code>, though, so code that must know mid-step (movement against walls, a precise death) reads tiles instead: Kite reads spikes and exits as tiles inside its movement step, and uses <code>Collider</code> for the optional gem pickup.</p></div>
   <h3 id="nearby-send">Finding and hitting things in an area: <code>nearby</code> and <code>send</code></h3>
-  <p>A component has no handle on another, so a tower cannot call an enemy. It asks the colliders instead: <code>nearby(tag, x, y, radius)</code> lists the colliders of a tag whose boxes come within a circle (a real circle, not a square), nearest first, each with its <code>tag</code>, <code>owner</code>, <code>data</code>, the middle of its box (<code>x</code>, <code>y</code>) and its <code>distance</code> (0 inside the box). <code>send(tag, where, value)</code> hands <code>value</code> to the <code>onReceive</code> of the colliders of a tag in a circle (<code>{ x, y, radius }</code>), or of the one collider a <code>nearby</code> result is. Both are called in a handler (<code>useUpdate</code>, <code>useInput</code>, a callback prop), and leave out the colliders the asking component draws itself.</p>
+  <p>A component has no handle on another, so a tower cannot call an enemy. It asks the colliders instead. <code>nearby(tag, x, y, radius)</code> lists the colliders with that tag whose boxes come within a circle (a real circle, not a square), nearest first. Each entry has the collider's <code>tag</code>, <code>owner</code> and <code>data</code>, the middle of its box (<code>x</code>, <code>y</code>) and its <code>distance</code> (0 inside the box). <code>send(tag, where, value)</code> hands <code>value</code> to the <code>onReceive</code> of every collider with that tag in a circle (<code>{ x, y, radius }</code>), or to the single collider a <code>nearby</code> result describes. Call both from a handler (<code>useUpdate</code>, <code>useInput</code>, a callback prop). Neither includes the colliders that the calling component draws itself.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // A tower: the nearest enemy in reach, hit; or everything in a splash.
 useUpdate(() => {
@@ -192,15 +192,15 @@ useUpdate(() => {
     <tr><td>Where things are</td><td>Boxes are where they were when the step's updates began, as for <code>useBody</code>. A <code>nearby</code> result is good for its step: keep an id from its <code>data</code>, not the result, across steps. A receiver that left the world before delivery hears nothing.</td></tr>
     <tr><td>Types</td><td>Declare what each tag can be sent beside <code>ColliderData</code>: <code>interface ColliderMessages { enemy: Blast }</code>. Then <code>send("enemy", …, value)</code> and <code>onReceive</code>'s value are typed by the tag; undeclared, the value is <code>unknown</code>.</td></tr>
   </table></div>
-  <p>This replaces a collider that lives for one step just to carry a message (a blast's collider whose <code>data</code> every enemy it touches checks): no extra collider, no step of delay, no re-checking whether the blast was meant for it.</p>
+  <p>Use <code>send</code> in place of a collider that lives for one step only to carry a message (a blast's collider whose <code>data</code> every enemy it touches checks). There is no extra collider and no step of delay, and the receiver does not have to check whether the blast was meant for it.</p>
   <h3>Pointer presses</h3>
-  <p>A left click goes to the <strong>topmost</strong> <code>Pointer</code> or <code>Flex onPress</code> under the mouse. HUD buttons work however the camera moves.</p>
+  <p>A left click goes to the topmost <code>Pointer</code> or <code>Flex onPress</code> under the mouse. HUD buttons work however the camera moves.</p>
 </section>
 <section id="placing" data-group="Systems" data-title="Placing things: Flex, x and y">
   <h2>Placing things</h2>
-  <p>Two ways, one rule: <strong>anything laid out in rows or columns is a <code>&lt;Flex&gt;</code></strong>, wherever it is (a menu over the world, a row of hearts, an inventory, a panel in a <code>&lt;Hud&gt;</code>); <strong>anything the game moves is placed with <code>x</code> and <code>y</code></strong> (a character, a coin, a shot), from its state.</p>
-  <p><code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code> and <code>scaleY</code> are props of every built-in that has a transform: <code>&lt;Sprite image="coin.png" x={spot.x} y={spot.y} /&gt;</code>. They are the same as <code>transform={{ x: spot.x, y: spot.y }}</code>, which stays for <code>global</code> and for placing a component: on a component, <code>x</code> is whatever its props say (a component may declare an <code>x</code> of its own), so a component is placed with <code>transform</code>. Writing a field both ways is an error. Fading is <code>opacity={…}</code>, a prop on every element (see <a href="language.html#transform">Transform</a>).</p>
-  <p>A <code>Flex</code> works anywhere, not only in a <code>&lt;Hud&gt;</code>: in the world, or in a <code>&lt;Screen&gt;</code> as Bramble's menus are. Bramble's menu placed its rows by hand at first:</p>
+  <p>Anything laid out in rows or columns is a <code>&lt;Flex&gt;</code>, wherever it is (a menu over the world, a row of hearts, an inventory, a panel in a <code>&lt;Hud&gt;</code>). Anything the game moves (a character, a coin, a shot) is placed with <code>x</code> and <code>y</code> from its state.</p>
+  <p><code>x</code>, <code>y</code>, <code>z</code>, <code>rotation</code>, <code>scaleX</code> and <code>scaleY</code> are props of every built-in that has a transform: <code>&lt;Sprite image="coin.png" x={spot.x} y={spot.y} /&gt;</code>. They are the same as <code>transform={{ x: spot.x, y: spot.y }}</code>. You still need <code>transform</code> for <code>global</code> and for placing a component: on a component, <code>x</code> is whatever its props say (a component may declare an <code>x</code> of its own), so a component is placed with <code>transform</code>. Writing a field both ways is an error. Fading is <code>opacity={…}</code>, a prop on every element (see <a href="language.html#transform">Transform</a>).</p>
+  <p>A <code>Flex</code> works anywhere, not only in a <code>&lt;Hud&gt;</code>: in the world, or in a <code>&lt;Screen&gt;</code> as Bramble's menus are. Here is Bramble's menu with its rows placed by hand:</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // Before: every row placed by hand, and the bar behind the cursor's row worked out the same way.
 <Entity>
@@ -213,7 +213,7 @@ useUpdate(() => {
   ))}
 </Entity>
 </script></pre>
-  <p>As a column, the rows' places and the bar are the layout's: the bar is the row's <code>background</code>, and a row added or a label made longer moves nothing by hand. It draws exactly the same pixels.</p>
+  <p>As a column, the layout places the rows and the bar, which becomes the row's <code>background</code>. Adding a row or lengthening a label needs no position changed by hand, and the menu draws exactly the same pixels.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // games/bramble/src/Menu.tsx
 <Flex direction="column" gap={1} x={10} y={top}>
@@ -247,7 +247,7 @@ useUpdate(() => {
   </Flex>
 </Flex>
 </script></pre>
-  <p>A <code>Flex</code> can be styled with props, which are checked like the layout ones: <code>background</code>, <code>borderWidth</code> and <code>borderColor</code> (the border is drawn inside the edge and takes room like padding), and <code>borderRadius</code>. <code>hoverBackground</code> and <code>hoverBorderColor</code> are drawn while the mouse is over the box, and <code>focusBackground</code> and <code>focusBorderColor</code> while it has the focus; hover wins when both apply. <code>pressedBackground</code> and <code>pressedBorderColor</code> are drawn while the mouse button is held on the box, and <code>disabled</code> (with <code>disabledBackground</code> and <code>disabledBorderColor</code>) switches a button off: no press, key or focus reaches it, and it shows only its disabled colours. Over one another the states go plain, focus, hover, pressed, and disabled over all. They change colours only, so nothing moves when the mouse does, and the component does not render again. Give the box a <code>transition</code> (seconds) and its colours fade between states instead of snapping; a fade cut short turns round from where it had got to. A box with a hover prop takes the mouse but lets a press through to what is under it, unless it has an <code>onPress</code>.</p>
+  <p>A <code>Flex</code> can be styled with props, which are checked like the layout ones: <code>background</code>, <code>borderWidth</code> and <code>borderColor</code> (the border is drawn inside the edge and takes room like padding), and <code>borderRadius</code>. <code>hoverBackground</code> and <code>hoverBorderColor</code> are drawn while the mouse is over the box, and <code>focusBackground</code> and <code>focusBorderColor</code> while it has the focus; hover wins when both apply. <code>pressedBackground</code> and <code>pressedBorderColor</code> are drawn while the mouse button is held on the box, and <code>disabled</code> (with <code>disabledBackground</code> and <code>disabledBorderColor</code>) switches a button off: no press, key or focus reaches it, and it shows only its disabled colours. Over one another the states go plain, focus, hover, pressed, and disabled over all. They change colours only, so nothing moves when the mouse does, and the component does not render again. Give the box a <code>transition</code> (seconds) and its colours fade between states instead of snapping; a fade that is cut short reverses from wherever it had reached. A box with a hover prop takes the mouse but lets a press through to what is under it, unless it has an <code>onPress</code>.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Flex padding={6} onPress={start} focusable
       background="#223" borderWidth={1} borderColor="#556" borderRadius={4}
@@ -255,14 +255,14 @@ useUpdate(() => {
   <Text>Start</Text>
 </Flex>
 </script></pre>
-  <p><code>&lt;Slider&gt;</code> and <code>&lt;Toggle&gt;</code> are two controls that are <code>Flex</code> boxes with parts drawn in them, so they are sized, laid out, clipped, faded, disabled and styled like any other. A slider is <code>&lt;Slider value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} /&gt;</code>: a press puts the thumb under the mouse, a drag moves it (even once the mouse has left the box), and when it has the focus the left and right keys move it one step (a twentieth of the range with no <code>step</code>) while up and down move the focus on. The track is its <code>background</code>, so it takes a border, a radius, an image and a colour for each state; <code>fillColor</code> is the part left of the thumb. A toggle is <code>&lt;Toggle checked={sound} onChange={(on) => setSound(on)} /&gt;</code>: a press, the confirm key or its <code>pressKey</code> flips it. Both move their own value and then call <code>onChange</code> with the new one, only when it is different, so <code>value</code> and <code>checked</code> are where they start and what you set. Both take the focus by default.</p>
+  <p><code>&lt;Slider&gt;</code> and <code>&lt;Toggle&gt;</code> are two controls that are <code>Flex</code> boxes with parts drawn in them, so they are sized, laid out, clipped, faded, disabled and styled like any other. A slider is <code>&lt;Slider value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} /&gt;</code>: a press puts the thumb under the mouse, a drag moves it (even once the mouse has left the box), and when it has the focus the left and right keys move it one step (a twentieth of the range with no <code>step</code>) while up and down move the focus on. The track is its <code>background</code>, so it takes a border, a radius, an image and a colour for each state; <code>fillColor</code> is the part left of the thumb. A toggle is <code>&lt;Toggle checked={sound} onChange={(on) => setSound(on)} /&gt;</code>: a press, the confirm key or its <code>pressKey</code> flips it. Each moves its own value and then calls <code>onChange</code> with the new one, only when it is different, so <code>value</code> and <code>checked</code> give the starting value and any value you set later. Both take the focus by default.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Flex direction="column" gap={8} padding={10}>
   <Slider width={160} value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} />
   <Toggle checked={sound} onChange={(on) => setSound(on)} />
 </Flex>
 </script></pre>
-  <p><code>&lt;Button&gt;</code> and <code>&lt;Menu&gt;</code> are the two pieces most screens need. A button is a <code>Flex</code> that takes the focus and has a look for each state, its label as children; any <code>Flex</code> prop replaces the default look. A menu is a column whose focusable children are its items: while one of them has the focus, up and down move it only among them, going round at the ends (<code>loop={false}</code> stops there), confirm presses the focused one, and <code>back</code> (Escape or PadB without a <code>back</code> action) calls <code>onBack</code>. <code>autoFocus</code> says which item starts with the focus. <code>onAdjust</code> on any focusable box hears left and right while it has the focus (-1 or 1), for a row that changes a value in place; the focus stays. When a modal opens over a menu its focus is put aside, and given back when the modal closes. A component of your own called <code>Button</code> or <code>Menu</code> is still yours: a name declared or imported in a file shadows the built-in, unless the file imports the built-in too.</p>
+  <p><code>&lt;Button&gt;</code> and <code>&lt;Menu&gt;</code> are the two pieces most screens need. A button is a <code>Flex</code> that takes the focus and has a look for each state, its label as children; any <code>Flex</code> prop replaces the default look. A menu is a column whose focusable children are its items: while one of them has the focus, up and down move it only among them, wrapping round at the ends (<code>loop={false}</code> stops there), confirm presses the focused one, and <code>back</code> (Escape or PadB without a <code>back</code> action) calls <code>onBack</code>. <code>autoFocus</code> says which item starts with the focus. <code>onAdjust</code> on any focusable box hears left and right while it has the focus (-1 or 1), for a row that changes a value in place; the focus stays. When a modal opens over a menu its focus is put aside, and given back when the modal closes. A component of your own called <code>Button</code> or <code>Menu</code> is still yours: a name declared or imported in a file shadows the built-in, unless the file imports the built-in too.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Menu gap={2} onBack={close}>
   <Button autoFocus onPress={resume}><Text>Resume</Text></Button>
@@ -272,7 +272,7 @@ useUpdate(() => {
   <Button onPress={quit}><Text>Quit</Text></Button>
 </Menu>
 </script></pre>
-  <p><code>wrap</code> lets a row break into lines: a child that will not fit in what is left of a line starts the next one. Give the box a width (<code>width={120}</code>, <code>"50%"</code> or <code>"grow"</code>); with only a fit size it is one line. Lines stack downward, each as tall as its tallest child, with <code>rowGap</code> between lines and <code>columnGap</code> between the children of a line (both default to <code>gap</code>). <code>justifyContent</code> places the children of each line on its own, so a short last line is not spread like a full one, and <code>alignItems</code> places each child inside its line's height. Children keep their size (a <code>"grow"</code> child is just its content, and none shrink); one wider than the box is alone on a line and sticks out. Only rows wrap. To scroll a long grid, put it in a <code>direction="column"</code> scroll box with <code>width="grow"</code> on the grid, so its width is the box's and it wraps there instead of running off to the side.</p>
+  <p><code>wrap</code> lets a row break into lines: a child that will not fit in what is left of a line starts the next one. Give the box a width (<code>width={120}</code>, <code>"50%"</code> or <code>"grow"</code>); with only a fit size it is one line. Lines stack downward, each as tall as its tallest child, with <code>rowGap</code> between lines and <code>columnGap</code> between the children of a line (both default to <code>gap</code>). <code>justifyContent</code> places the children of each line on its own, so a short last line is not spread like a full one, and <code>alignItems</code> places each child inside its line's height. Children keep their size (a <code>"grow"</code> child takes only its content's size, and none shrink); one wider than the box is alone on a line and sticks out. Only rows wrap. To scroll a long grid, put it in a <code>direction="column"</code> scroll box with <code>width="grow"</code> on the grid, so its width is the box's and it wraps there instead of running off to the side.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Flex direction="column" width={120} height={80} overflow="scroll">
   <Flex wrap width="grow" gap={4} padding={4}>
@@ -307,7 +307,7 @@ useUpdate(() => {
   <Tooltip><Text>Sells for {price} gold</Text></Tooltip>
 </Button>
 </script></pre>
-  <p><code>&lt;TextInput&gt;</code> is a one-line text field. Give it the focus (a click, or the arrows) and type: the characters the keyboard makes go in at the end, with the system's key repeat, Backspace takes the last one off, and Enter calls <code>onSubmit</code>. Keep the text in state with <code>value</code> and <code>onChange</code>, as a React input; what <code>onChange</code> writes back is what the field shows, so it can change or refuse what is typed. While a field has the focus, letters do not trigger the game's <code>confirm</code> and <code>back</code> actions or a <code>pressKey</code>: only the arrows, Enter and Escape move or leave it. A game's own <code>useInput</code> still sees the keys; check <code>input.typed</code>, the characters typed this step, if it needs to.</p>
+  <p><code>&lt;TextInput&gt;</code> is a one-line text field. Give it the focus (a click, or the arrows) and type: the characters the keyboard makes go in at the end, with the system's key repeat, Backspace takes the last one off, and Enter calls <code>onSubmit</code>. Keep the text in state with <code>value</code> and <code>onChange</code>, as with a React input; what <code>onChange</code> writes back is what the field shows, so it can change or refuse what is typed. While a field has the focus, letters do not trigger the game's <code>confirm</code> and <code>back</code> actions or a <code>pressKey</code>: only the arrows, Enter and Escape move or leave it. A game's own <code>useInput</code> still sees the keys; check <code>input.typed</code>, the characters typed this step, if it needs to.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <TextInput autoFocus value={s.name} placeholder="Your name" maxLength={12}
            onChange={(v) => { s.name = v; }} onSubmit={() => start(s.name)} />
@@ -337,29 +337,29 @@ export default function Main() {
   <h3><code>Screen</code>: fixed resolution</h3>
   <div class="tablewrap"><table>
     <tr><th><code>fit</code></th><th>Behaviour</th></tr>
-    <tr><td><code>"integer"</code> (default)</td><td>Largest <strong>whole-number</strong> scale that fits. Every game pixel is the same size. Bars fill the rest with <code>border</code>.</td></tr>
+    <tr><td><code>"integer"</code> (default)</td><td>Largest whole-number scale that fits. Every game pixel is the same size. Bars fill the rest with <code>border</code>.</td></tr>
     <tr><td><code>"contain"</code></td><td>Largest scale that fits, fractional allowed.</td></tr>
     <tr><td><code>"stretch"</code></td><td>Each axis scaled on its own to fill the window.</td></tr>
     <tr><td><code>"expand"</code></td><td>Like <code>"integer"</code>, but the game is widened to the window's shape. A wide window shows more world instead of bars. Lay out with <code>grow</code> and percentages, not fixed x positions.</td></tr>
   </table></div>
   <p>Only the root <code>&lt;Screen&gt;</code> counts; it takes no <code>transform</code>. Everything inside is in game pixels. Without one, coordinates are window pixels.</p>
 
-  <p><code>&lt;Text&gt;</code> can keep itself readable over a busy picture. <code>shadow="black"</code> draws the text again a pixel right and down in that colour (<code>shadowX</code> and <code>shadowY</code> move it); <code>outline="black"</code> draws it in that colour at every pixel around it, <code>outlineWidth</code> pixels thick (1 to 3). Both work with the built-in font and with bitmap fonts, turn and scale with the text, and fall from the outlined shape when used together. They take no room in a layout, so leave padding for them, and use opaque colours: a see-through outline shows through where its copies overlap.</p>
+  <p><code>&lt;Text&gt;</code> can keep itself readable over a busy picture. <code>shadow="black"</code> draws the text again a pixel right and down in that colour (<code>shadowX</code> and <code>shadowY</code> move it); <code>outline="black"</code> draws it in that colour at every pixel around it, <code>outlineWidth</code> pixels thick (1 to 3). Both work with the built-in font and with bitmap fonts and turn and scale with the text. Used together, the shadow falls from the outlined shape. They take no room in a layout, so leave padding for them, and use opaque colours: a see-through outline shows through where its copies overlap.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 <Text size={16} color="#ffee88" outline="#000000" shadow="#000000" shadowY={2}>Score: {score}</Text>
 </script></pre>
 
   <h3><code>Hud</code></h3>
-  <p>A layer drawn after the world, ignoring the camera. Coordinates are screen pixels (game pixels under a <code>Screen</code>), top-left 0, 0. Put it directly in the game's root. A <code>&lt;Fade&gt;</code> goes here too.</p>
+  <p>A layer drawn after the world that ignores the camera. Coordinates are screen pixels (game pixels under a <code>Screen</code>), top-left 0, 0. Put it directly in the game's root. A <code>&lt;Fade&gt;</code> goes here too.</p>
 
   <h3><code>Camera</code></h3>
   <ul>
-    <li><strong>It follows its children</strong>: <code>&lt;Camera&gt;&lt;Player /&gt;&lt;/Camera&gt;</code> keeps the view on the player (several children: their middle; none: it stays put).</li>
+    <li>The camera follows its children: <code>&lt;Camera&gt;&lt;Player /&gt;&lt;/Camera&gt;</code> keeps the view on the player (several children: their middle; none: it stays put).</li>
     <li>Children are placed as if the camera were not there. Its own <code>transform</code> is an offset from the followed point.</li>
     <li><code>zoom</code>: 2 draws everything twice as large; must be positive.</li>
     <li><code>bounds={[x, y, w, h]}</code> keeps the view inside a world area. <code>slide={0.4}</code> eases to new bounds (a room change) instead of jumping.</li>
     <li><code>shake={shake}</code> takes a value from <a href="language.html#logic"><code>useShake()</code></a>.</li>
-    <li>Only the <strong>first</strong> camera counts. With none, the origin is the window's top-left.</li>
+    <li>Only the first camera counts. With none, the origin is the window's top-left.</li>
   </ul>
 </section>
 <section id="router" data-group="Systems" data-title="Screens (Router)">
@@ -401,7 +401,7 @@ export function fadeThrough(progress: number): TransitionFrame {
   <h2>Tilemaps and movement</h2>
   <p>A <code>&lt;Tilemap&gt;</code> draws a Tiled map with no game object per tile. The same data is the solid grid your movement code asks about, so what is drawn and what blocks cannot disagree.</p>
   <h3>Moving a component: <code>useBody</code></h3>
-  <p>A component that moves and is stopped by walls keeps a body: a box that moves a pixel at a time and is stopped by the solid tiles of a <code>&lt;Tilemap solid&gt;</code> (tiles with the Tiled property <code>solid</code>) and by every <code>&lt;Collider solid&gt;</code>, and says what it hit <strong>in the same step</strong>. A collider's <code>onCollisionEnter</code> runs after the step's update, a step late for movement; a body does not wait.</p>
+  <p>A component that moves and is stopped by walls keeps a body: a box that moves a pixel at a time and is stopped by the solid tiles of a <code>&lt;Tilemap solid&gt;</code> (tiles with the Tiled property <code>solid</code>) and by every <code>&lt;Collider solid&gt;</code>, and says what it hit in the same step. A collider's <code>onCollisionEnter</code> runs after the step's update, a step late for movement; a body does not wait.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 export function Hero() {
   const s = useMutable({ vy: 0 });
@@ -427,8 +427,8 @@ export function Hero() {
     <li>Bodies move in the order their components update, each against the world as it is at that moment. Others see a body through a <code>&lt;Collider&gt;</code> the component draws at its position.</li>
   </ul>
   <h3>Moving with plain functions</h3>
-  <p>Both ways move the same: Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>packages/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceilings' corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement: a component when only it does; plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
-  <p>A game whose movement is plain functions over the grid (Kite's, which a search runs thousands of times) reads the same data:</p>
+  <p>A <code>useBody</code> component and plain functions produce the same movement. Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>packages/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceiling corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement. Use a component when only it does, and plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
+  <p>Movement written as plain functions over the grid (Kite's, which a search runs thousands of times) reads the same tile data:</p>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // rules/rooms.ts: runs once when imported, before the game starts.
 // tse-compile --scenes writes generated/tilemaps.ts from your .tmj files.
@@ -457,18 +457,18 @@ moveActorX(actor, vx * dt, blocked, (dir) => { actor.vx = 0; });      // a pixel
   </table></div>
   <ul>
     <li>Reading outside the map gives an empty cell, not an error.</li>
-    <li>Kite puts <strong>gameplay data in a hidden layer</strong> (<code>Markers</code>: room start and exit tiles) and finds it with <code>find("Markers", gid)</code>. Only the visible <code>Tiles</code> layer is drawn.</li>
-    <li>A map of any size costs what its view does: in the world, an unrotated, unscaled <code>&lt;Tilemap&gt;</code> writes only the cells the camera shows (and one more cell round them). Inside a <code>&lt;Hud&gt;</code>, or turned or scaled, it writes every cell. Kite still mounts only the current room and its neighbours, which is now an option, not a need.</li>
-    <li>Only draw what is needed: Kite maps over its room list and mounts the current room and its neighbours.</li>
+    <li>Kite puts gameplay data in a hidden layer (<code>Markers</code>: room start and exit tiles) and finds it with <code>find("Markers", gid)</code>. Only the visible <code>Tiles</code> layer is drawn.</li>
+    <li>A map of any size costs what its view does: in the world, an unrotated, unscaled <code>&lt;Tilemap&gt;</code> writes only the cells the camera shows (and one more cell round them). Inside a <code>&lt;Hud&gt;</code>, or turned or scaled, it writes every cell.</li>
+    <li>You can still mount only what is needed, though a large map does not require it: Kite maps over its room list and mounts the current room and its neighbours.</li>
     <li><code>moveActorX</code> / <code>moveActorY</code> move <code>{ x, y, rx, ry }</code> a pixel at a time against <code>blocked(x, y)</code>, carrying the sub-pixel remainder. On a block the remainder is dropped and <code>onBlocked(direction)</code> runs; it may move the actor (a corner correction).</li>
-    <li><strong>Tilesets:</strong> embedded, or external as JSON (<code>.tsj</code>) or XML (<code>.tsx</code>). Without <code>image</code>, a <code>&lt;Tilemap&gt;</code> draws each tile from its own tileset's sheet, with its margin and spacing, so keep the sheets in the assets folder; a tile larger than a cell sits on the bottom of it, as in Tiled. With <code>image</code>, every tile is cut from that one sheet.</li>
-    <li><strong>Objects as data:</strong> give an object layer the bool property <code>data</code> and its objects are for your rules, not prefabs: <code>getTilemap("room1").objects("door")</code> gives each one's position, size, name and custom properties, and the map's own properties are <code>property(name)</code>. Bramble reads its doors, people, items and enemies this way (<code>games/bramble/src/rules/maps.ts</code>), checking each one and naming the map and object when something is wrong.</li>
+    <li>Tilesets can be embedded, or external as JSON (<code>.tsj</code>) or XML (<code>.tsx</code>). Without <code>image</code>, a <code>&lt;Tilemap&gt;</code> draws each tile from its own tileset's sheet, with its margin and spacing, so keep the sheets in the assets folder; a tile larger than a cell sits on the bottom of it, as in Tiled. With <code>image</code>, every tile is cut from that one sheet.</li>
+    <li>To use map objects as data, give an object layer the bool property <code>data</code> and its objects are for your rules, not prefabs: <code>getTilemap("room1").objects("door")</code> gives each one's position, size, name and custom properties, and the map's own properties are <code>property(name)</code>. Bramble reads its doors, people, items and enemies this way (<code>games/bramble/src/rules/maps.ts</code>), checking each one and naming the map and object when something is wrong.</li>
     <li>Importer limits: finite maps; CSV or base64 layers (uncompressed, zlib or gzip, not zstd); not tilesets that are collections of images. Each is reported when imported.</li>
   </ul>
 </section>
 <section id="scenes" data-group="Systems" data-title="Scenes and prefabs">
   <h2>Scenes and prefabs</h2>
-  <p>Every <strong>exported</strong> component is a <em>prefab</em> that JSON scenes can place by name.</p>
+  <p>Every exported component is a <em>prefab</em> that JSON scenes can place by name.</p>
 <pre class="code" data-lang="json"><script type="text/plain">
 {
   "version": 1,
@@ -499,18 +499,18 @@ const byId = loadScene(world, scene, prefabs);   // Map of scene id → object, 
 <section id="frame" data-group="Systems" data-title="How a frame works">
   <h2>How a frame works</h2>
   <ol>
-    <li><strong>Presses.</strong> A new left click goes to the topmost <code>Pointer</code> / <code>Flex onPress</code> under the mouse.</li>
-    <li><strong>Each step, <code>world.tick(dt, input)</code></strong> (one a frame, or as many as <code>fixedStep</code> holds): all <code>useInput</code> handlers, then all <code>useUpdate</code> handlers, then every dirty component renders once, then structural changes commit (conditions and list items mount and unmount).</li>
-    <li><strong>Collisions, after each step.</strong> New touching pairs call <code>onCollisionEnter</code>, separated ones <code>onCollisionExit</code>, and what they change renders at once, so the next step sees it, and a run collides at the same steps at any frame rate.</li>
-    <li><strong>Draw.</strong> The tree is walked depth-first into draw records in tree order (or <code>z</code> order), with the camera applied. A contact and what it caused are drawn in the same frame.</li>
+    <li>A new left click goes to the topmost <code>Pointer</code> / <code>Flex onPress</code> under the mouse.</li>
+    <li>Each step runs <code>world.tick(dt, input)</code> (one step a frame, or as many as <code>fixedStep</code> holds): all <code>useInput</code> handlers, then all <code>useUpdate</code> handlers, then every dirty component renders once, then structural changes commit (conditions and list items mount and unmount).</li>
+    <li>After each step, new touching pairs call <code>onCollisionEnter</code> and separated ones <code>onCollisionExit</code>. What they change renders at once, so the next step sees it and a run collides at the same steps at any frame rate.</li>
+    <li>To draw, the tree is walked depth-first into draw records in tree order (or <code>z</code> order), with the camera applied. A contact and what it caused are drawn in the same frame.</li>
     <li>The backend draws and presents, then supplies next frame's input.</li>
   </ol>
   <h3>Consequences worth knowing</h3>
   <ul>
-    <li>State set in a handler shows <strong>next render</strong>. Refs are immediate.</li>
-    <li><strong>Between components, a step apart.</strong> Every update in a step sees the state as the step began. So a value a child reports to its parent in a step (<code>onMove(x)</code>, then the parent's <code>setPlayerX</code>) reaches its siblings, by props or through context, in the next step. That is one step of lag between independent things, and it repeats exactly. Where it matters, a built-in reads its child directly, as <code>&lt;Camera&gt;</code> follows what it holds.</li>
+    <li>State set in a handler shows at the next render. Refs are immediate.</li>
+    <li>Components see each other's changes a step apart. Every update in a step sees the state as the step began, so a value a child reports to its parent in a step (<code>onMove(x)</code>, then the parent's <code>setPlayerX</code>) reaches its siblings, by props or through context, in the next step. That is one step of lag between independent things, and it repeats exactly. Where it matters, a built-in reads its child directly, as <code>&lt;Camera&gt;</code> follows what it holds.</li>
     <li>Objects attached mid-frame get hooks next frame.</li>
-    <li>With <code>fixedStep</code>, steps 2–4 above run once per whole step, and drawing runs once per frame. See <a href="effects.html#input">Input and timing</a>.</li>
+    <li>With <code>fixedStep</code>, steps 2 to 4 above run once per whole step, and drawing runs once per frame. See <a href="effects.html#input">Input and timing</a>.</li>
     <li><code>freeze(n)</code> skips <code>useUpdate</code> (not <code>useInput</code> or renders) for <code>n</code> steps.</li>
     <li>Any number of setters means one render. <code>AnimatedSprite</code> costs no renders.</li>
     <li>Unchanged subtrees reuse last frame's draw records.</li>
