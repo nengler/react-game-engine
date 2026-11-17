@@ -18,6 +18,7 @@ import { createRequire } from "node:module";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { fontLicenses } from "@tsengine/native";
 import { build, type Plugin } from "esbuild";
 
 import { bundleForHost } from "../bundle.ts";
@@ -46,6 +47,9 @@ export async function packageCommand(args: readonly string[]): Promise<number> {
   if (engine === "quickjs") await packageQuickJs(game, entry, name, flavor, out);
   else await packageNode(game, entry, name, flavor, out);
   if (existsSync(join(game.dir, "assets"))) cpSync(join(game.dir, "assets"), join(out, "assets"), { recursive: true });
+  // libtse holds the built-in fonts, whose licenses go with it.
+  const fonts = fontLicenses();
+  if (fonts !== null) cpSync(fonts, join(out, "FONTS.md"));
   console.log(
     `\npackaged ${entry} -> ${relative(process.cwd(), out) || out} (${engine === "node" ? "Node/V8" : "QuickJS-ng"}, ${flavor === "headless" ? "headless: no window" : "with a window"})`
   );

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  BUILTIN_FONTS,
   Camera,
   Entity,
   Fade,
@@ -18,7 +19,14 @@ import {
   type TilemapData,
 } from "@tsengine/runtime";
 
-import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
+import {
+  BUILTIN_FONT_METRICS,
+  createPlayer,
+  RecordingBackend,
+  TSE_BUILTIN_FONT_SHEETS,
+  type DecodedRecord,
+  type PlayerConfig,
+} from "../src/index.ts";
 
 const SIZES = {
   "assets/tiles.png": { width: 30, height: 20 },
@@ -449,6 +457,42 @@ describe("bitmap fonts", () => {
     assert.deepEqual([glyphs[2]?.x, (glyphs[2]?.y ?? 0) - (glyphs[0]?.y ?? 0)], [0, 6], "the next line is 6 pixels down");
   });
 
+  it("have a sheet and an advance for each character for every built-in font, and the same names as the runtime's list", () => {
+    assert.deepEqual(Object.keys(BUILTIN_FONT_METRICS), [...BUILTIN_FONTS]);
+    assert.deepEqual(Object.keys(TSE_BUILTIN_FONT_SHEETS), [...BUILTIN_FONTS]);
+    for (const [name, font] of Object.entries(BUILTIN_FONT_METRICS)) {
+      assert.equal(font.advances.length, 96, name);
+      assert.ok(font.width % 16 === 0 && font.height % 6 === 0, `${name}: 16 × 6 whole cells`);
+      const cellW = font.width / 16;
+      assert.ok(
+        font.advances.every((a) => Number.isInteger(a) && a >= 0 && a <= cellW),
+        `${name}: each advance fits its cell`
+      );
+      const digits = font.advances.slice(16, 26);
+      assert.ok(
+        digits.every((a) => a === digits[0]),
+        `${name}: the digits are one width, so a counting number does not shift`
+      );
+    }
+  });
+
+  it("lay a built-in font out by each character's own advance, not the cell: an i is narrower than an m", () => {
+    const { advances, width, height } = BUILTIN_FONT_METRICS["tse:m5x7"]!;
+    const advance = (ch: string) => advances[ch.charCodeAt(0) - 32]!;
+    assert.ok(advance("i") < advance("m"), "m5x7 is proportional");
+    const { backend } = run(() => new Text({ text: "imi", font: "tse:m5x7", size: (height / 6) * 2 }), 1);
+    const glyphs = ofOp(backend.lastFrame.records, "spriteRegion");
+    assert.equal(glyphs[0]?.srcW, width / 16, "each glyph is drawn from its whole cell");
+    assert.deepEqual(
+      glyphs.map((g) => g.x),
+      [0, advance("i") * 2, (advance("i") + advance("m")) * 2],
+      "at twice the size, each moves the next on by twice its advance"
+    );
+    const centred = run(() => new Text({ text: "imi", font: "tse:m5x7", align: "center" }), 1);
+    const total = advance("i") * 2 + advance("m");
+    assert.equal(ofOp(centred.backend.lastFrame.records, "spriteRegion")[0]?.x, Math.round(-total / 2), "measured by the advances too");
+  });
+
   it("align without a width on their x: centred, or ending there, line by line", () => {
     const centre = run(() => new Text({ text: "AB\nC", font: "tse:small", align: "center" }), 1);
     const glyphs = ofOp(centre.backend.lastFrame.records, "spriteRegion");
@@ -467,7 +511,7 @@ describe("bitmap fonts", () => {
   it("refuse a tse: name that is not built in, naming the ones there are, and load nothing for it", () => {
     const { backend, warnings } = run(() => new Text({ text: "A", font: "tse:huge" }), 1);
     assert.ok(
-      warnings.some((w) => w.includes("There is no built-in 'tse:huge' (there is: tse:small)")),
+      warnings.some((w) => w.includes(`There is no built-in 'tse:huge' (there is: ${BUILTIN_FONTS.join(", ")})`)),
       warnings.join("\n")
     );
     assert.ok(!backend.textureLoads.some((p) => p.includes("tse:huge")));

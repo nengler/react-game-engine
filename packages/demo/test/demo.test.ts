@@ -328,9 +328,10 @@ describe("demo: pixels from the real library", { skip }, () => {
     assert.equal(pixel(frame, 308, 68), "3a2b50ff", "a ground circle");
     assert.equal(pixel(frame, 100, 68), "708090ff", "the button, below its label");
     assert.equal(pixel(frame, 332, 192), "ffd700ff", "the player, in the middle of the window");
-    assert.equal(pixel(frame, 468, 308), "00aaaaff", "the plain sprite (teal) in the lower right");
-    // The beacon is orange, teal or (on its missing frame) magenta, depending on how long 60 frames took.
-    assert.ok(["ff8c00ff", "00aaaaff", "ff00ffff"].includes(pixel(frame, 208, 128)), `beacon pixel ${pixel(frame, 208, 128)}`);
+    assert.equal(pixel(frame, 468, 308), "fc683bff", "the plain sprite (the flag's second frame, light red there) in the lower right");
+    // The beacon's flag is dark red (frame 1), light red (frame 2) or (on its missing frame) magenta there, depending on how long
+    // 60 frames took.
+    assert.ok(["dd442cff", "fc683bff", "ff00ffff"].includes(pixel(frame, 208, 128)), `beacon pixel ${pixel(frame, 208, 128)}`);
     let white = 0;
     for (let y = 44; y < 68; y++) for (let x = 18; x < 112; x++) if (pixel(frame, x, y) === "ffffffff") white++;
     assert.ok(white > 10, `the label drew ${white} white pixels`);

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
 
-import { CollisionTracker, createPlayer, KEYS, TSE_ABI_VERSION, type PlayerConfig } from "@tsengine/player";
+import { CollisionTracker, createPlayer, KEYS, TSE_ABI_VERSION, TSE_BUILTIN_FONT_SHEETS, type PlayerConfig } from "@tsengine/player";
 import {
   Camera,
   Collider,
@@ -134,11 +134,13 @@ describe("libtse through koffi", { skip }, () => {
     }
   });
 
-  it("draws tse:small, the font built into libtse: a 64 × 36 sheet, 3 × 5 glyphs, crisp at its own size", () => {
+  it("draws tse:small, a font built into libtse: a 64 × 36 sheet, 3 × 5 glyphs, crisp at its own size; and makes every built-in sheet", () => {
     const backend = createNodeBackend(library);
     try {
       backend.open({ width: 64, height: 48, title: "fonts", hidden: true, vsync: false });
       assert.deepEqual(backend.textureSize(backend.loadTexture("tse:small")), { width: 64, height: 36 });
+      for (const [name, sheet] of Object.entries(TSE_BUILTIN_FONT_SHEETS))
+        assert.deepEqual(backend.textureSize(backend.loadTexture(name)), sheet, `${name}: the sheet the player expects`);
       assert.equal(backend.loadTexture("tse:huge"), -1, "a tse: name that is not built in loads nothing");
     } finally {
       backend.close();
@@ -410,6 +412,35 @@ describe("libtse through koffi", { skip }, () => {
       assert.equal(pixel(frame, 0, y), "0000ffff", `left border at y=${y}`);
       assert.equal(pixel(frame, 63, y), "0000ffff", `right border at y=${y}`);
     }
+  });
+
+  it("blends a translucent shape in a <Screen> with what is under it, not with the border", () => {
+    // The canvas's alpha drops where something translucent is drawn (0.5 over 1 is 0.75), and the canvas was laid over the window
+    // with it, so the border showed through: here half of the blue border.
+    const frame = render(() => {
+      const screen = new Screen({ width: 64, height: 48, border: "blue" });
+      screen.addChild(new Shape({ kind: "rect", width: 64, height: 48, color: "#406080" }));
+      const shade = new Shape({ kind: "rect", width: 20, height: 20, color: "black" });
+      shade.transform.opacity = 0.5;
+      screen.addChild(shade);
+      const layer = new Layer({ opacity: 0.5 });
+      const red = new Shape({ kind: "rect", width: 20, height: 20, color: "red" });
+      red.transform.x = 30;
+      layer.addChild(red);
+      screen.addChild(layer);
+      return screen;
+    });
+    const near = (x: number, y: number, rgb: [number, number, number], what: string) => {
+      const at = (y * frame.width + x) * 4;
+      const got = [...frame.rgba.subarray(at, at + 3)];
+      assert.ok(
+        got.every((v, i) => Math.abs(v - rgb[i]!) <= 2),
+        `${what}: ${pixel(frame, x, y)}`
+      );
+    };
+    near(5, 5, [0x20, 0x30, 0x40], "half black over the background");
+    near(35, 5, [0xa0, 0x30, 0x40], "a layer's red at half opacity over the background");
+    near(35, 30, [0x40, 0x60, 0x80], "...and the background as it is where nothing is drawn");
   });
 
   it("lays a translucent add or screen layer of lights over a coloured background without darkening a pixel of it", () => {

@@ -5,10 +5,29 @@ export const TEXT_ALIGNS = ["left", "center", "right"] as const;
 export type TextAlign = (typeof TEXT_ALIGNS)[number];
 
 /**
- * Fonts built into the engine, named like an asset but with the `tse:` prefix: `<Text font="tse:small">` or `<Game font="tse:small">`.
- * `tse:small` is 3×5 glyphs in 4×6 cells (a 64×36 sheet), so text is 6 pixels a line: for 320×180 and smaller screens.
+ * Fonts built into the engine, named like an asset but with the `tse:` prefix: `<Text font="tse:m5x7">` or `<Game font="tse:m5x7">`.
+ * Each is a bitmap font whose characters keep their own widths. By the screen they suit, with a line's height in pixels:
+ *
+ * - 320×180: `tse:small` (Tom Thumb, 3×5, 6 a line), `tse:micro5` (condensed, 8), `tse:tiny5` (rounder, 8).
+ * - 480×270: `tse:m5x7` (with lower case, 10), `tse:silkscreen` (wide capitals, 9), `tse:caps` (5×7 capitals, 8).
+ * - 640×360: `tse:arcade` (bold 8×8, 9), `tse:unscii` and `tse:unscii-thin` (8×8, 9), `tse:jersey10` (tall and sporty, 14),
+ *   `tse:unscii-tall` (8×16, 17).
+ *
+ * Where each comes from and its license: tools/fonts/README.md. The list is the same as the player's `BUILTIN_FONT_METRICS`.
  */
-export const BUILTIN_FONTS = ["tse:small"] as const;
+export const BUILTIN_FONTS = [
+  "tse:small",
+  "tse:tiny5",
+  "tse:micro5",
+  "tse:m5x7",
+  "tse:silkscreen",
+  "tse:caps",
+  "tse:arcade",
+  "tse:unscii",
+  "tse:unscii-thin",
+  "tse:jersey10",
+  "tse:unscii-tall",
+] as const;
 export type BuiltinFont = (typeof BUILTIN_FONTS)[number];
 
 /** Whether a font or image name is an engine built-in's (`tse:…`), whether or not one by that name exists. */
@@ -50,7 +69,8 @@ export interface TextProps {
    * A bitmap font: the name of an image holding the glyphs of the ASCII characters 32 to 127 in a grid of 16 columns and 6 rows,
    * left to right, then down. Each glyph cell is the image's width ÷ 16 by its height ÷ 6, and the text is drawn from them with
    * no smoothing, so it stays crisp. `size` is then the height in pixels of a glyph cell: a whole multiple of the cell's height
-   * keeps pixels square. `"tse:small"` is a font built into the engine (no file): 3×5 glyphs in 4×6 cells, for small screens.
+   * keeps pixels square. A `tse:` name is a font built into the engine (no file), whose characters keep their own widths:
+   * `"tse:small"` (3×5, for 320×180), `"tse:m5x7"` (for 480×270), `"tse:unscii"` (8×8, for 640×360) and more (`BUILTIN_FONTS`).
    * Without `font` the text uses the default font.
    */
   font?: string;

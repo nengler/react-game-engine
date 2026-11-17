@@ -34,12 +34,20 @@ export function encodePng(pixels: Pixels): Uint8Array {
   ]);
 }
 
-/** Read back a PNG written by `encodePng` (8-bit RGBA, no interlacing): for tests of the screenshot tool. */
+/**
+ * Decode a PNG to RGBA8: any colour type (grey, RGB, palette, each with or without alpha, and `tRNS` transparency), bit depths
+ * 1 to 16 (16-bit samples keep their high byte), and every row filter. Interlaced images are refused. It reads back what
+ * `encodePng` writes (for the screenshot tool's comparisons) and ordinary PNGs from elsewhere (for asset scripts).
+ */
 export function decodePng(bytes: Uint8Array): Pixels {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length);
   let at = 8;
   let width = 0;
   let height = 0;
+  let depth = 8;
+  let colorType = 6;
+  let palette: Uint8Array = new Uint8Array(0);
+  let transparency: Uint8Array = new Uint8Array(0);
   const data: Buffer[] = [];
   while (at < buffer.length) {
     const length = buffer.readUInt32BE(at);
@@ -48,16 +56,83 @@ export function decodePng(bytes: Uint8Array): Pixels {
     if (type === "IHDR") {
       width = body.readUInt32BE(0);
       height = body.readUInt32BE(4);
-      if (body[8] !== 8 || body[9] !== 6) throw new Error("decodePng only reads 8-bit RGBA.");
-    } else if (type === "IDAT") data.push(body);
+      depth = body[8]!;
+      colorType = body[9]!;
+      if (body[12] !== 0) throw new Error("decodePng does not read interlaced PNGs.");
+    } else if (type === "PLTE") palette = body;
+    else if (type === "tRNS") transparency = body;
+    else if (type === "IDAT") data.push(body);
+    else if (type === "IEND") break;
     at += 12 + length;
   }
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colorType];
+  if (channels === undefined) throw new Error(`decodePng: unknown colour type ${colorType}.`);
+  const bitsPerPixel = channels * depth;
+  const stride = Math.ceil((width * bitsPerPixel) / 8);
+  const step = Math.max(1, bitsPerPixel >> 3); // the filters' "corresponding byte to the left"
   const raw = inflateSync(Buffer.concat(data));
+  const rows = new Uint8Array(height * stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)]!;
+    const src = y * (stride + 1) + 1;
+    const out = y * stride;
+    for (let i = 0; i < stride; i++) {
+      const a = i >= step ? rows[out + i - step]! : 0;
+      const b = y > 0 ? rows[out - stride + i]! : 0;
+      const c = i >= step && y > 0 ? rows[out - stride + i - step]! : 0;
+      let predicted = 0;
+      if (filter === 1) predicted = a;
+      else if (filter === 2) predicted = b;
+      else if (filter === 3) predicted = (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        predicted = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      } else if (filter !== 0) throw new Error(`decodePng: unknown row filter ${filter}.`);
+      rows[out + i] = (raw[src + i]! + predicted) & 255;
+    }
+  }
+  // One sample of a row, scaled to 8 bits (a palette index is returned as is).
+  const sample = (y: number, index: number): number => {
+    if (depth === 8) return rows[y * stride + index]!;
+    if (depth === 16) return rows[y * stride + index * 2]!;
+    const bit = index * depth;
+    const value = (rows[y * stride + (bit >> 3)]! >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
+    return colorType === 3 ? value : Math.round((value * 255) / ((1 << depth) - 1));
+  };
+  // The tRNS colour key of a grey or RGB image, in the same 8-bit terms as `sample`.
+  const key = (i: number): number => {
+    const value = (transparency[i * 2]! << 8) | transparency[i * 2 + 1]!;
+    return depth === 16 ? value >> 8 : depth === 8 ? value : Math.round((value * 255) / ((1 << depth) - 1));
+  };
   const rgba = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) {
-    const row = y * (1 + width * 4);
-    if (raw[row] !== 0) throw new Error("decodePng only reads unfiltered rows.");
-    rgba.set(raw.subarray(row + 1, row + 1 + width * 4), y * width * 4);
+    for (let x = 0; x < width; x++) {
+      const o = (y * width + x) * 4;
+      const s = x * channels;
+      if (colorType === 3) {
+        const index = sample(y, s);
+        rgba[o] = palette[index * 3] ?? 0;
+        rgba[o + 1] = palette[index * 3 + 1] ?? 0;
+        rgba[o + 2] = palette[index * 3 + 2] ?? 0;
+        rgba[o + 3] = transparency[index] ?? 255;
+      } else if (colorType === 0 || colorType === 4) {
+        const grey = sample(y, s);
+        rgba.fill(grey, o, o + 3);
+        rgba[o + 3] = colorType === 4 ? sample(y, s + 1) : transparency.length >= 2 && grey === key(0) ? 0 : 255;
+      } else {
+        const r = sample(y, s);
+        const g = sample(y, s + 1);
+        const b = sample(y, s + 2);
+        rgba[o] = r;
+        rgba[o + 1] = g;
+        rgba[o + 2] = b;
+        rgba[o + 3] =
+          colorType === 6 ? sample(y, s + 3) : transparency.length >= 6 && r === key(0) && g === key(1) && b === key(2) ? 0 : 255;
+      }
+    }
   }
   return { width, height, rgba };
 }

@@ -40,6 +40,7 @@ export function Hero({ startX, startY, speed = 110 }: HeroProps) {
 
   return (
     <Entity x={x} y={y}>
+      {/* hero.png is tile 98 of Kenney's Tiny Dungeon pack (kenney.nl, CC0): free to use, change or replace. */}
       <Sprite image="hero.png" originX={2} />
     </Entity>
   );

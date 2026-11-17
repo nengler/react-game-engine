@@ -332,7 +332,7 @@ export function stagePackage(name: string, staging: string, version?: string): s
   if (pkg.bin) {
     built.bin = Object.fromEntries(Object.entries(pkg.bin as Record<string, string>).map(([bin, file]) => [bin, builtPath(file, ".js")]));
   }
-  built.files = name === "native" ? ["dist", "lib", "bin"] : name === "cli" ? ["dist", "template", "templates"] : ["dist"];
+  built.files = name === "native" ? ["dist", "lib", "bin", "FONTS.md"] : name === "cli" ? ["dist", "template", "templates"] : ["dist"];
   if (name === "cli") {
     cpSync(join(source, "template"), join(stage, "template"), { recursive: true });
     cpSync(join(source, "templates"), join(stage, "templates"), { recursive: true });
@@ -340,6 +340,8 @@ export function stagePackage(name: string, staging: string, version?: string): s
   writeFileSync(join(stage, "package.json"), `${JSON.stringify(built, null, 2)}\n`);
   // The engine's license goes with every pack (npm includes a LICENSE file at a package's root).
   cpSync(join(ROOT, "LICENSE"), join(stage, "LICENSE"));
+  // libtse holds fonts under their own licenses, which go where it goes (`fontLicenses()` in @tsengine/native finds them).
+  if (name === "native") cpSync(join(ROOT, "native", "FONTS.md"), join(stage, "FONTS.md"));
   return stage;
 }
 

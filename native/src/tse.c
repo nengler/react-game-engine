@@ -681,6 +681,12 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
   target.scale = 1.0f;
   execute_records(r + TSE_OP_CANVAS_LEN, length - TSE_OP_CANVAS_LEN, text, text_offsets, text_count);
   EndTextureMode();
+  /* The canvas is the finished picture, and it is laid over the window opaque, as the window's own pixels are. Its alpha is not
+   * coverage: blending a translucent draw blends the alpha too (0.5 over 1 leaves 0.75), and laying the canvas over with that
+   * alpha would let the border colour through. Neither renderer can blend alpha apart from colour here (rlsw has no separate
+   * blend factors), so blending is off until the canvas is down. */
+  rlDrawRenderBatchActive();
+  rlDisableColorBlend();
 
   ClearBackground(unpack_color(to_color(r[7])));
   /* Render textures are upside down: a negative source height flips it. */
@@ -713,6 +719,8 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
     }
   }
   DrawTexturePro(shown, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
+  rlDrawRenderBatchActive();
+  rlEnableColorBlend();
 }
 
 void tse_frame(uint32_t clear_color, const double *records, int32_t records_length,

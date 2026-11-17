@@ -1,189 +1,131 @@
 /**
- * Writes the game's art: for now the ground tiles (`assets/tiles.png`: floor, wall, water). Original, made here, and committed.
- * Run with `npm run assets`.
+ * Writes the game's art and sound effects from Kenney's free CC0 packs (kenney.nl), and its music. The Kenney files used are
+ * copied into `tools/kenney/` under their pack's name and number (`tiny-dungeon-0084.png` is Tiny Dungeon's `tile_0084.png`;
+ * the sounds are converted to WAV), so this runs offline. It lays the tiles out as the sheets the game reads: the packs are
+ * 16 × 16, the game's tile size, so nothing is scaled. Run with `npm run assets`; the outputs are committed.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { crc32, deflateSync } from "node:zlib";
+
+import { decodePng, encodePng } from "@tsengine/player-node";
 
 import { TILE } from "../src/rules/constants.ts";
 
-const assets = join(dirname(fileURLToPath(import.meta.url)), "../assets");
+const here = dirname(fileURLToPath(import.meta.url));
+const assets = join(here, "../assets");
 mkdirSync(assets, { recursive: true });
 
-type Rgb = readonly [number, number, number];
-
-/** An RGBA PNG from a flat array of width × height × 4 bytes. */
-function rgbaPng(width: number, height: number, rgba: Uint8Array): Buffer {
-  const chunk = (type: string, data: Buffer): Buffer => {
-    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-    const out = Buffer.alloc(12 + data.length);
-    out.writeUInt32BE(data.length, 0);
-    body.copy(out, 4);
-    out.writeUInt32BE(crc32(body), 8 + data.length);
-    return out;
-  };
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header[8] = 8;
-  header[9] = 6; // RGBA
-  const raw = Buffer.alloc((width * 4 + 1) * height);
-  for (let y = 0; y < height; y++) Buffer.from(rgba.subarray(y * width * 4, (y + 1) * width * 4)).copy(raw, y * (width * 4 + 1) + 1);
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", header),
-    chunk("IDAT", deflateSync(raw)),
-    chunk("IEND", Buffer.alloc(0)),
-  ]);
+// ---- Sheets made of Kenney tiles. ----
+interface Image {
+  readonly width: number;
+  readonly height: number;
+  readonly rgba: Uint8Array;
 }
+const kenney = (name: string): Image => decodePng(readFileSync(join(here, "kenney", `${name}.png`)));
+const blank = (width: number, height: number): Image => ({ width, height, rgba: new Uint8Array(width * height * 4) });
 
-function png(width: number, height: number, pixel: (x: number, y: number) => Rgb): Buffer {
-  const chunk = (type: string, data: Buffer): Buffer => {
-    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-    const out = Buffer.alloc(12 + data.length);
-    out.writeUInt32BE(data.length, 0);
-    body.copy(out, 4);
-    out.writeUInt32BE(crc32(body), 8 + data.length);
-    return out;
-  };
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header[8] = 8; // bit depth
-  header[9] = 2; // RGB
-  const raw = Buffer.alloc((width * 3 + 1) * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) raw.set(pixel(x, y), y * (width * 3 + 1) + 1 + x * 3);
+/** Draw `src` into `dst` at (dx, dy), each source pixel `scale` × `scale`, mirrored if asked; transparent pixels are skipped. */
+function blit(dst: Image, src: Image, dx: number, dy: number, { flipX = false, scale = 1 } = {}): void {
+  for (let y = 0; y < src.height * scale; y++) {
+    for (let x = 0; x < src.width * scale; x++) {
+      const sx = Math.floor((flipX ? src.width * scale - 1 - x : x) / scale);
+      const from = (Math.floor(y / scale) * src.width + sx) * 4;
+      if (src.rgba[from + 3] === 0) continue;
+      const tx = dx + x;
+      const ty = dy + y;
+      if (tx < 0 || ty < 0 || tx >= dst.width || ty >= dst.height) continue;
+      dst.rgba.set(src.rgba.subarray(from, from + 4), (ty * dst.width + tx) * 4);
+    }
   }
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", header),
-    chunk("IDAT", deflateSync(raw)),
-    chunk("IEND", Buffer.alloc(0)),
-  ]);
 }
 
-/** Three tiles side by side: grass, stone wall, water. A little speckle so a flat field does not look like an error. */
-const tiles = png(TILE * 3, TILE, (x, y) => {
-  const tile = Math.floor(x / TILE);
-  const lx = x % TILE;
-  const speck = (lx * 7 + y * 13) % 11 === 0;
-  if (tile === 0) return speck ? [74, 132, 78] : [88, 150, 92];
-  if (tile === 1)
-    return lx === 0 || y === 0 || lx === TILE - 1 || y === TILE - 1 ? [70, 72, 82] : speck ? [118, 120, 132] : [104, 106, 118];
-  return (lx + y * 3) % 9 < 2 ? [92, 150, 214] : [58, 112, 188];
-});
-writeFileSync(join(assets, "tiles.png"), tiles);
+/** A row of 16 × 16 frames, one per entry, in order. */
+function strip(frames: readonly ((frame: Image) => void)[]): Image {
+  const sheet = blank(frames.length * TILE, TILE);
+  frames.forEach((draw, i) => {
+    const frame = blank(TILE, TILE);
+    draw(frame);
+    blit(sheet, frame, i * TILE, 0);
+  });
+  return sheet;
+}
+const tile =
+  (name: string, options: { flipX?: boolean; scale?: number } = {}) =>
+  (frame: Image): void =>
+    blit(frame, kenney(name), 0, 0, options);
+
+/** Micro Roguelike's tiles sit on a solid background: its near-black pixels are made transparent. */
+function keyed(name: string): Image {
+  const image = kenney(name);
+  const rgba = image.rgba.slice();
+  for (let i = 0; i < rgba.length; i += 4) if (rgba[i]! + rgba[i + 1]! + rgba[i + 2]! < 120) rgba[i + 3] = 0;
+  return { ...image, rgba };
+}
+
+/** The bell: Kenney's packs have none, so it is drawn here in their style (a dark outline around flat colour with one highlight). */
+function bell(frame: Image): void {
+  const rows = [
+    "................",
+    "......####......",
+    "......#bb#......",
+    ".....######.....",
+    "....#yyyyyy#....",
+    "...#ywyyyyyy#...",
+    "...#ywyyyyyy#...",
+    "...#ywyyyyyy#...",
+    "...#yyyyyyyy#...",
+    "..#yyyyyyyyyy#..",
+    "..#oooooooooo#..",
+    "..############..",
+    "......#bb#......",
+    ".......##.......",
+    "................",
+    "................",
+  ];
+  const colors: Record<string, readonly number[]> = {
+    "#": [0x3f, 0x26, 0x31],
+    y: [0xf3, 0xb2, 0x3e],
+    o: [0xc8, 0x76, 0x2c],
+    w: [0xff, 0xec, 0xb0],
+    b: [0x8e, 0x52, 0x2e],
+  };
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const c = colors[row[x]!];
+      if (c !== undefined) frame.rgba.set([...c, 255], (y * frame.width + x) * 4);
+    }
+  });
+}
+
+// The ground (`assets/tiles.png`), in the order the maps' tile ids count: 1 grass, 2 stone wall, 3 water.
+const tiles = strip([tile("tiny-town-0000"), tile("tiny-town-0126"), tile("tiny-battle-0037")]);
+writeFileSync(join(assets, "tiles.png"), encodePng(tiles));
 console.log("wrote assets/tiles.png");
 
-// ---- Sprites: sixteen 16 x 16 frames in a row (RGBA), drawn here with a few lines each. ----
-const FRAMES = 16;
-const sheet = new Uint8Array(FRAMES * TILE * TILE * 4);
-function px(frame: number, x: number, y: number, color: string): void {
-  if (x < 0 || y < 0 || x >= TILE || y >= TILE) return;
-  const at = (y * FRAMES * TILE + frame * TILE + x) * 4;
-  const n = parseInt(color.slice(1), 16);
-  sheet[at] = (n >> 16) & 255;
-  sheet[at + 1] = (n >> 8) & 255;
-  sheet[at + 2] = n & 255;
-  sheet[at + 3] = 255;
-}
-const box = (frame: number, x0: number, y0: number, w: number, h: number, color: string): void => {
-  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) px(frame, x, y, color);
-};
-const disc = (frame: number, cx: number, cy: number, r: number, color: string): void => {
-  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + r / 2) px(frame, cx + x, cy + y, color);
-};
-
-// 0 to 3: the keeper's apprentice, facing down, up, left, right (a hooded figure with a lantern-orange scarf).
-for (let f = 0; f < 4; f++) {
-  box(f, 5, 4, 6, 9, "#3b5a7a"); // cloak
-  box(f, 5, 3, 6, 1, "#2c4560");
-  disc(f, 8, 6, 3, "#e9c9a0"); // face
-  box(f, 5, 3, 6, 3, "#3b5a7a"); // hood
-  box(f, 5, 9, 6, 2, "#f28b3c"); // scarf
-  box(f, 5, 13, 2, 2, "#2c2f3a"); // boots
-  box(f, 9, 13, 2, 2, "#2c2f3a");
-}
-box(0, 6, 5, 4, 3, "#e9c9a0");
-px(0, 7, 6, "#222");
-px(0, 9, 6, "#222");
-box(2, 5, 5, 2, 3, "#e9c9a0");
-px(2, 5, 6, "#222");
-box(3, 9, 5, 2, 3, "#e9c9a0");
-px(3, 10, 6, "#222");
-// 4: a beetle: shell, legs, two feelers.
-disc(4, 8, 9, 5, "#7a3b2a");
-box(4, 3, 8, 10, 1, "#5a2a1e");
-box(4, 7, 3, 1, 3, "#3a1a12");
-box(4, 9, 3, 1, 3, "#3a1a12");
-for (const x of [3, 5, 10, 12]) box(4, x, 13, 1, 2, "#3a1a12");
-// 5: a wisp: a glowing drop with a tail.
-disc(5, 8, 7, 4, "#b58cff");
-disc(5, 8, 7, 2, "#f1e6ff");
-box(5, 7, 11, 2, 3, "#8a63d6");
-px(5, 8, 14, "#6a49a8");
-// 6: a villager: a robe and a hat.
-box(6, 4, 6, 8, 9, "#8a6a3a");
-disc(6, 8, 5, 3, "#e9c9a0");
-box(6, 4, 2, 8, 2, "#5a4a2a");
-box(6, 6, 0, 4, 2, "#5a4a2a");
-px(6, 7, 5, "#222");
-px(6, 9, 5, "#222");
-// 7: the lantern. 8: the key. 9: the shears. 10: a bell.
-box(7, 5, 3, 6, 10, "#f2e05a");
-box(7, 4, 2, 8, 1, "#8a7a2a");
-box(7, 4, 13, 8, 1, "#8a7a2a");
-box(7, 7, 5, 2, 6, "#fff6b0");
-disc(8, 5, 5, 3, "#d8d8d8");
-disc(8, 5, 5, 1, "#10131c");
-box(8, 7, 5, 7, 2, "#d8d8d8");
-box(8, 11, 7, 2, 3, "#d8d8d8");
-box(9, 3, 3, 3, 5, "#c8c8d0");
-box(9, 10, 3, 3, 5, "#c8c8d0");
-box(9, 6, 7, 4, 2, "#9a9aa6");
-box(9, 4, 9, 2, 5, "#8a5a2a");
-box(9, 10, 9, 2, 5, "#8a5a2a");
-box(10, 5, 4, 6, 7, "#d9b64a");
-box(10, 4, 11, 8, 2, "#d9b64a");
-box(10, 7, 2, 2, 2, "#8a7a2a");
-disc(10, 8, 14, 1, "#8a7a2a");
-// 11: a shrine: a stone with a glowing rune. 12: a door. 13: the gate. 14: a bush. 15: the swing.
-box(11, 4, 3, 8, 11, "#7a7e8c");
-box(11, 3, 12, 10, 2, "#5a5e6c");
-box(11, 7, 5, 2, 6, "#6fd6d0");
-box(11, 5, 7, 6, 2, "#6fd6d0");
-box(12, 2, 0, 12, 16, "#6b4a2b");
-box(12, 3, 1, 10, 14, "#8a6338");
-box(12, 11, 8, 2, 2, "#d9b64a");
-box(13, 0, 0, 16, 16, "#9a7a2a");
-box(13, 2, 2, 12, 12, "#d9b64a");
-box(13, 7, 2, 2, 12, "#9a7a2a");
-disc(13, 8, 8, 2, "#fff1b0");
-disc(14, 8, 8, 7, "#2f7a3a");
-disc(14, 6, 6, 3, "#3f9a4a");
-disc(14, 11, 10, 3, "#256a30");
-for (const [x, y] of [
-  [5, 10],
-  [10, 5],
-  [8, 12],
-] as const)
-  px(14, x, y, "#d95a6a");
-for (let i = 2; i < 14; i++) {
-  px(15, i, 3, "#ffffff");
-  px(15, i, 12, "#ffffff");
-}
-for (let i = 3; i < 13; i++) {
-  px(15, 2, i, "#ffffff");
-  px(15, 13, i, "#ffffff");
-}
-writeFileSync(join(assets, "things.png"), rgbaPng(FRAMES * TILE, TILE, sheet));
-
+// Everything on the ground (`assets/things.png`), in the order `src/rules/view.ts` (FRAME) counts.
+const things = strip([
+  tile("tiny-dungeon-0084"), // 0 the apprentice (a wizard), facing down
+  tile("tiny-dungeon-0084"), // 1 facing up: the pack draws characters from the front only
+  tile("tiny-dungeon-0084", { flipX: true }), // 2 facing left
+  tile("tiny-dungeon-0084"), // 3 facing right
+  tile("tiny-dungeon-0122"), // 4 the beetle (a spider)
+  tile("tiny-dungeon-0121"), // 5 the wisp (a ghost)
+  tile("tiny-dungeon-0085"), // 6 a villager
+  (frame) => blit(frame, keyed("micro-roguelike-0039"), 0, 0, { scale: 2 }), // 7 the lantern (an 8 × 8 tile, doubled)
+  tile("tiny-town-0117"), // 8 the key
+  tile("tiny-farm-0088"), // 9 the shears (a sickle)
+  bell, // 10 the bell
+  tile("tiny-dungeon-0065"), // 11 a shrine (a carved stone)
+  tile("tiny-dungeon-0045"), // 12 a door
+  tile("tiny-dungeon-0057"), // 13 the gate (a barred grate)
+  tile("tiny-farm-0078"), // 14 a bush (a bramble with berries)
+  tile("tiny-dungeon-0104"), // 15 the swing (a sword)
+]);
+writeFileSync(join(assets, "things.png"), encodePng(things));
 console.log("wrote assets/things.png");
 
-// ---- Sound: short synthesised effects and a looping theme (16-bit mono PCM WAVs). ----
+// ---- Sound: Kenney's effects, and a looping theme synthesised here (16-bit mono PCM WAVs). ----
 function wav(samples: Float64Array, rate = 22050): Buffer {
   const data = Buffer.alloc(samples.length * 2);
   for (let i = 0; i < samples.length; i++)
@@ -221,116 +163,24 @@ function notes(
   }
   return out;
 }
-const square = (p: number): number => (Math.sin(p) >= 0 ? 0.6 : -0.6);
 const tri = (p: number): number => (2 / Math.PI) * Math.asin(Math.sin(p));
 const save = (name: string, samples: Float64Array): void => writeFileSync(join(assets, name), wav(samples));
-save(
-  "pickup.wav",
-  notes(
-    [
-      [660, 0.07],
-      [880, 0.07],
-      [1320, 0.14],
-    ],
-    square,
-    0.6
-  )
-);
-save("talk.wav", notes([[320, 0.04]], square, 0.4));
-save(
-  "swing.wav",
-  notes(
-    [
-      [300, 0.05],
-      [200, 0.08],
-    ],
-    square,
-    0.5
-  )
-);
-save(
-  "hit.wav",
-  notes(
-    [
-      [150, 0.1],
-      [90, 0.12],
-    ],
-    square,
-    0.8
-  )
-);
-save(
-  "hurt.wav",
-  notes(
-    [
-      [220, 0.1],
-      [110, 0.2],
-    ],
-    tri,
-    1
-  )
-);
-save(
-  "shrine.wav",
-  notes(
-    [
-      [523, 0.12],
-      [659, 0.12],
-      [784, 0.12],
-      [1046, 0.3],
-    ],
-    tri,
-    0.9
-  )
-);
-save(
-  "door.wav",
-  notes(
-    [
-      [180, 0.08],
-      [140, 0.1],
-    ],
-    tri,
-    0.8
-  )
-);
-save(
-  "deny.wav",
-  notes(
-    [
-      [140, 0.1],
-      [120, 0.15],
-    ],
-    square,
-    0.5
-  )
-);
-save(
-  "cut.wav",
-  notes(
-    [
-      [900, 0.03],
-      [600, 0.05],
-    ],
-    square,
-    0.5
-  )
-);
-save(
-  "win.wav",
-  notes(
-    [
-      [523, 0.15],
-      [659, 0.15],
-      [784, 0.15],
-      [1046, 0.5],
-      [784, 0.15],
-      [1046, 0.6],
-    ],
-    tri,
-    1
-  )
-);
+// The effects are Kenney's (Digital Audio, Interface Sounds, Impact Sounds, RPG Audio, Music Jingles), as 22.05 kHz mono WAVs in
+// `tools/kenney/`.
+const sounds: Record<string, string> = {
+  "pickup.wav": "digital-audio-power-up-2",
+  "talk.wav": "interface-sounds-tick-002",
+  "swing.wav": "rpg-audio-knife-slice",
+  "hit.wav": "impact-sounds-impact-soft-medium-000",
+  "hurt.wav": "impact-sounds-impact-punch-heavy-000",
+  "shrine.wav": "interface-sounds-maximize-008",
+  "door.wav": "rpg-audio-door-open-1",
+  "deny.wav": "interface-sounds-error-004",
+  "cut.wav": "rpg-audio-chop",
+  "win.wav": "music-jingles-jingles-nes-12",
+};
+for (const [name, source] of Object.entries(sounds)) copyFileSync(join(here, "kenney", `${source}.wav`), join(assets, name));
+
 // The theme: a slow eight-bar loop of triangle notes over a drone, in A minor.
 const bar = (a: number, b: number, c: number): [number, number][] => [
   [a, 0.5],

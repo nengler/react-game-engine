@@ -9,7 +9,9 @@ It has a compiler, a runtime, and a native player that draws, plays sound and re
 through raylib. The player runs under Node while you develop (with hot reload and rewind); a packaged game is one folder that
 runs on V8 or on a small Rust + QuickJS-ng host. Four games are built on it: [Kite](packages/kite) (a precision platformer),
 [Hearth](packages/hearth) (a tower defense), [Bramble](games/bramble) (a top-down adventure made from the template, outside
-the workspaces) and [Swarm](games/swarm) (a survivors-style game, the crowd test). Linux is the supported platform.
+the workspaces) and [Swarm](games/swarm) (a survivors-style game, the crowd test). The first three's art and sound effects are
+Kenney's free CC0 packs ([kenney.nl](https://kenney.nl)), laid out by each game's `tools/make-assets.ts` from the files in its
+`tools/kenney/`; Swarm's are drawn in code. Linux is the supported platform.
 
 Start with the [authoring guide](docs/index.html) (open it in a browser): [Getting started](docs/start.html) goes from an
 empty folder to a packaged game (`tse create my-game`, or `--template menu` / `--template platformer`), and

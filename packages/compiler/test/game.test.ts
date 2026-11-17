@@ -4,7 +4,7 @@ import { join } from "node:path";
 /** `<Game>`: the optional root that carries the game's configuration and its state. */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Game } from "@tsengine/runtime";
+import { BUILTIN_FONTS, Entity, Game } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, formatDiagnostic, checkAssets } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule, compile, typeCheck } from "./helpers.ts";
@@ -212,7 +212,7 @@ describe("<Game font>", () => {
       checkAssets([compile(source).ir], { folder: "assets", exists: () => false, list: () => [] }).map((d) => d.message);
     assert.deepEqual(check(`export function Main() { return <Game font="tse:small"><Text font="tse:small">hi</Text></Game>; }`), []);
     assert.deepEqual(check(`export function Main() { return <Game><Text font="tse:tiny">hi</Text></Game>; }`), [
-      "There is no built-in font 'tse:tiny' (there is: tse:small).",
+      `There is no built-in font 'tse:tiny' (there is: ${BUILTIN_FONTS.join(", ")}).`,
     ]);
     assert.match(check(`export function Main() { return <Game><Sprite image="tse:small" /></Game>; }`)[0] ?? "", /names a font built into/);
   });
