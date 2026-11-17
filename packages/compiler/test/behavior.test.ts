@@ -221,7 +221,7 @@ function Idle() {
   it("are setter calls of the value worked out from the field as it is now, in a hook and in a callback", () => {
     assert.match(
       code,
-      /this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live\.step\);\n\s+this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live\.step\);/
+      /this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live_step\);\n\s+this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live_step\);/
     );
     assert.match(code, /onPress: \(\) => \{ this\.\$set_st_n\(this\.#\$st_nNext \+ 100\); \}/);
     assert.match(code, /if \(this\.#\$st_bigNext > 2\) \{\n\s+this\.\$set_st_big\(0\);/);

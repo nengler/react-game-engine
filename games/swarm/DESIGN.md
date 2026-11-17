@@ -112,6 +112,18 @@ Engine, in the order found:
    enemy, to move one. The capture after each step now lists the objects whose own transform changed, and `blend` reads the list:
    0.42 to 0.18 ms a frame at 1,500 enemies. The capture (0.44 ms) and putting the transforms back (0.09 ms) are as they were.
 
+9. **Reading a prop in a handler cost an enemy about 0.6 µs, three times its own arithmetic.** An enemy reads `px` and `py` once
+   each in its update, and each read went through four things: an object of getters (`this.$live.px`), `GameObject.liveProp`
+   (one function for every component and every prop, so V8 could not settle on what `getters[name]` held or what it called), the
+   parent's getter, and there a `WeakMap` and two `Map` lookups to find the item by its key. A CPU profile put 4 % of a step
+   on the `px` line; reading `this.props.px` there took 0.9 ms off a 7.8 ms step. Two changes, each worth about half. The
+   component has a getter of its own for each prop (`this.$live_px`), which reads the parent's getter by name. A list item's
+   getters share `$at`, where the item was at the last read, and look there before asking `$indexOfKey`. Remembering the place
+   had been tried alone before, and an A/B showed nothing; one comparison, with the generic read still in front of it.
+
+Measured A/B on 9 (2026-11-17, medians, old then new in turn, only `Enemy` and `Play` changed between them): 1,500 enemies 7.9
+to 6.9 ms, armed 12.6 to 11.2.
+
 Measured A/B on the same game, the engine before and after 7 (2026-11-17, medians, old then new in turn): 1,000 enemies 5.5 to
 4.7 ms, 1,500 about 9.3 to 7.9, 1,500 armed about 14 to 12.9, 3,000 about 21.8 to 17. The table above was taken before 7.
 
@@ -120,7 +132,7 @@ that, 1 and 2 took 2,000 enemies from 38 to 24 ms.
 
 The game, and what it says about writing one:
 
-9. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
+10. **A crowd piles up unless separation is stronger than walking.** Every enemy walks at the player's middle. With a push as a
    speed (40 px/s, at most four neighbours), the crowd behind always won: one 32-pixel cell held 169 enemies and thirty stood on
    one pixel, and every `nearby` in the pile looked at all of them. Stopping at the player and stepping out of each overlap keeps
    the busiest cell under fifty. It is the largest single change here (15 to 11 ms). It is kept because the pile was wrong to
@@ -135,9 +147,6 @@ numbers above are for the game written that way; speed comes from the engine.
 - **Workarounds in the game**: separating every other step (half the crowd each step) and `Math.sqrt(dx * dx + dy * dy)` for
   `Math.hypot` were together about 1.5 ms at 1,500 enemies. Both were taken out again: see "Swarm is written plainly".
 
-- **Remembering, in each item's getter, the list array it last looked in and where the item was**, so a live read is one
-  comparison. The profile put the enemy's own time on the `px` read, but an A/B showed nothing: V8 inlines the getters, and the
-  profile charged their caller.
 - **An index of keys that survives removals** (looking a few places left of where the item was, before making the map again):
   no difference.
 - **Telling the draw walk that only a parent's children changed** (`markChildrenChanged`, so a list in which one enemy died copies
@@ -162,9 +171,5 @@ costs about the same whatever it does, so the remaining gains are in visiting fe
 
 ### What would close the rest
 
-In the order to try them:
-
-- **Fewer objects per enemy.** A sprite cannot hold children, so a component that draws and collides is at least three objects;
-  a collider on the sprite itself would make it two.
 - **A data-oriented crowd**: one component drawing every enemy from arrays (as Hearth's backlog suggests for health bars). It is
   not how this engine asks for games to be written, which is why Swarm does not do it, but it is how a game of 5,000 would.

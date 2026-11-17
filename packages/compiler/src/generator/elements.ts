@@ -574,6 +574,8 @@ export class ElementEmitter extends HandlerEmitter {
       const text = emit(() => this.expr(this.live(e), true));
       return when.length === 0 ? text : `(${when.join(" && ")}) ? ${text} : undefined`;
     };
+    // Whether a getter remembers where its item was: the getters of one item are then made in a function that holds `$at` for them.
+    let usesAt = false;
     // A list item reads its own item, which is found again by its key in the list as it is now (the source and the filter as the
     // render has them, read live). An item that is no longer there, or whose key was taken by another (`key={page}` with `label={page}`:
     // the old page, on its way out as the new one comes), says nothing, and the instance's last props stand.
@@ -600,16 +602,21 @@ export class ElementEmitter extends HandlerEmitter {
             : branch === 1
               ? ` if (${test}) return undefined; $assume(!(${test}));`
               : ` if (!(${test})) return undefined; $assume(${test});`;
-      // Without a filter the list is the state's own array, the same one until it is replaced: its keys are indexed once per array
-      // (`$indexOfKey`), so a thousand items each reading a prop is not a thousand searches of a thousand items. A filter makes a new
-      // array each time, so a filtered list is searched.
-      if (filter === "") this.usesKeyIndex = true;
-      const find =
-        filter === ""
-          ? `$indexOfKey($l, ${JSON.stringify(key)}, $key, (${params}) => ${key})`
-          : `$l.findIndex((${params}) => ${key} === $key)`;
-      return `() => { const $l = ${source}${filter}; const $i = ${find}; if ($i < 0) return undefined; const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()}; }`;
+      const bind = `const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()};`;
+      // A filter makes a new array each time, so a filtered list is searched.
+      if (filter !== "")
+        return `() => { const $l = ${source}${filter}; const $i = $l.findIndex((${params}) => ${key} === $key); if ($i < 0) return undefined; ${bind} }`;
+      // Without a filter the list is the state's own array, the same one until it is replaced. The getters of one item share `$at`,
+      // where the item was at the last read: a read first looks there, which is the item itself and no lookup, as long as nothing
+      // before it in the list was added or removed (a crowd of a thousand, each reading the player's place every step). Otherwise
+      // the array's keys are indexed once per array (`$indexOfKey`), so it is still not a thousand searches of a thousand items.
+      this.usesKeyIndex = true;
+      usesAt = true;
+      // Only what the key reads is named there: a game's `noUnusedLocals` fails on the rest.
+      const there = `${readsParam(around.key, around.item.id) ? `const ${item} = $l[$i]!; ` : ""}${around.index && readsParam(around.key, around.index.id) ? `const ${around.index.name} = $i; ` : ""}if (${key} === $key) break $there;`;
+      return `() => { const $l = ${source}; let $i = $at; $there: { if ($i < $l.length) { ${there} } $i = $indexOfKey($l, ${JSON.stringify(key)}, $key, (${params}) => ${key}); if ($i < 0) return undefined; $at = $i; } ${bind} }`;
     };
+    const made = (getters: string): string => (usesAt ? `(($at: number) => (${getters}))(0)` : getters);
     if (spread) {
       // A spread's members are not known here: every value prop is worked out at once, in order, as the construction does.
       const all = el.props
@@ -626,9 +633,11 @@ export class ElementEmitter extends HandlerEmitter {
         .slice(lastSpread + 1)
         .filter((p) => p.kind === "DynamicProp")
         .map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`);
-      return `{ ${[...own, `$all: ${wrap(() => `({ ${all.join(", ")} })`)}`].join(", ")} }`;
+      return made(`{ ${[...own, `$all: ${wrap(() => `({ ${all.join(", ")} })`)}`].join(", ")} }`);
     }
-    return `{ ${dynamic.map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`).join(", ")} }`;
+    return made(
+      `{ ${dynamic.map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`).join(", ")} }`
+    );
   }
 
   protected propsObject(props: readonly PropIR[]): string {
