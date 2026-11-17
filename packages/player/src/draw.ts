@@ -123,6 +123,72 @@ export function walkTree(
   walk(root, visit, parentSpace, parentZ, intoHuds, leave);
 }
 
+/**
+ * `FrameBuilder.colliders`' walk: every collider under `node` with the world transform the build's walk gives it, in its order (the
+ * tree's, before any z sort), into `out`. The same rules as that walk: a hidden route is not entered, nor is a `<Hud>` (whose colliders
+ * a build does not collect), and a camera is transparent to its children. The first camera met goes in `found`. Returns false, having
+ * stopped, at a `<Flex>`: its children are placed by layout.
+ */
+function placeColliders(
+  node: GameObject,
+  parentSpace: WorldTransform,
+  out: ColliderEntry[],
+  last: Map<Collider, ColliderEntry>,
+  next: Map<Collider, ColliderEntry>,
+  found: { camera: Camera | null }
+): boolean {
+  const kind = (node.drawKind >= 0 ? node.drawKind : kindCode(node)) & KIND_MASK;
+  // A leaf that neither collides nor is a camera (a sprite, a shape: most of a crowd) adds nothing, so its place is not worked out.
+  if (node.children.length === 0 && kind !== KIND_COLLIDER && kind !== KIND_CAMERA) return true;
+  const transform = node.transform;
+  const placement = node.placement;
+  const laidOut = node.layoutX === 0 && node.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, node.layoutX, node.layoutY);
+  const at = composeTransforms(
+    placement.x === 0 &&
+      placement.y === 0 &&
+      placement.rotation === 0 &&
+      placement.scaleX === 1 &&
+      placement.scaleY === 1 &&
+      !placement.global
+      ? laidOut
+      : composeTransforms(laidOut, placement),
+    transform
+  );
+  switch (kind) {
+    case KIND_COLLIDER: {
+      const collider = node as Collider;
+      const was = last.get(collider);
+      const entry =
+        was !== undefined &&
+        was.world.x === at.x &&
+        was.world.y === at.y &&
+        was.world.rotation === at.rotation &&
+        was.world.scaleX === at.scaleX &&
+        was.world.scaleY === at.scaleY
+          ? was
+          : { collider, world: at };
+      next.set(collider, entry);
+      out.push(entry);
+      break;
+    }
+    case KIND_ROUTE:
+      if (!(node as Route).visible) return true;
+      break;
+    case KIND_HUD:
+      return true;
+    case KIND_FLEX:
+      return false;
+    case KIND_CAMERA:
+      if (found.camera === null) found.camera = node as Camera;
+      break;
+  }
+  const childSpace = kind === KIND_CAMERA ? parentSpace : at;
+  const children = node.children;
+  for (let i = 0; i < children.length; i++)
+    if (!placeColliders(children[i] as GameObject, childSpace, out, last, next, found)) return false;
+  return true;
+}
+
 /** What a `walkTree` visit returns for an object that is not drawn at all (a hidden `<Tooltip>`): its subtree is not walked, and it is not left. */
 const SKIP_SUBTREE: WorldTransform = Object.freeze({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 }) as WorldTransform;
 
@@ -1335,6 +1401,32 @@ export class FrameBuilder {
    * not pixel-perfect, a last view in window pixels and the border bars. A pixel-perfect game is drawn in game pixels
    * and scaled by the canvas record; any other game is drawn through views that scale to the window themselves.
    */
+  /** Last step's entry for each collider `colliders` placed: kept while the collider stays put, so the tracker sees it unchanged by identity. */
+  #placedColliders = new Map<Collider, ColliderEntry>();
+
+  /**
+   * The world's colliders where `build` would put them, in the same order, with nothing drawn: for a step's collisions when the frame
+   * is drawn from blended transforms anyway (interpolation), which used to cost a whole build every step only to find the colliders.
+   * What a build does to the first camera (the view it remembers: a change of bounds, the followed point) it does too, at the size of
+   * the last frame's view. Null when a `<Flex>` is in the world outside a `<Hud>`: a box is placed by the layout a build runs, so the
+   * caller builds instead.
+   */
+  colliders(root: GameObject): ColliderEntry[] | null {
+    const out: ColliderEntry[] = [];
+    const next = new Map<Collider, ColliderEntry>();
+    const found = { camera: null as Camera | null };
+    if (!placeColliders(root, IDENTITY_TRANSFORM, out, this.#placedColliders, next, found)) return null;
+    this.#placedColliders = next;
+    const camera = found.camera;
+    const area = this.#area;
+    if (camera !== null && area !== null) {
+      camera.viewWidth = area.gameWidth;
+      camera.viewHeight = area.gameHeight;
+      this.#view(camera, area.gameWidth, area.gameHeight);
+    }
+    return out;
+  }
+
   build(root: GameObject, width: number, height: number, time?: number): BuiltFrame {
     this.inspected.length = 0;
     // The animation clock: where a `<Flex transition>` is in its fade is worked out from it, so building the frame twice at one

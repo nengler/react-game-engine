@@ -408,6 +408,15 @@ Script time only, on the recording backend:
   An index's cells are about one and a half times its boxes' median side (16 to 64 pixels): 32-pixel cells under 10-pixel enemies
   looked at fifty entries to find four. Boxes are worked out with each ancestor's child space remembered, not composed up the
   whole tree for every collider. `distanceToBox` uses `Math.sqrt`; `Math.hypot` is about four times slower in V8.
+- **Collisions without a build, when drawing between steps** (2026-11-17). With interpolation on, a step's frame is built again
+  from blended transforms anyway, so the build `collide()` made to find the colliders was thrown away. `FrameBuilder.colliders`
+  places them without drawing: the build's walk, its order and its rules (a hidden route is not entered, nor is a `<Hud>`, a camera is
+  transparent), skipping leaves that neither collide nor are cameras. It keeps a collider's entry while it stays put, so the tracker's
+  incremental path still sees it unchanged, and it calls the first camera's `viewTransform` at the last frame's view size, as the
+  build did: drawing is what moves a camera's remembered view on (a change of bounds, the start of a slide), and the frame drawn
+  from blended transforms is put back. A `<Flex>` outside a `<Hud>` is placed by layout, so a world with one is built as before.
+  `retain: "check"` builds as well and requires the same colliders. Swarm with 1,500 enemies 0.1 to 1 ms faster; Hearth's wave 10
+  about 0.08 ms.
 - **A keyed list whose keys did not change skips its bookkeeping** (2026-11-17): the duplicate check, the scan for removed items and
   the reorder, when the keys are the same, in the same order, as at its last render. `applyProps` walks props with `for…in`, not
   `Object.keys`. A reorder writes the slot's run of children in place instead of sorting them all, and which hooks an object has is a

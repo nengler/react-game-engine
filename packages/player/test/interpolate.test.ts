@@ -148,4 +148,56 @@ describe("interpolation under a fixed step", () => {
     // And the camera ends where a run without interpolation leaves it: drawing changed nothing the next step would see.
     assert.deepEqual(blended.camera.saveView(), plain.camera.saveView());
   });
+
+  it("moves a camera to new bounds, and slides it there, as a run without interpolation does (the collisions place no frame)", () => {
+    // With interpolation the step's colliders are found without a build, and the frame is drawn from blended transforms and put back:
+    // what the camera remembers of its view (a change of bounds, which starts the slide) must still move on each step.
+    class Door extends Entity {
+      steps = 0;
+      readonly camera: Camera;
+      constructor(camera: Camera) {
+        super();
+        this.camera = camera;
+      }
+      override onUpdate(): void {
+        if (++this.steps === 4) {
+          this.camera.bounds = [400, 0, 320, 180];
+          this.camera.markChanged();
+        }
+      }
+    }
+    const run = (interpolate: boolean): string[] => {
+      let camera: Camera | null = null;
+      const views: string[] = [];
+      const backend = new RecordingBackend();
+      const player = createPlayer(backend, {
+        width: 100,
+        height: 100,
+        title: "camera bounds",
+        hidden: true,
+        fixedStep: 60,
+        interpolate,
+        // Not "check": that builds for the collisions too, which would move the camera on as before.
+        root: () => {
+          const root = new Entity();
+          camera = new Camera({ bounds: [0, 0, 320, 180], slide: 0.2 });
+          camera.addChild(new Mover(3));
+          root.addChild(camera);
+          root.addChild(new Door(camera));
+          return root;
+        },
+      });
+      for (let i = 0; i < 20; i++) backend.queueInput({ dt: STEP });
+      for (let i = 0; i < 20; i++) {
+        player.step();
+        views.push(JSON.stringify((camera as unknown as Camera).saveView()));
+      }
+      player.close();
+      return views;
+    };
+    const blended = run(true);
+    const plain = run(false);
+    assert.deepEqual(blended, plain);
+    assert.notEqual(plain[3], plain[6], "the bounds changed and the view moved");
+  });
 });
