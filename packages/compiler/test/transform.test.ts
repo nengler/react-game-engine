@@ -106,8 +106,8 @@ describe("transform: generated code", () => {
       "a child's transform is set before it is attached"
     );
     const render = code.slice(code.indexOf("override render"));
-    assert.match(render, /const (\$\d+) = this\.\$s_x;[^]*?this\.transform\.x = \1;/);
-    assert.match(render, /const (\$\d+) = \(?this\.\$s_x \/ 100\)?;[^]*?this\.transform\.rotation = \1;/);
+    assert.match(render, /const (\$\d+)(?:: [^=]+)? = this\.\$s_x;[^]*?this\.transform\.x = \1;/);
+    assert.match(render, /const (\$\d+)(?:: [^=]+)? = \(?this\.\$s_x \/ 100\)?;[^]*?this\.transform\.rotation = \1;/);
     assert.doesNotMatch(render, /transform\.y/, "static fields are not re-applied");
   });
 

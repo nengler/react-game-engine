@@ -73,7 +73,7 @@ describe("z in transform", () => {
       [["z", "DynamicProp"]]
     );
     assert.match(compiled.code, /this\.shape\.transform\.z = 2;/);
-    assert.match(compiled.code, /const (\$\d+) = this\.\$s_front \? 5 : \(-5\);[^]*?this\.shape2\.transform\.z = \1;/);
+    assert.match(compiled.code, /const (\$\d+)(?:: [^=]+)? = this\.\$s_front \? 5 : \(-5\);[^]*?this\.shape2\.transform\.z = \1;/);
   });
 
   it("places a component with `transform={{ z }}` in its placement, under the component's own", () => {

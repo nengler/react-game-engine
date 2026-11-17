@@ -165,7 +165,7 @@ describe("props: generated code", () => {
       /updateProps\(next: Partial<EnemyProps>\): void \{\n\s+if \(this\.applyProps\(next, \{ skin: "red" \}\)\) this\.markDirty\(\);/
     );
     assert.match(code, /this\.props\.onDefeated\?\.\(\)/);
-    assert.match(code, /const (\$\d+) = this\.props\.speed;[^]*?this\.transform\.x = \1;/);
+    assert.match(code, /const (\$\d+)(?:: [^=]+)? = this\.props\.speed;[^]*?this\.transform\.x = \1;/);
   });
 
   it("builds a child with all its props and callbacks, and re-sends the dynamic ones in one call", () => {
