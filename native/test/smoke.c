@@ -587,6 +587,14 @@ int main(void) {
   expect_near(6, 6, 0x602020ffu, "add: one light adds to the dark below");
   expect_near(10, 10, 0xa02020ffu, "add: two overlapping lights add to each other (childBlend add), then to what is below");
   expect_near(30, 30, 0x202020ffu, "add: nothing in the layer leaves what is below");
+  /* Past white an add saturates, as on the GPU. rlsw stores a blended channel past 1 without clamping it, and it wrapped (c0 + c0 was
+   * 80): native/cmake/patch-rlsw.cmake clamps it. */
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0xc0c0c0ffu);
+  layer_begin(0x000000ffu, TSE_BLEND_ADD); rect(0, 0, 0, 1, 1, 8, 8, 0xc0c0c0ffu); rect(0, 0, 0, 1, 1, 8, 8, 0xc0c0c0ffu); layer_end(TSE_BLEND_ADD, WHITE_RGBA); frame();
+  expect(4, 4, 0xffffffffu, "add past white is white, in the layer and over what is below");
+  reset(); canvas(64, 48, 0, 0, 64, 48, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0xc0c0c0ffu);
+  layer_begin(0x000000ffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 8, 8, 0xc0c0c0ffu); layer_end(TSE_BLEND_ADD, WHITE_RGBA); frame();
+  expect(4, 4, 0xffffffffu, "add past white in a canvas is white: the canvas stays opaque");
   reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x000000ffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 8, 8, C_RED); layer_end(TSE_BLEND_NORMAL, 0xffffff80u); frame();
   expect_near(4, 4, 0x881018ffu, "normal with half opacity: half the layer's red over the clear colour");
   expect_near(20, 20, 0x081018ffu, "...and half its black elsewhere");
@@ -650,6 +658,33 @@ int main(void) {
   expect_near(32 + 21, 24, 0x000000ffu, "...and black past its radius");
   reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x000000ffu, TSE_BLEND_ADD); light(32, 24, 20, 0xff804080u); light(32, 24, 20, 0xff804080u); layer_end(TSE_BLEND_NORMAL, WHITE_RGBA); frame();
   expect_within(32, 24, 0xff8040ffu, 24, "two lights at half strength add up to one at full");
+  {
+    /* A translucent layer (opacity below 1) keeps its blend mode, scaled by the opacity. An add layer of lights at half opacity, over
+     * a colour, adds half its light, and the dark falloff of each light never shows as a disc over what is below; whether the layer
+     * starts black or transparent. Screen and multiply at half opacity go half way from what is below to the full blend. */
+    const uint32_t below = 0x406080ffu;
+    for (int run = 0; run < 4; run++) {
+      int clear_alpha = run & 1, in_canvas = run >> 1;
+      reset(); if (in_canvas) canvas(64, 48, 0, 0, 64, 48, C_GREEN);
+      view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, below);
+      layer_begin(clear_alpha ? 0x000000ffu : 0x00000000u, TSE_BLEND_ADD); light(20, 24, 14, 0xff8040ffu); light(44, 24, 14, 0x40ff80c0u);
+      layer_end(TSE_BLEND_ADD, 0xffffff80u); frame();
+      int darker = 0;
+      for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+        const uint8_t *p = &pixels[(y * W + x) * 4];
+        for (int c = 0; c < 3; c++) if (p[c] + 1 < (int)(below >> (24 - 8 * c) & 255)) darker++;
+      }
+      CHECK(darker == 0, "a translucent add layer (clear alpha %d, in a canvas %d) never darkens what is below: %d channels darker", clear_alpha, in_canvas, darker);
+      expect_within(20, 24, 0xc0a0a0ffu, 16, "a translucent add layer adds half its light at a light's middle");
+      expect_near(2, 2, below, "...and nothing away from the lights");
+    }
+    reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x404040ffu); layer_begin(0x000000ffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 8, 8, 0x808080ffu); layer_end(TSE_BLEND_SCREEN, 0xffffff80u); frame();
+    expect_within(4, 4, 0x707070ffu, 3, "screen at half opacity: half way from the grey below to grey screened over it");
+    expect_near(20, 20, 0x404040ffu, "...and its black leaves what is below");
+    reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x808080ffu); layer_begin(0xffffffffu, TSE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 8, 8, 0x000000ffu); layer_end(TSE_BLEND_MULTIPLY, 0xffffff80u); frame();
+    expect_within(4, 4, 0x404040ffu, 3, "multiply at half opacity: its black darkens the grey below by half");
+    expect_near(20, 20, 0x808080ffu, "...and its white leaves what is below, never brightens it");
+  }
   reset(); view(1, 0, 0, 1, 0, 0); light(10, 10, 0, C_RED); light(10, 10, NAN, C_RED); frame();
   expect(10, 10, CLEAR, "a light of no radius, or a radius that is not a number, draws nothing");
 

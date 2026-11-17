@@ -6,7 +6,21 @@ import { after, describe, it } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
 
 import { CollisionTracker, createPlayer, KEYS, TSE_ABI_VERSION, type PlayerConfig } from "@tsengine/player";
-import { Camera, Collider, Entity, Flex, Hud, Screen, Shape, Sprite, Text, type World } from "@tsengine/runtime";
+import {
+  Camera,
+  Collider,
+  Entity,
+  Flex,
+  Hud,
+  Layer,
+  Light,
+  Screen,
+  Shape,
+  Sprite,
+  Text,
+  type BlendMode,
+  type World,
+} from "@tsengine/runtime";
 
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
@@ -395,6 +409,42 @@ describe("libtse through koffi", { skip }, () => {
     for (let y = 0; y < 48; y++) {
       assert.equal(pixel(frame, 0, y), "0000ffff", `left border at y=${y}`);
       assert.equal(pixel(frame, 63, y), "0000ffff", `right border at y=${y}`);
+    }
+  });
+
+  it("lays a translucent add or screen layer of lights over a coloured background without darkening a pixel of it", () => {
+    // A game's report: in a <Screen>, `<Layer blend="add" childBlend="add" opacity={0.5}>` of lights drew black discs on the software
+    // renderer. rlsw wrapped the canvas's alpha past 1 (0.25 + 1 stored as 0.25), so the border showed through each light.
+    const below = [0x40, 0x60, 0x80];
+    for (const blend of ["add", "screen"] as BlendMode[]) {
+      for (const clear of ["transparent", "black"]) {
+        const frame = render(
+          () => {
+            const root = new Screen({ width: 64, height: 48, border: "black" });
+            const layer = new Layer({ blend, childBlend: "add", clear, opacity: 0.5 });
+            for (const [x, color] of [
+              [20, "#ff8040"],
+              [44, "#40ff80"],
+            ] as const) {
+              const light = new Light({ radius: 14, color, intensity: 1 });
+              light.transform.x = x;
+              light.transform.y = 24;
+              layer.addChild(light);
+            }
+            root.addChild(layer);
+            return root;
+          },
+          { background: "#406080" }
+        );
+        let darker = 0;
+        for (let i = 0; i < frame.width * frame.height * 4; i += 4) {
+          for (let c = 0; c < 3; c++) if (frame.rgba[i + c]! + 1 < below[c]!) darker++;
+        }
+        assert.equal(darker, 0, `${blend} at half opacity, clear ${clear}: no channel darker than the background`);
+        assert.equal(pixel(frame, 2, 2), "406080ff", `${blend}, clear ${clear}: away from the lights the background is untouched`);
+        const middle = frame.rgba.subarray((24 * frame.width + 20) * 4, (24 * frame.width + 20) * 4 + 3);
+        assert.ok(middle[0]! > 0x90, `${blend}, clear ${clear}: a light brightens the background at its middle (${pixel(frame, 20, 24)})`);
+      }
     }
   });
 

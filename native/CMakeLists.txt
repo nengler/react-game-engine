@@ -30,6 +30,8 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/raysan5/raylib.git
   GIT_TAG 6.0
   GIT_SHALLOW TRUE
+  # The software renderer stores a blended channel past 1 without clamping it, so it wraps (see the script).
+  PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch-rlsw.cmake
 )
 FetchContent_MakeAvailable(raylib)
 
