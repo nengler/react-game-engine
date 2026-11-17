@@ -2885,7 +2885,9 @@ lists reflow with no extra work, and in steady state it allocates nothing. `back
 behind the children, at the box's size. Each child's offset is rounded to a whole pixel (sizes stay exact), so centred
 text is not blurred. A `Flex` with an `onPress` is pressable over its laid-out box, in the same draw-order list as
 `Pointer`s (both are a `Pressable`). A `<Text width={80} align="center">` is laid out as an 80-wide box and drawn
-centred in it. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
+centred in it. Without `width` or `maxWidth`, outside a `Flex`, `align` aligns each line on the text's x (a damage number centred
+on a point, 2026-11-17): the line widths count from a box of 0 (`textAlignBox`), and a parent's extent counts the text where it
+is drawn. A `Flex` child without a width is still laid out at its own size and not moved. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
 minimums; a leaf's minimum is its size unless the measurer reports a smaller one (`minWidth` / `minHeight`, for
 wrapping text), so in a real game nothing shrinks yet and overflow is visible. Not built yet: floating boxes (U5), text wrapping.
 
