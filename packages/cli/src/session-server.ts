@@ -57,6 +57,11 @@ export const COMMANDS: Readonly<Record<string, { readonly args: string; readonly
     does: "the level as text: its tilemaps one character a tile (# solid, other tiles by symbol, with a legend) and the game's things marked by letter with their positions; around a component (default: what the camera follows), or a region {x, y, width, height} in pixels",
   },
   texts: { args: "", does: "the words of every <Text> on screen, in tree order" },
+  watch: {
+    args: "path",
+    does: "follow a value: every answer then lists its changes with their frames. A component's state (`Play.s.lives`, `Pad[key=7].st.hovered`) or the game state's (`useGame.wave`)",
+  },
+  unwatch: { args: "path", does: "stop following a value" },
   snapshot: { args: "name", does: "keep the game as it is now under a name" },
   restore: { args: "name", does: "go back to a snapshot (fast; a built-in's own state, timers and particles start afresh)" },
   replay: { args: "", does: "start again and play this run's input from the start (exact)" },
@@ -186,11 +191,20 @@ export class SessionServer {
       const result = await this.#run(request);
       const session = this.session;
       const warnings = session.takeWarnings();
-      return { ...id, ok: true, frame: session.frame, ...result, ...(warnings.length > 0 ? { warnings } : {}) };
+      const log = session.takeLog();
+      return { ...id, ok: true, frame: session.frame, ...result, ...(log ?? {}), ...(warnings.length > 0 ? { warnings } : {}) };
     } catch (error) {
       const frame = this.#session?.frame ?? 0;
       const warnings = this.#session?.takeWarnings() ?? [];
-      return { ...id, ok: false, frame, error: describeError(error, this.gameDir), ...(warnings.length > 0 ? { warnings } : {}) };
+      const log = this.#session?.takeLog() ?? null;
+      return {
+        ...id,
+        ok: false,
+        frame,
+        error: describeError(error, this.gameDir),
+        ...(log ?? {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
+      };
     }
   }
 
@@ -275,6 +289,11 @@ export class SessionServer {
       }
       case "texts":
         return { texts: session.texts() };
+      case "watch":
+        return { value: session.watch(text("path")), watching: session.watching };
+      case "unwatch":
+        session.unwatch(text("path"));
+        return { watching: session.watching };
       case "snapshot":
         session.snapshot(text("name"));
         return { snapshots: session.snapshots() };
@@ -283,8 +302,11 @@ export class SessionServer {
         return {};
       case "snapshots":
         return { snapshots: session.snapshots() };
-      case "replay":
-        return { steps: session.replay() };
+      case "replay": {
+        const steps = session.replay();
+        session.takeLog(); // what a replay plays again happened before
+        return { steps };
+      }
       case "reset":
         session.reset();
         return {};
@@ -293,6 +315,7 @@ export class SessionServer {
         this.#compile();
         await this.#load();
         this.session.play(history);
+        this.session.takeLog();
         return { steps: history.length };
       }
       case "hash":
@@ -387,6 +410,8 @@ const MAIN_ARG: Readonly<Record<string, string>> = {
   find: "query",
   snapshot: "name",
   press: "query",
+  watch: "path",
+  unwatch: "path",
   restore: "name",
   screenshot: "out",
 };

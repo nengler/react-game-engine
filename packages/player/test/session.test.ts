@@ -136,6 +136,33 @@ describe("Session", () => {
   });
 });
 
+describe("Session's log", () => {
+  it("lists what changed by frame, counts what happens often, and follows watched values", () => {
+    const session = new Session(config, { bindings });
+    assert.equal(session.takeLog(), null, "nothing has happened yet");
+    assert.equal(session.watch("Walker.x"), 0);
+    session.input("right*25, jump, _");
+    const log = session.takeLog()!;
+    assert.deepEqual(log.events, ['frame 20: "FAR"', "frame 26: state0.points 0→1  state0.best.run 0→1"]);
+    assert.deepEqual(log.often, ['19 new texts like "x=38" (last at frame 19)']);
+    assert.deepEqual(log.watched?.["Walker.x"]?.slice(0, 3), [
+      [0, 0],
+      [1, 2],
+      [2, 4],
+    ]);
+    assert.deepEqual(log.watched?.["Walker.x"]?.at(-1), [25, 50]);
+    session.step({ count: 3 });
+    assert.equal(session.takeLog(), null, "nothing changed: no log, and a watched value that held still says nothing");
+    assert.equal(session.valueOf("state0.points"), 1);
+    assert.deepEqual(session.valueOf("Walker"), { x: 50, typed: "" });
+    assert.equal(session.valueOf("Nobody.x"), undefined);
+    assert.throws(() => session.watch("Nobody.x"), /nothing at 'Nobody\.x'/);
+    assert.equal(session.unwatch("Walker.x"), true);
+    assert.deepEqual(session.watching, []);
+    session.close();
+  });
+});
+
 /** A field with a camera on a hero far to the right, a button in the world near it and one on the HUD, and a list of keyed tiles. */
 class Field extends Entity {
   static readonly managed = true;

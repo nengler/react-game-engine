@@ -21,7 +21,7 @@ const KNOWN_VERSIONS = new Set(["2024-11-05", "2025-03-26", "2025-06-18"]);
 const INSTRUCTIONS = `A game made with tse, running headless: nothing is drawn unless you ask for a screenshot. The game steps 60 times a
 second of game time, and only when you play input or step it. Play input with game_input (a script such as "right*30, jump, _*10":
 a name is one of the game's actions or a key name, *N holds it N steps, + starts terms together, _ waits). Read the game with
-game_observe (the scene as text: each object, its world position, texts, colliders and state), game_map (the level drawn in characters, with things marked) and game_state. Keep a moment with
+game_observe (the scene as text: each object, its world position, texts, colliders and state), game_map (the level drawn in characters, with things marked) and game_state. Follow a value through long steps with game_watch; every answer lists what came, went and changed, by frame. Keep a moment with
 game_snapshot and go back with game_restore. After changing the game's source, game_reload compiles it and plays the same input again
 with the new code. Positions are in pixels, y grows downward.`.replace(/\n/g, " ");
 
@@ -87,6 +87,8 @@ const SCHEMAS: Readonly<Record<string, Record<string, unknown>>> = {
     maxColumns: num("The widest the map may be, in characters (default 120)."),
   }),
   texts: schema(),
+  watch: schema({ path: str("The value to follow: `Play.s.lives`, `Hero.s.x`, `Pad[key=7].st.hovered`, `useGame.wave`.") }, ["path"]),
+  unwatch: schema({ path: str("The value to stop following.") }, ["path"]),
   snapshot: schema({ name: str("A name for the snapshot.") }, ["name"]),
   restore: schema({ name: str("The snapshot to go back to.") }, ["name"]),
   replay: schema(),
@@ -111,8 +113,13 @@ export function answerText(answer: SessionResponse): string {
   const { ok: _ok, id: _id, error, frame, warnings, ...rest } = answer;
   lines.push(`frame ${frame}`);
   if (error !== undefined) lines.push(`error: ${error}`);
-  for (const [key, value] of Object.entries(rest))
-    lines.push(typeof value === "string" && value.includes("\n") ? `${key}:\n${value}` : `${key}: ${JSON.stringify(value)}`);
+  for (const [key, value] of Object.entries(rest)) {
+    if (typeof value === "string" && value.includes("\n")) lines.push(`${key}:\n${value}`);
+    // A list of lines (the events) is printed a line each.
+    else if (Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === "string"))
+      lines.push(`${key}:`, ...value.map((v) => `  ${v}`));
+    else lines.push(`${key}: ${JSON.stringify(value)}`);
+  }
   if (Array.isArray(warnings)) for (const warning of warnings) lines.push(`warning: ${String(warning)}`);
   return lines.join("\n");
 }

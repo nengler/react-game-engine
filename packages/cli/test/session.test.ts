@@ -209,7 +209,7 @@ test("mcp: initializes, lists the game's tools, and calls them", () => {
   assert.ok(tools.some((t) => t.name === "game_screenshot"));
   assert.deepEqual(tools.find((t) => t.name === "game_input")?.inputSchema.required, ["script"]);
   const text = (m: typeof input): string => ((m!.result!["content"] as { text: string }[])[0] as { text: string }).text;
-  assert.equal(text(input), "frame 6\nsteps: 6");
+  assert.equal(text(input), 'frame 6\nsteps: 6\nevents:\n  frame 6: useGame.steps 0→1  "steps: 1"', "what changed, a line a frame");
   assert.match(text(observe), /^frame 6\nscene:\nMain @\(0,0\)\n {2}Hero @/);
   assert.match(text(observe), /gameState: \{"useGame":\{"steps":1\}\}/);
   assert.equal(restore?.result?.["isError"], true);

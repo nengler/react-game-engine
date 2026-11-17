@@ -34,6 +34,7 @@ import { applyInputFrame, RecordingBackend, type InputFrame } from "./recording.
 import { hashState } from "./rewind.ts";
 import { onScreen } from "./screen.ts";
 import { parseInputScript, type InputBindings, type ScriptOptions } from "./script.ts";
+import { SessionLog, type LogContext, type SessionLogEntry } from "./session-log.ts";
 
 export interface SessionOptions {
   /** Action names an input script may use (`jump`, `right`), as the game's `game.ts` exports them. */
@@ -126,6 +127,7 @@ export class Session {
   #mouse: { x: number; y: number } | undefined;
   #warnings: string[] = [];
   readonly #snapshots = new Map<string, SessionSnapshot>();
+  readonly #log = new SessionLog();
 
   constructor(config: PlayerConfig, options: SessionOptions = {}) {
     this.#config = config;
@@ -133,6 +135,7 @@ export class Session {
     const started = this.#start();
     this.#backend = started.backend;
     this.#player = started.player;
+    this.#log.baseline(this.#logContext());
   }
 
   /** Build the game afresh and run the warm-up step, which mounts and settles the tree (as `runScript` does). */
@@ -190,6 +193,57 @@ export class Session {
     this.#player.step();
     const failure = this.#player.failure;
     if (failure !== null) throw failure.error;
+    this.#log.record(this.#frame, this.#logContext());
+  }
+
+  #logContext(): LogContext {
+    return {
+      root: this.#root(),
+      gameState: this.gameState(),
+      plays: this.#backend.plays,
+      resolve: (path) => this.valueOf(path),
+    };
+  }
+
+  /**
+   * A value by path: into the game state (`useGame.lives`), or into a component's state (`Play.s.lives`, `Pad[key=7].st.hovered`;
+   * the component alone gives all its state). Undefined when there is no such thing.
+   */
+  valueOf(path: string): unknown {
+    const state = this.gameState();
+    const dot = path.indexOf(".");
+    const head = dot === -1 ? path : path.slice(0, dot);
+    const rest = dot === -1 ? "" : path.slice(dot + 1);
+    if (Object.hasOwn(state, head)) return rest === "" ? state[head] : valueAt(state[head], rest);
+    const found = this.#findAll(head)[0];
+    if (found === undefined) return undefined;
+    const own = componentState(found);
+    return rest === "" ? own : valueAt(own, rest);
+  }
+
+  /** Follow a value (see `valueOf`): `takeLog` lists every change to it, with its frame. Throws when there is nothing at the path. */
+  watch(path: string): unknown {
+    const now = this.valueOf(path);
+    if (now === undefined)
+      throw new Error(
+        `watch: nothing at '${path}' (a game state's path, \`${Object.keys(this.gameState())[0] ?? "useGame"}.coins\`, or a component's, \`Hero.s.hp\`).`
+      );
+    this.#log.watch(path, now, this.#frame);
+    return now;
+  }
+
+  unwatch(path: string): boolean {
+    return this.#log.unwatch(path);
+  }
+
+  /** The values `watch` follows. */
+  get watching(): readonly string[] {
+    return this.#log.watching;
+  }
+
+  /** What happened since the last call: events by frame, sounds, and watched values' changes (see `SessionLog`). Null when nothing did. */
+  takeLog(): SessionLogEntry | null {
+    return this.#log.take();
   }
 
   /** Run steps with nothing pressed: `count` of them, or until `until` holds. */
@@ -444,6 +498,8 @@ export class Session {
     this.#frame = snapshot.frame;
     this.#history = [...snapshot.history];
     this.#mouse = snapshot.mouse;
+    this.#log.take();
+    this.#log.baseline(this.#logContext());
   }
 
   /** Start the game again from nothing (snapshots are kept, but refer to the old run's states and stay restorable). */
@@ -455,6 +511,8 @@ export class Session {
     this.#frame = 0;
     this.#history = [];
     this.#mouse = undefined;
+    this.#log.take();
+    this.#log.baseline(this.#logContext());
   }
 
   /** Start again and play `frames` (default: this run's own history), the exact way back to the same moment. */
