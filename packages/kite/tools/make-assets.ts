@@ -1,15 +1,20 @@
 /**
- * Writes the game's placeholder assets, all made here (nothing is copied from anywhere): the tile sheet, the character's sheet,
- * a 5 × 7 pixel font, the sound effects and the music loop. Run it with `npm run kite:assets`; the outputs are committed, and
- * `assets/README.md` says where each came from. The art is drawn from code on purpose, so it can be changed without a tool.
+ * Writes the game's assets: the tile sheet and the character's sheet from Kenney's Pixel Platformer pack (CC0, kenney.nl, the
+ * tiles used are copied into `tools/kenney/`), and, made here in code, a 5 × 7 pixel font, the death burst and the music loop.
+ * The sound effects come from Kenney's audio packs (`tools/kenney/*.wav`). Run it with `npm run kite:assets`; the outputs are
+ * committed, and `assets/README.md` says where each came from.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { encodePng } from "@tsengine/player-node";
 
-const assets = join(dirname(fileURLToPath(import.meta.url)), "../assets");
+import { blank, kenneyFolder, nearest, place, save, turn, type Image } from "../../../tools/sprite-kit.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const kenney = kenneyFolder(join(here, "kenney"));
+const assets = join(here, "../assets");
 mkdirSync(assets, { recursive: true });
 
 type Rgb = readonly [number, number, number];
@@ -36,108 +41,46 @@ class Canvas {
 }
 
 // -- palette ------------------------------------------------------------------------------------------------------------
-const STONE: Rgb = [0x3b, 0x46, 0x66];
-const STONE_DARK: Rgb = [0x32, 0x3c, 0x5a];
-const STONE_LIGHT: Rgb = [0x5a, 0x6b, 0x99];
-const SPIKE: Rgb = [0xd9, 0x43, 0x5a];
-const SPIKE_LIGHT: Rgb = [0xf2, 0x7a, 0x8c];
-const BODY: Rgb = [0xff, 0xf1, 0xd6];
-const BODY_SHADE: Rgb = [0xe0, 0xc9, 0xa6];
-const SCARF: Rgb = [0xff, 0x7a, 0x59];
-const SCARF_DARK: Rgb = [0xc4, 0x4f, 0x3a];
-const EYE: Rgb = [0x23, 0x1f, 0x33];
+// The death burst's two colours, the alien's greens.
+const BODY: Rgb = [0x6f, 0xd6, 0x7c];
+const SCARF: Rgb = [0x2f, 0x9a, 0x5a];
 
 // -- tiles: 8 × 2 of 10 × 10 ----------------------------------------------------------------------------------------------
-// 1 stone, 2 stone with a lit top, 3-6 spikes (up, down, left, right), 7 exit, 8 start, 9 end marker (the last three are empty).
+// 1 dirt, 2 dirt with grass on top, 3-6 spikes (up, down, left, right), 7 exit, 8 start, 9 end marker (the last three are empty).
+// Kenney's Pixel Platformer tiles are 18 × 18; each is shrunk to 10 × 10 by taking every other pixel or so.
 function tiles(): void {
-  const c = new Canvas(80, 20);
-  const noise = (x: number, y: number): number => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 7;
-  const stone = (ox: number, oy: number, lit: boolean): void => {
-    for (let y = 0; y < 10; y++) {
-      for (let x = 0; x < 10; x++) {
-        let color = noise(ox + x, oy + y) === 0 ? STONE_DARK : STONE;
-        if (lit && y === 0) color = STONE_LIGHT;
-        if (lit && y === 1) color = noise(x, y) < 3 ? STONE_LIGHT : color;
-        c.set(ox + x, oy + y, color);
-      }
-    }
-  };
-  stone(0, 0, false);
-  stone(10, 0, true);
-  // Spikes: three teeth, each a small triangle, drawn for each direction on the half of the tile they occupy.
-  const teeth = (ox: number, dir: "up" | "down" | "left" | "right"): void => {
-    for (let t = 0; t < 3; t++) {
-      for (let depth = 0; depth < 5; depth++) {
-        const width = Math.max(1, 3 - Math.floor(depth * 0.7)); // wide at the base, one pixel at the tip
-        const start = Math.floor(t * 3.33 + (3 - width) / 2) + (depth === 4 ? 0 : 0);
-        for (let w = 0; w < width; w++) {
-          const along = start + w;
-          const color = w === 0 ? SPIKE_LIGHT : SPIKE;
-          if (dir === "up") c.set(ox + along, 9 - depth, color);
-          else if (dir === "down") c.set(ox + along, depth, color);
-          else if (dir === "left") c.set(ox + 9 - depth, along, color);
-          else c.set(ox + depth, along, color);
-        }
-      }
-    }
-  };
-  teeth(20, "up");
-  teeth(30, "down");
-  teeth(40, "left");
-  teeth(50, "right");
-  c.write("tiles.png");
+  const sheet = blank(80, 20);
+  const tile = (name: string): Image => nearest(kenney(name), 10, 10);
+  place(sheet, 0, 10, 10, tile("pixel-platformer-0122"));
+  place(sheet, 1, 10, 10, tile("pixel-platformer-0002"));
+  const spikes = tile("pixel-platformer-0068"); // points up, sitting on the bottom of its tile
+  place(sheet, 2, 10, 10, spikes);
+  place(sheet, 3, 10, 10, turn(spikes, 2));
+  place(sheet, 4, 10, 10, turn(spikes, 3));
+  place(sheet, 5, 10, 10, turn(spikes, 1));
+  save(assets, "tiles.png", sheet);
 }
 
 // -- the character: 12 × 12 frames, 8 per row ---------------------------------------------------------------------------------
 // 0-1 idle, 2-7 run, 8 jump, 9 fall, 10 wall slide, 11 dash, 12-15 death. It faces right; the game mirrors it for left.
+// The character is Kenney's Pixel Platformer alien (two 24 × 24 frames, halved); the death burst is drawn here.
 function hero(): void {
-  const c = new Canvas(96, 24);
-  const frame = (index: number, draw: (put: (x: number, y: number, color: Rgb) => void) => void): void => {
-    const ox = (index % 8) * 12;
-    const oy = Math.floor(index / 8) * 12;
-    draw((x, y, color) => c.set(ox + x, oy + y, color));
-  };
-  /** The body: a rounded bean, `squash` rows shorter and `lean` pixels shifted, with an eye and a scarf blowing back. */
-  const bean = (
-    put: (x: number, y: number, color: Rgb) => void,
-    opts: { top?: number; lean?: number; scarf?: number; feet?: number } = {}
-  ): void => {
-    const top = opts.top ?? 2;
-    const lean = opts.lean ?? 0;
-    const bottom = 11 - (opts.feet ?? 0);
-    for (let y = top; y <= bottom; y++) {
-      const rows = bottom - top;
-      const edge = y === top || y === bottom ? 2 : y === top + 1 || y === bottom - 1 ? 1 : 0;
-      for (let x = 2 + edge; x <= 8 - edge; x++) put(x + lean, y, y > top + rows * 0.65 ? BODY_SHADE : BODY);
-    }
-    put(7 + lean, top + 2, EYE);
-    put(7 + lean, top + 3, EYE);
-    // The scarf: from the back of the neck, trailing left, lifting with `scarf`.
-    const sy = top + 4;
-    put(1 + lean, sy, SCARF);
-    put(0 + lean, sy + (opts.scarf ?? 0), SCARF_DARK);
-    put(2 + lean, sy, SCARF);
-    put(2 + lean, sy + 1, SCARF_DARK);
-  };
-  frame(0, (p) => bean(p));
-  frame(1, (p) => bean(p, { top: 3 }));
-  for (let i = 0; i < 6; i++)
-    frame(2 + i, (p) => bean(p, { top: 2 + (i % 3 === 1 ? 1 : 0), lean: 1, scarf: i % 2, feet: i % 3 === 1 ? 0 : 0 }));
-  frame(8, (p) => bean(p, { top: 0, scarf: -1 })); // stretched up
-  frame(9, (p) => bean(p, { top: 1, scarf: 1 }));
-  frame(10, (p) => bean(p, { top: 2, lean: -1, scarf: 0 })); // against the wall
-  frame(11, (p) => bean(p, { top: 4, lean: 1, scarf: 0 })); // low and long
+  const sheet = blank(96, 24);
+  const [a, b] = [kenney("pixel-platformer-0000"), kenney("pixel-platformer-0001")].map((f) => nearest(f, 12, 12)) as [Image, Image];
+  const frames = [a, b, a, b, a, b, a, b, b, a, a, b];
+  frames.forEach((f, i) => place(sheet, i, 12, 12, f));
   for (let i = 0; i < 4; i++) {
-    frame(12 + i, (p) => {
-      // A burst: pixels flying outward from the middle.
-      const r = 2 + i * 2;
-      for (let a = 0; a < 8; a++) {
-        const ang = (a * Math.PI) / 4;
-        p(Math.round(6 + Math.cos(ang) * r), Math.round(7 + Math.sin(ang) * r), a % 2 ? BODY : SCARF);
-      }
-    });
+    // A burst: pixels flying outward from the middle, in the alien's colours.
+    const r = 2 + i * 2;
+    for (let k = 0; k < 8; k++) {
+      const angle = (k * Math.PI) / 4;
+      const x = ((12 + i) % 8) * 12 + Math.round(6 + Math.cos(angle) * r);
+      const y = 12 + Math.round(7 + Math.sin(angle) * r);
+      if (x < 0 || y < 12 || y >= 24) continue;
+      sheet.rgba.set([...(k % 2 ? BODY : SCARF), 255], (y * 96 + x) * 4);
+    }
   }
-  c.write("hero.png");
+  save(assets, "hero.png", sheet);
 }
 
 // -- the pixel font: 16 × 6 cells of 5 × 8, the characters 32 to 127 ---------------------------------------------------------------
@@ -235,53 +178,23 @@ function wav(samples: Float32Array, rate = RATE): Buffer {
 }
 
 const square = (phase: number, duty = 0.5): number => (phase % 1 < duty ? 1 : -1);
-const saw = (phase: number): number => 2 * (phase % 1) - 1;
 let seed = 12345;
 const random = (): number => {
   seed = (seed * 1664525 + 1013904223) >>> 0;
   return (seed / 4294967296) * 2 - 1;
 };
 
-/** A tone sweeping from `from` to `to` Hz over `seconds`, with a volume envelope. */
-function sweep(seconds: number, from: number, to: number, shape: (phase: number) => number, volume = 0.4, decay = 3): Float32Array {
-  const n = Math.round(seconds * RATE);
-  const out = new Float32Array(n);
-  let phase = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / n;
-    phase += (from + (to - from) * t) / RATE;
-    out[i] = shape(phase) * volume * Math.exp(-decay * t) * Math.min(1, i / 60);
-  }
-  return out;
-}
-
-function noiseBurst(seconds: number, volume: number, lowpass: number): Float32Array {
-  const n = Math.round(seconds * RATE);
-  const out = new Float32Array(n);
-  let last = 0;
-  for (let i = 0; i < n; i++) {
-    last += (random() - last) * lowpass;
-    out[i] = last * volume * Math.pow(1 - i / n, 2);
-  }
-  return out;
-}
-
+/** The effects: Kenney's sounds (Digital Audio, Impact Sounds, Interface Sounds), converted to 22.05 kHz mono WAVs in `tools/kenney/`. */
 function sfx(): void {
-  writeFileSync(join(assets, "jump.wav"), wav(sweep(0.14, 260, 620, (p) => square(p, 0.4), 0.32, 2.5)));
-  const dash = noiseBurst(0.18, 0.7, 0.35);
-  const dashTone = sweep(0.18, 700, 180, saw, 0.2, 3);
-  writeFileSync(join(assets, "dash.wav"), wav(dash.map((v, i) => v + (dashTone[i] as number))));
-  writeFileSync(join(assets, "land.wav"), wav(sweep(0.09, 140, 55, (p) => Math.sin(p * 2 * Math.PI), 0.7, 4)));
-  const death = sweep(0.4, 520, 70, saw, 0.3, 2.2);
-  const deathNoise = noiseBurst(0.4, 0.3, 0.5);
-  writeFileSync(join(assets, "death.wav"), wav(death.map((v, i) => v + (deathNoise[i] as number))));
-  const gem = new Float32Array(Math.round(0.36 * RATE));
-  [0, 0.09, 0.18].forEach((start, k) => {
-    const note = sweep(0.17, [660, 880, 1320][k] as number, [660, 880, 1320][k] as number, (p) => square(p, 0.25), 0.28, 3);
-    note.forEach((v, i) => (gem[Math.round(start * RATE) + i] = (gem[Math.round(start * RATE) + i] as number) + v));
-  });
-  writeFileSync(join(assets, "gem.wav"), wav(gem));
-  writeFileSync(join(assets, "start.wav"), wav(sweep(0.2, 440, 880, (p) => square(p, 0.5), 0.3, 2)));
+  const sounds: Record<string, string> = {
+    "jump.wav": "digital-audio-phase-jump-1",
+    "dash.wav": "digital-audio-zap-1",
+    "land.wav": "impact-sounds-footstep-concrete-000",
+    "death.wav": "digital-audio-zap-three-tone-down",
+    "gem.wav": "digital-audio-power-up-2",
+    "start.wav": "interface-sounds-confirmation-001",
+  };
+  for (const [name, source] of Object.entries(sounds)) copyFileSync(join(here, "kenney", `${source}.wav`), join(assets, name));
 }
 
 /** A 16-second loop: a bass line and a lead over a minor pentatonic, 96 beats a minute. */
