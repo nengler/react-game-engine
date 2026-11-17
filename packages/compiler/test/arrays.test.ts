@@ -241,7 +241,7 @@ describe("array and record state: generated code", () => {
     assert.match(code, /onHit: \(id\) => \{ this\.\$set_s_enemies\(this\.#\$s_enemiesNext\.filter\(\(e\) => e\.id !== id\)\); \}/);
     assert.match(
       code,
-      /const (\$\d+) = \(this\.\$s_enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/
+      /const (\$\d+)(?:: [^=]+)? = \(this\.\$s_enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/
     );
   });
 

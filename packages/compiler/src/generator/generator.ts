@@ -617,7 +617,11 @@ class ComponentGenerator extends ElementEmitter {
               this.within({ renderMemos, guard }, () => {
                 const dynamic = c.root.props.filter((p) => p.kind === "DynamicProp");
                 this.emitReportedWrites(
-                  dynamic.map((prop) => ({ target: access("this", prop.name), value: prop.value })),
+                  dynamic.map((prop) => ({
+                    target: access("this", prop.name),
+                    value: prop.value,
+                    type: `${c.name}[${JSON.stringify(prop.name)}]`,
+                  })),
                   "this.markChanged()"
                 );
                 this.emitDynamicTransform(c.root.transform, "this", "transform");
