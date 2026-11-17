@@ -412,6 +412,35 @@ describe("libtse through koffi", { skip }, () => {
     }
   });
 
+  it("blends a translucent shape in a <Screen> with what is under it, not with the border", () => {
+    // The canvas's alpha drops where something translucent is drawn (0.5 over 1 is 0.75), and the canvas was laid over the window
+    // with it, so the border showed through: here half of the blue border.
+    const frame = render(() => {
+      const screen = new Screen({ width: 64, height: 48, border: "blue" });
+      screen.addChild(new Shape({ kind: "rect", width: 64, height: 48, color: "#406080" }));
+      const shade = new Shape({ kind: "rect", width: 20, height: 20, color: "black" });
+      shade.transform.opacity = 0.5;
+      screen.addChild(shade);
+      const layer = new Layer({ opacity: 0.5 });
+      const red = new Shape({ kind: "rect", width: 20, height: 20, color: "red" });
+      red.transform.x = 30;
+      layer.addChild(red);
+      screen.addChild(layer);
+      return screen;
+    });
+    const near = (x: number, y: number, rgb: [number, number, number], what: string) => {
+      const at = (y * frame.width + x) * 4;
+      const got = [...frame.rgba.subarray(at, at + 3)];
+      assert.ok(
+        got.every((v, i) => Math.abs(v - rgb[i]!) <= 2),
+        `${what}: ${pixel(frame, x, y)}`
+      );
+    };
+    near(5, 5, [0x20, 0x30, 0x40], "half black over the background");
+    near(35, 5, [0xa0, 0x30, 0x40], "a layer's red at half opacity over the background");
+    near(35, 30, [0x40, 0x60, 0x80], "...and the background as it is where nothing is drawn");
+  });
+
   it("lays a translucent add or screen layer of lights over a coloured background without darkening a pixel of it", () => {
     // A game's report: in a <Screen>, `<Layer blend="add" childBlend="add" opacity={0.5}>` of lights drew black discs on the software
     // renderer. rlsw wrapped the canvas's alpha past 1 (0.25 + 1 stored as 0.25), so the border showed through each light.
