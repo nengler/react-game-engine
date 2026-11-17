@@ -166,7 +166,10 @@ export class GameObject<P extends object = {}> {
    */
   protected applyProps(next: Partial<P>, defaults: Partial<P> = {}): boolean {
     let changed = false;
-    for (const key of Object.keys(next) as (keyof P)[]) {
+    // `for…in`, not `Object.keys`: a parent re-rendering a thousand list items calls this for each, every step, and an array of keys
+    // for each call was garbage. `next` is an object literal the generated code made, with no inherited enumerable keys.
+    for (const name in next) {
+      const key = name as keyof P;
       const value = (next[key] === undefined ? defaults[key] : next[key]) as P[keyof P];
       if (this.props[key] !== value) {
         this.props[key] = value;
@@ -402,9 +405,33 @@ export class GameObject<P extends object = {}> {
       if (child.parent === this && child.#slot === slot) child.#order = prefix.length === 0 ? index : [...prefix, index];
     });
     this.markChanged();
-    // Children are kept sorted by (slot, order), and the sort is stable, so only this slot's range can move.
-    this.children.sort((a, b) => (a.#slot === b.#slot ? compareOrder(a.#order, b.#order) : a.#slot < b.#slot ? -1 : 1));
+    // Children are kept sorted by (slot, order), so this slot's children are one run of `children`. When `children` is exactly
+    // that run in its new order (a keyed list's items, which is what reorders), it is written over the run: no sort. A list of a
+    // thousand enemies reordered every step something died was sorted every step.
+    if (prefix.length !== 0 || !this.#writeSlot(slot, children))
+      this.children.sort((a, b) => (a.#slot === b.#slot ? compareOrder(a.#order, b.#order) : a.#slot < b.#slot ? -1 : 1));
     this.world?.orderChanged();
+  }
+
+  /** Write `order` over the run of this object's children in `slot`, if it holds exactly those children; returns whether it did. */
+  #writeSlot(slot: number, order: readonly GameObject[]): boolean {
+    const children = this.children;
+    let start = 0;
+    while (start < children.length && children[start]!.#slot !== slot) start++;
+    let end = start;
+    while (end < children.length && children[end]!.#slot === slot) end++;
+    let count = 0;
+    for (let i = 0; i < order.length; i++) {
+      const child = order[i]!;
+      if (child.parent === this && child.#slot === slot) count++;
+    }
+    if (count !== end - start) return false;
+    let at = start;
+    for (let i = 0; i < order.length; i++) {
+      const child = order[i]!;
+      if (child.parent === this && child.#slot === slot) children[at++] = child;
+    }
+    return true;
   }
 
   /**
@@ -521,6 +548,13 @@ export class GameObject<P extends object = {}> {
    */
   /** How many times this object has rendered: what the development inspector shows. */
   renderCount = 0;
+
+  /**
+   * Which per-step hooks the world it is in runs for it: `HANDLES_INPUT`, `HANDLES_UPDATE`, set by `World.registerObject` and cleared
+   * when it leaves. What `World`'s handler sets hold, kept on the object so making the order handlers run in again (every step that
+   * something mounts or unmounts) is a walk with no lookups, and leaves with no hooks are not walked at all.
+   */
+  worldHandlers = 0;
 
   runRender(): void {
     this.renderCount++;

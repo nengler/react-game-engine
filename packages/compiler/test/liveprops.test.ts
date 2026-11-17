@@ -110,6 +110,38 @@ export function Parent() {
     assert.equal(find("w1").s.saw, 10, "another item is as it was");
   });
 
+  it("an item is found by key after an earlier item was removed and the list replaced (its index moved)", async () => {
+    const { find } = await run(`${ITEMS}
+export function Parent() {
+  const s = useMutable({ foes: [{ id: 1, hp: 10 }, { id: 2, hp: 10 }, { id: 3, hp: 10 }] as Foe[] });
+  const hit = (n: number) => { s.foes = s.foes.filter((f) => f.id !== 1).map((f) => (f.id === 3 ? { id: 3, hp: f.hp - n } : f)); };
+  return <Entity><Hurt onHit={hit} />{s.foes.map((f) => <Watch key={f.id} id={f.id} hp={f.hp} />)}</Entity>;
+}`);
+    assert.equal(find("w3").s.saw, 10 - 20, "item 3, now second in the list, as the parent has it now");
+    assert.equal(find("w2").s.saw, 10);
+    assert.equal(find("w1"), null, "item 1 left");
+  });
+
+  it("a prop written after a spread is read live on its own, and the spread's members still are", async () => {
+    const compiled = compile(`${HURT}
+interface Foe { id: number; hp: number }
+export function See({ id, hp, bonus, onSee }: { id: number; hp: number; bonus: number; onSee: (line: string) => void }) { useUpdate(() => { onSee(id + ":" + hp + ":" + bonus); }); return <Entity />; }
+export function Parent({ onSee }: { onSee: (line: string) => void }) {
+  const s = useMutable({ bonus: 1, foes: [{ id: 1, hp: 10 }, { id: 2, hp: 10 }] as Foe[] });
+  const hit = (n: number) => { s.bonus += n; s.foes[1]!.hp -= n; };
+  return <Entity><Hurt onHit={hit} />{s.foes.map((f) => <See key={f.id} {...f} bonus={s.bonus} onSee={onSee} />)}</Entity>;
+}`);
+    assert.match(compiled.code, /bonus: \(\) => \{/, "bonus has a getter of its own");
+    const module = await load<Record<string, new (p: object) => Entity>>(compiled);
+    const log: string[] = [];
+    const world = new World();
+    world.mount(new module["Parent"]!({ onSee: (line: string) => log.push(line) }));
+    world.flush();
+    world.tick(1 / 60);
+    world.flush();
+    assert.deepEqual(log, ["1:10:21", "2:-10:21"]);
+  });
+
   it("a spread of the item, under a condition on it: where the condition no longer holds, the last props stand", async () => {
     const compiled = compile(`${HURT}
 interface Foe { id: number; hp: number }

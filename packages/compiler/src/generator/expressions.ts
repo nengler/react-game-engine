@@ -100,6 +100,8 @@ export class ExpressionEmitter {
   };
   /** Whether a callback was written with `$assume`, so the module declares it. */
   usesAssume = false;
+  /** Whether a list item's prop getter finds its item through `$indexOfKey`, which the module then declares. */
+  usesKeyIndex = false;
   /** The `useMutable`s a handler has passed whole (`takeHit(s)`), by view name: the class gets an object for each (see the generator). */
   protected readonly mutableObjects = new Set<string>();
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */

@@ -133,6 +133,7 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
     for (const line of declaration.text.split("\n")) w.line(line);
   }
   let usesAssume = false;
+  let usesKeyIndex = false;
   for (const component of module.components) {
     w.blank();
     w.at(component.span, () => {
@@ -145,6 +146,7 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
       );
       generator.emit();
       usesAssume ||= generator.usesAssume;
+      usesKeyIndex ||= generator.usesKeyIndex;
     });
     if (component.isDefaultExport) {
       w.blank();
@@ -157,6 +159,10 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
       "/** Narrows for TypeScript what a callback made under a condition reads (the condition held when it was made). It checks nothing. */"
     );
     w.line("function $assume(_condition: unknown): asserts _condition {}");
+  }
+  if (usesKeyIndex) {
+    w.blank();
+    for (const line of KEY_INDEX.split("\n")) w.line(line);
   }
   emitPrefabs(module, w);
   return w;
@@ -660,3 +666,28 @@ class ComponentGenerator extends ElementEmitter {
     });
   }
 }
+
+/**
+ * What a list item's prop getter finds its item by: the index of the first item whose key is `key`, from a map of the list's keys
+ * made the first time this array is asked about for this key expression (`site`), so each read is a lookup and not a search. A list
+ * field is replaced, never changed, when it changes, so the map stays right for its array; the item found is still checked, and a
+ * miss or a mismatch (an array a helper changed in place) is searched as `findIndex` would.
+ */
+const KEY_INDEX = `/** The index of the item with this key, from a map of the array's keys made once per array (see the compiler's \`KEY_INDEX\`). */
+const $keyIndexes = new WeakMap<readonly unknown[], Map<string, Map<unknown, number>>>();
+function $indexOfKey<T>(list: readonly T[], site: string, key: unknown, keyOf: (item: T, index: number) => unknown): number {
+  let sites = $keyIndexes.get(list);
+  if (sites === undefined) $keyIndexes.set(list, (sites = new Map()));
+  let index = sites.get(site);
+  if (index === undefined) {
+    index = new Map();
+    for (let i = 0; i < list.length; i++) {
+      const k = keyOf(list[i]!, i);
+      if (!index.has(k)) index.set(k, i);
+    }
+    sites.set(site, index);
+  }
+  const i = index.get(key);
+  if (i !== undefined && i < list.length && keyOf(list[i]!, i) === key) return i;
+  return list.findIndex((item, n) => keyOf(item, n) === key);
+}`;

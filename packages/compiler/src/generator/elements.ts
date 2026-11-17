@@ -275,12 +275,19 @@ export class ElementEmitter extends HandlerEmitter {
       : "";
     w.line(`const $list = ${computed ? `this.${listSourceMethod(list)}(${args})` : this.expr(list.source, true)}${filter};`);
     w.line(`const $keys = $list.map((${params}) => ${this.arrowBody(list.key)});`);
-    w.line("const $seen = new Set<string | number>();");
-    w.block("for (const $key of $keys)", () => {
-      w.line(`if ($seen.has($key)) throw new Error("Duplicate key " + JSON.stringify($key) + ${JSON.stringify(` ${where}.`)});`);
-      w.line("$seen.add($key);");
+    // The same keys in the same order as the last render: they were checked then, and nothing comes, goes or moves. Most renders of a
+    // list that is not changing (a thousand enemies re-rendered because the player moved) are this, and skip the bookkeeping below.
+    w.line(`let $same = $keys.length === ${order}.length;`);
+    w.line(`for (let $i = 0; $same && $i < $keys.length; $i++) $same = $keys[$i] === ${order}[$i];`);
+    w.line("const $seen = $same ? null : new Set<string | number>();");
+    w.block("if ($seen !== null)", () => {
+      w.block("for (const $key of $keys)", () => {
+        w.line(`if ($seen.has($key)) throw new Error("Duplicate key " + JSON.stringify($key) + ${JSON.stringify(` ${where}.`)});`);
+        w.line("$seen.add($key);");
+      });
     });
-    w.block(`for (const [${position}, ${item}] of $list.entries())`, () => {
+    w.block(`for (let ${position} = 0; ${position} < $list.length; ${position}++)`, () => {
+      w.line(`const ${item} = $list[${position}]!;`);
       w.line(`const $key = $keys[${position}]!;`);
       if (list.condition !== null && alt === null) {
         // `p.tower && <Tower {...p.tower} />`: the filter above kept only items whose condition holds, but TypeScript does not narrow
@@ -351,15 +358,15 @@ export class ElementEmitter extends HandlerEmitter {
         w.block("else", () => this.emitDynamicTransform(alt.transform, view(alt)));
       } else this.emitDynamicTransform(el.transform, "$item");
     });
-    w.block(`for (const [$key, $item] of ${items})`, () => {
-      w.block("if (!$seen.has($key))", () => {
-        w.line(`${queueRemoveChild({ ref: "$parent", passed: mount.passed }, "$item")};`);
-        w.line(`${items}.delete($key);`);
-        if (records) w.line(`${records}.delete($key);`);
-        if (alt) w.line(`${branches}.delete($key);`);
+    w.block("if ($seen !== null)", () => {
+      w.block(`for (const [$key, $item] of ${items})`, () => {
+        w.block("if (!$seen.has($key))", () => {
+          w.line(`${queueRemoveChild({ ref: "$parent", passed: mount.passed }, "$item")};`);
+          w.line(`${items}.delete($key);`);
+          if (records) w.line(`${records}.delete($key);`);
+          if (alt) w.line(`${branches}.delete($key);`);
+        });
       });
-    });
-    w.block(`if ($keys.length !== ${order}.length || $keys.some(($k, $i) => $k !== ${order}[$i]))`, () => {
       const ordered = `$keys.map(($k) => ${items}.get($k)!)`;
       w.line(
         `${mount.passed ? `$parent.queueReorderPassedChildren(${ordered}, [${slot}])` : `$parent.queueReorder(${slot}, ${ordered})`};`
@@ -593,7 +600,15 @@ export class ElementEmitter extends HandlerEmitter {
             : branch === 1
               ? ` if (${test}) return undefined; $assume(!(${test}));`
               : ` if (!(${test})) return undefined; $assume(${test});`;
-      return `() => { const $l = ${source}${filter}; const $i = $l.findIndex((${params}) => ${key} === $key); if ($i < 0) return undefined; const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()}; }`;
+      // Without a filter the list is the state's own array, the same one until it is replaced: its keys are indexed once per array
+      // (`$indexOfKey`), so a thousand items each reading a prop is not a thousand searches of a thousand items. A filter makes a new
+      // array each time, so a filtered list is searched.
+      if (filter === "") this.usesKeyIndex = true;
+      const find =
+        filter === ""
+          ? `$indexOfKey($l, ${JSON.stringify(key)}, $key, (${params}) => ${key})`
+          : `$l.findIndex((${params}) => ${key} === $key)`;
+      return `() => { const $l = ${source}${filter}; const $i = ${find}; if ($i < 0) return undefined; const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()}; }`;
     };
     if (spread) {
       // A spread's members are not known here: every value prop is worked out at once, in order, as the construction does.
@@ -604,7 +619,14 @@ export class ElementEmitter extends HandlerEmitter {
             ? `...(${value(p.value)})`
             : `${propertyKey((p as { name: string }).name)}: ${value((p as { value: ExprIR }).value)}`
         );
-      return `{ $all: ${wrap(() => `({ ${all.join(", ")} })`)} }`;
+      // A value prop written after every spread is that value whatever the spreads hold, so it gets a getter of its own: reading
+      // `px` in `<Enemy {...e} px={s.px} />` does not build every prop to read one.
+      const lastSpread = el.props.map((p) => p.kind).lastIndexOf("SpreadProp");
+      const own = el.props
+        .slice(lastSpread + 1)
+        .filter((p) => p.kind === "DynamicProp")
+        .map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`);
+      return `{ ${[...own, `$all: ${wrap(() => `({ ${all.join(", ")} })`)}`].join(", ")} }`;
     }
     return `{ ${dynamic.map((p) => `${propertyKey((p as { name: string }).name)}: ${wrap(() => value((p as { value: ExprIR }).value))}`).join(", ")} }`;
   }

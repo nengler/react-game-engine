@@ -147,6 +147,21 @@ describe("send and onReceive", () => {
     assert.deepEqual(log, ['2:"hit"'], "it left: nothing is delivered, and nothing else is hit instead");
   });
 
+  it("reaches the collider of a result found in the step before, as a collision callback's is (found after one step's sends, sent in the next)", () => {
+    const log: string[] = [];
+    let step = 0;
+    let kept: Nearby | null = null;
+    const sender = new Asker((self) => {
+      step += 1;
+      if (step === 1) kept = self.nearby("enemy", 100, 100, 50)[0] ?? null;
+      if (step === 2 && kept !== null) self.send("enemy", kept, "late");
+    });
+    const world = worldOf(sender, enemy(1, 110, 95, log), enemy(2, 95, 95, log));
+    world.tick(1 / 60);
+    world.tick(1 / 60);
+    assert.deepEqual(log, ['2:"late"']);
+  });
+
   it("delivers a value sent from onReceive later in the same step, and stops a loop of receivers sending to each other", () => {
     const log: string[] = [];
     let world: World | null = null;
