@@ -153,7 +153,8 @@ work now. Change history belongs in commits and release notes.
 - `npm run docs:index` rebuilds the search index in `docs/search-index.js` (a test fails if it is stale).
 - `node --test packages/runtime/test/docs-coverage.test.ts packages/compiler/test/docs-hooks.test.ts packages/compiler/test/recipes.test.ts`
   checks that every built-in and hook is still mentioned and every recipe still compiles.
-- `npm run format:check` if you touched Markdown or JavaScript.
+- Markdown, HTML and everything under `docs/` are not format-checked (`.oxfmtrc.json` ignores them), so do not run
+  prettier on them: it reflows code blocks and tables.
 
 ## What to report
 
