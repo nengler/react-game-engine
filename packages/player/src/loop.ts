@@ -28,7 +28,7 @@ import {
 import type { Backend, WindowConfig } from "./backend.ts";
 import { CollisionTracker } from "./collide.ts";
 import { MAGENTA, parseColor } from "./color.ts";
-import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame } from "./draw.ts";
+import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame, type ColliderEntry } from "./draw.ts";
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
@@ -297,8 +297,14 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const collide = (): void => {
     const profiler = activeProfiler();
     const started = profiler?.now() ?? 0;
-    lastBuilt = builder.build(world.root, input.width, input.height, animationTime);
-    collisions.update(world, lastBuilt.colliders);
+    // Drawn from blended transforms, a frame is built again anyway: the step's colliders are placed without drawing anything, unless
+    // the world has a box laid out (`colliders` says null). `retain: "check"` builds as well and requires the same colliders.
+    const placed = interpolator !== null ? builder.colliders(world.root) : null;
+    if (placed !== null && config.retain === "check")
+      sameColliders(placed, builder.build(world.root, input.width, input.height, animationTime).colliders);
+    if (placed === null) lastBuilt = builder.build(world.root, input.width, input.height, animationTime);
+    else lastBuilt = null;
+    collisions.update(world, placed ?? (lastBuilt as BuiltFrame).colliders);
     stale = collisions.reported > 0;
     if (stale) world.flush();
     if (profiler !== null) profiler.phase("collisions", profiler.now() - started);
@@ -914,4 +920,29 @@ function createSoundSink(backend: Backend, assets: string, warner: Warner): Soun
       if (handle >= 0) backend.stopMusic?.(handle);
     },
   };
+}
+
+/** `retain: "check"`: the colliders placed without a build are the build's, in its order and at its transforms; throws where not. */
+function sameColliders(placed: readonly ColliderEntry[], built: readonly ColliderEntry[]): void {
+  const at = (entry: ColliderEntry): string => {
+    const w = entry.world;
+    return `${entry.collider.constructor.name} at ${w.x},${w.y} turned ${w.rotation} scaled ${w.scaleX},${w.scaleY}`;
+  };
+  for (let i = 0; i < Math.max(placed.length, built.length); i++) {
+    const a = placed[i];
+    const b = built[i];
+    if (
+      a === undefined ||
+      b === undefined ||
+      a.collider !== b.collider ||
+      a.world.x !== b.world.x ||
+      a.world.y !== b.world.y ||
+      a.world.rotation !== b.world.rotation ||
+      a.world.scaleX !== b.world.scaleX ||
+      a.world.scaleY !== b.world.scaleY
+    )
+      throw new Error(
+        `retain: "check": the colliders placed for a step's collisions differ from a build's at ${i}: ${a === undefined ? "none" : at(a)} against ${b === undefined ? "none" : at(b)}.`
+      );
+  }
 }
