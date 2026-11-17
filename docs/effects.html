@@ -141,7 +141,8 @@ export const fx = createParticles({
 export const sfx = createSounds({ land: { src: "land.wav", volume: 0.5 }, start: "start.wav", shot: { src: "shot.wav", once: true } });
 </script></pre>
 <pre class="code" data-lang="tsx"><script type="text/plain">
-<ParticleLayer particles={fx} />      {/* once, beside the Camera (not inside it), so bursts are in world space */}
+{/* once, beside the Camera (not inside it), so bursts are in world space */}
+<ParticleLayer particles={fx} />
 
 // anywhere: a handler, a plain function, a game-state action
 fx.burst("dust", x, y);               // options: { angle, count, color, endColor }
@@ -178,9 +179,11 @@ const x = useSpring(s.shown ? 0 : 24, { duration: 0.3, bounce: 0.15 });
 
   <h3>Music and fades</h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
-<Music src="theme.ogg" volume={0.6} playing={!paused} fade={0.5} />   {/* plays while mounted: keep it outside any Router */}
+{/* plays while mounted: keep it outside any Router */}
+<Music src="theme.ogg" volume={0.6} playing={!paused} fade={0.5} />
 
-<Hud><Fade on={dying} color="black" duration={0.3} /></Hud>           {/* from={1} fades in at start */}
+{/* from={1} fades in at start */}
+<Hud><Fade on={dying} color="black" duration={0.3} /></Hud>
 </script></pre>
 
   <h3>Freeze frames, shake, squash</h3>
@@ -196,8 +199,10 @@ const x = useSpring(s.shown ? 0 : 24, { duration: 0.3, bounce: 0.15 });
   <p>A <code>&lt;Layer&gt;</code> draws its children off screen, into a picture the size of the screen, and then lays that picture over what is under it with a <strong>blend mode</strong>. That is how a cave goes dark and a lantern lights it again: a layer of near-black, multiplied over the world, with lights added into it where they shine.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 {inCave && (
-  <Lighting ambient="#16162c">                                  {/* the dark, where no light reaches */}
-    <Light radius={56} color="#ffe2b0" x={heroX} y={heroY} />   {/* bright in the middle, nothing at the edge */}
+  // the dark, where no light reaches
+  <Lighting ambient="#16162c">
+    {/* bright in the middle, nothing at the edge */}
+    <Light radius={56} color="#ffe2b0" x={heroX} y={heroY} />
     {torches.map((t) => <Light key={t.id} radius={32} color="orange" intensity={0.7} x={t.x} y={t.y} />)}
   </Lighting>
 )}

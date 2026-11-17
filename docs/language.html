@@ -491,7 +491,8 @@ interface EnemyProps {
 }
 
 export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
-  useUpdate(() => { if (hp <= 0) onDefeated?.(); });
+  const s = useMutable({ hp: 3 });
+  useUpdate(() => { if (s.hp <= 0) onDefeated?.(); });
   return <Entity><Sprite image={tint === "red" ? "red.png" : "blue.png"} /></Entity>;
 }
 
@@ -678,9 +679,12 @@ export function Level() {
   const s = useMutable({ playerX: 0 });
   return (
     <Entity>
-      <Player onMove={(x) => { s.playerX = x; }} />      // reports where it is
-      <Enemy target={s.playerX} />                        // by props
-      <PlayerAt.Provider value={s.playerX}>               // or through context, to every enemy below
+      {/* reports where it is */}
+      <Player onMove={(x) => { s.playerX = x; }} />
+      {/* by props */}
+      <Enemy target={s.playerX} />
+      {/* or through context, to every enemy below */}
+      <PlayerAt.Provider value={s.playerX}>
         <Swarm />
       </PlayerAt.Provider>
     </Entity>

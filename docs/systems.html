@@ -239,11 +239,13 @@ useUpdate(() => {
   <Flex alignItems="center" gap={8}>
     <Sprite image="coin.png" />
     <Text size={20}>{coins}</Text>
-    <Flex width="grow" />                       {/* a spacer */}
+    {/* a spacer */}
+    <Flex width="grow" />
   </Flex>
+  {/* a button */}
   <Flex width={96} height={32} alignItems="center" justifyContent="center"
         background="slategray" onPress={() => { s.paused = !s.paused; }}>
-    <Text>{s.paused ? "Resume" : "Pause"}</Text>  {/* a button */}
+    <Text>{s.paused ? "Resume" : "Pause"}</Text>
   </Flex>
 </Flex>
 </script></pre>
@@ -322,13 +324,16 @@ export default function Main() {
   return (
     <Game name="Main" title="my game" width={640} height={360} background="#10131c" assets="assets">
       <Screen width={640} height={360} fit="expand">
-        <World />                              {/* your world: Ground, Coin, … */}
-        <Hud x={16} y={16}>                    {/* stays put while the camera moves */}
+        {/* your world: Ground, Coin, … */}
+        <World />
+        {/* stays put while the camera moves */}
+        <Hud x={16} y={16}>
           <Flex direction="column" gap={8}>
             <CoinCounter />
           </Flex>
         </Hud>
-        <Camera><Player /></Camera>            {/* the view follows its children */}
+        {/* the view follows its children */}
+        <Camera><Player /></Camera>
       </Screen>
     </Game>
   );
@@ -373,7 +378,8 @@ const screen = useGame((s) => s.screen);        // "title" | "play" | "end", cha
   <Route name="play"><Play /></Route>
   <Route name="end"><End /></Route>
 </Router>
-<Music src="theme.wav" volume={0.45} fade={1} />   {/* beside the router, so screen changes leave it alone */}
+{/* beside the router, so screen changes leave it alone */}
+<Music src="theme.wav" volume={0.45} fade={1} />
 </script></pre>
 <pre class="code" data-lang="ts"><script type="text/plain">
 // transitions.ts: a plain function of progress (0 to 1). Fade out, switch behind the cover, fade in.
