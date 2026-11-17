@@ -48,6 +48,11 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 ## 5. Smaller gotchas
 
 - A key reading only the index warns, and a callback on a list item cannot read the index.
+- `useMutable({ x, y })` is refused (`TSE1103`): fields are written `x: x`. A `.map` in JSX returns one element, so a value worked
+  out per item (`const a = …` inside the callback) has to be put in the items first (Swarm's blades).
+- `<Game background>` must be a literal, so the theme's colour cannot be used there.
+- `nearby` measures to the edge of each box, not its middle: a reach that looks small finds many neighbours in a crowd (Swarm's
+  separation found eleven at 7 pixels, and cost a third of a step).
 - Side-effect imports are refused in component files (`TSE1001`), and the message says to put them in a `.ts` file such as the game
   state.
 - The manifest gates the API: a new runtime method compiles in plain TypeScript but fails in a component until

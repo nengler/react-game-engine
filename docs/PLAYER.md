@@ -360,6 +360,9 @@ Script time only, on the recording backend:
 - Hearth's wave 10 (109 enemies; 2026-11-15): Node mean about 1.0 ms; QuickJS mean 11.1 ms, 99th percentile about 29 ms (a garbage
   collection). Most of it is every enemy re-rendering every step, then the walk; if the Rust host hitches in the last waves, that is
   where to look.
+- Swarm's stress scene (2026-11-17, a VM about 1.25 times slower than the one above): 1,000 enemies, each asking `nearby` for its
+  neighbours every step, mean 10 ms; 1,500, 18 ms; 2,000, 28 ms. It grows faster than the count, as a bigger crowd is denser. The
+  table and what is left are in [games/swarm/DESIGN.md](../games/swarm/DESIGN.md), "Performance".
 - 200 styled animated sprites, re-rendered every step: 0.2 ms under Node, 2.2 ms under QuickJS (about 11 µs each, three times a plain
   rect), comfortable for games of this size.
 
@@ -385,6 +388,13 @@ Script time only, on the recording backend:
   walked up the tree to find where it is: 14 % of a step with a press target on each of 180 tiles. A run of pressables with one
   parent now shares the parent's place (`Pressable.containsIn`). With both, that game's step went from 0.245 to 0.164 ms; the
   bench has a scene for each ("a HUD of 100 rows, still", "900 press targets in a grid").
+- **A list item finds itself by key once per list** (2026-11-17). A handler reading a list item's prop live found the item in the
+  parent's list with `findIndex` on every read, so a thousand enemies each reading the player's position was a million comparisons a
+  step. The generated module keeps a map of each list array's keys (`$indexOfKey`, made the first time the array is asked about),
+  and a prop written after a spread has a getter of its own instead of building every prop. 25 % of a step of 2,000 enemies.
+- **`nearby` registers a result only when it is sent** (2026-11-17). Results are kept in plain arrays for their step and the next,
+  and put in the `WeakMap` that `send` reads only when one is sent: putting each in it cost about 200 times making it, 18 % of a
+  step with 1,000 enemies keeping apart. Each index entry also keeps the component its collider belongs to.
 - **Mounting** appends without scanning siblings when the child sorts last; it was quadratic before.
 - **A transform's numbers start as doubles** (2026-11-16). V8 picks a field's representation from its first value: a `Transform`
   whose `x` started at 0 (a small integer) and later held a fraction changed shape, and the walk that composes thousands of them kept

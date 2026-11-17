@@ -4,20 +4,21 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "games/swarm"
   ],
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
-    "generate": "npm run -s demo && npm run -s example && npm run -s kite && npm run -s hearth",
+    "generate": "npm run -s demo && npm run -s example && npm run -s kite && npm run -s hearth && npm run -s swarm",
     "pretest": "npm run -s generate",
     "pretypecheck": "npm run -s generate",
-    "test": "node --test \"packages/*/test/**/*.test.ts\"",
+    "test": "node --test \"packages/*/test/**/*.test.ts\" \"games/swarm/test/**/*.test.ts\"",
     "lint": "oxlint",
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
-    "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json && tsc -p packages/kite/tsconfig.json && tsc -p packages/hearth/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json && tsc -p packages/kite/tsconfig.json && tsc -p packages/hearth/tsconfig.json && tsc -p games/swarm/tsconfig.json",
     "native:build": "cmake -S native -B native/build && cmake --build native/build -j",
     "native:build:headless": "cmake -S native -B native/build-headless -DTSE_PLATFORM=Memory && cmake --build native/build-headless -j",
     "native:test": "cmake --build native/build-headless -j && ctest --test-dir native/build-headless --output-on-failure",
@@ -50,6 +51,10 @@
     "play:hearth": "tse dev packages/hearth",
     "package:hearth": "tse package packages/hearth",
     "check:hearth": "tse check packages/hearth && tsc -p tsconfig.json",
+    "swarm": "node packages/compiler/src/cli.ts games/swarm/src games/swarm/generated --assets games/swarm/assets",
+    "swarm:assets": "node games/swarm/tools/make-assets.ts",
+    "play:swarm": "tse dev games/swarm",
+    "check:swarm": "tse check games/swarm && tsc -p games/swarm/tsconfig.json",
     "native:build:pack": "node tools/pack.ts --build",
     "bramble:install": "node tools/bramble-install.ts",
     "check:outside": "node tools/check-outside.ts",

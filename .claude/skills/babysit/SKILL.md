@@ -30,7 +30,7 @@ Run what the change touches, and for a CI fix show the failing check passing loc
 | --- | --- |
 | Anything | `npm run generate`, `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check` |
 | The guide (`docs/*.html`, `docs/guide.js`) | `npm run docs:index` (rebuilds `docs/search-index.js`, which every page loads; a test fails if it is stale) |
-| A game (`packages/kite`, `packages/hearth`, `packages/demo`) or the engine it uses | `npm run check:<game>` |
+| A game (`packages/kite`, `packages/hearth`, `packages/demo`, `games/swarm`) or the engine it uses | `npm run check:<game>` |
 | `games/bramble`, packaging, `packages/cli`, or a package's exports | `npm run native:build:headless`, then `npm run check:outside` |
 | The player, runtime, compiler output, or anything on the frame path | `npm run bench:check` |
 | The Rust host or the parity between hosts | `npm run host:build:headless`, then `TSE_HOST_BIN=host/target/release/tse-host TSE_REQUIRE_HOST=1 node --test packages/demo/test/parity.test.ts` |

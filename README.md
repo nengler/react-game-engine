@@ -7,9 +7,9 @@ children are persistent instances, updated in place when state changes.
 
 It has a compiler, a runtime, and a native player that draws, plays sound and reads the keyboard, mouse and gamepads
 through raylib. The player runs under Node while you develop (with hot reload and rewind); a packaged game is one folder that
-runs on V8 or on a small Rust + QuickJS-ng host. Three games are built on it: [Kite](packages/kite) (a precision platformer),
-[Hearth](packages/hearth) (a tower defense) and [Bramble](games/bramble) (a top-down adventure made from the template, outside
-the workspaces). Linux is the supported platform.
+runs on V8 or on a small Rust + QuickJS-ng host. Four games are built on it: [Kite](packages/kite) (a precision platformer),
+[Hearth](packages/hearth) (a tower defense), [Bramble](games/bramble) (a top-down adventure made from the template, outside
+the workspaces) and [Swarm](games/swarm) (a survivors-style game, the crowd test). Linux is the supported platform.
 
 Start with the [authoring guide](docs/index.html) (open it in a browser): [Getting started](docs/start.html) goes from an
 empty folder to a packaged game (`tse create my-game`, or `--template menu` / `--template platformer`), and
@@ -103,6 +103,7 @@ packages/
 native/       libtse, in C over raylib: the ABI every host calls (native/include/tse.h)
 host/         the small host: Rust + QuickJS-ng, linked statically against libtse, for `--engine quickjs`
 games/bramble a top-down adventure made from the template, checked from outside the repository by `npm run check:outside`
+games/swarm   a survivors-style game with up to 2,000 enemies, the engine's crowd test: `npm run play:swarm`, `npm run check:swarm`
 ```
 
 ## Usage
