@@ -274,3 +274,21 @@ test("a CLI from npm pins a new game's engine packages to its own version", () =
   assert.deepEqual(pinned["dependencies"], { "@tsengine/runtime": "0.2.0", other: "^1.0.0" });
   assert.deepEqual(pinned["devDependencies"], { "@tsengine/cli": "0.2.0" });
 });
+
+test("package --engine web writes a page, a browser bundle with nothing from Node, the assets and a manifest", { timeout: 120_000 }, () => {
+  const packaged = tse(["package", game, "--engine", "web"]);
+  assert.equal(packaged.status, 0, packaged.stderr);
+  const out = join(game, "dist", "fixture-web");
+  for (const file of ["index.html", "game.js", "manifest.webmanifest"]) assert.ok(existsSync(join(out, file)), `${file} is written`);
+  const page = readFileSync(join(out, "index.html"), "utf8");
+  assert.match(page, /<canvas id="game">/);
+  assert.match(page, /<script type="module" src="game\.js">/);
+  assert.match(page, /name="viewport"/, "a phone shows it at its own width");
+  const bundle = readFileSync(join(out, "game.js"), "utf8");
+  assert.doesNotMatch(bundle, /from\s*["']node:|require\(["']node:|["']koffi["']/, "the browser cannot load Node's modules");
+  assert.match(bundle, /webgl2/, "the web backend is in it");
+  const manifest = JSON.parse(readFileSync(join(out, "manifest.webmanifest"), "utf8")) as { display: string; orientation: string };
+  assert.equal(manifest.display, "fullscreen");
+  assert.equal(manifest.orientation, "landscape");
+  assert.ok(!existsSync(join(game, ".tse-web-entry.mjs")), "the bundle's entry stub is removed");
+});

@@ -18,6 +18,7 @@
     "**/*.md",
     "**/*.json",
     "**/*.tmj",
-    "**/*.yml"
+    "**/*.yml",
+    "packages/player-web/src/fonts-data.ts"
   ]
 }

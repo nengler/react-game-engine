@@ -79,8 +79,10 @@ export function createCommand(args: readonly string[]): number {
     for (const file of tarballs) {
       const pack = /^tsengine-(.+?)-\d/.exec(file)?.[1] as string;
       const spec = `file:${join(dir, file)}`;
-      // The command line, its language server and the testing library are for making the game, not for running it.
-      if (pack === "cli" || pack === "testing" || pack === "language-server") devDependencies[`@tsengine/${pack}`] = spec;
+      // The command line, its language server, the testing library and the web backend (bundled into a web build) are for making the
+      // game, not for running it.
+      if (pack === "cli" || pack === "testing" || pack === "language-server" || pack === "player-web")
+        devDependencies[`@tsengine/${pack}`] = spec;
       else dependencies[`@tsengine/${pack}`] = spec;
     }
     pkg["dependencies"] = dependencies;

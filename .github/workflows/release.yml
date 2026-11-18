@@ -178,7 +178,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         run: |
           if [[ "$VERSION" == *-* ]]; then tag=next; else tag=latest; fi
-          for name in runtime compiler player native player-node testing language-server cli; do
+          for name in runtime compiler player native player-node player-web testing language-server cli; do
             if npm view "@tsengine/$name@$VERSION" version >/dev/null 2>&1; then
               echo "@tsengine/$name@$VERSION is already on npm"
               continue

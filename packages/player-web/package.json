@@ -1,0 +1,14 @@
+{
+  "name": "@tsengine/player-web",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tsengine/player": "0.0.0",
+    "@tsengine/runtime": "0.0.0"
+  }
+}

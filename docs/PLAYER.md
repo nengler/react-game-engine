@@ -252,14 +252,44 @@ through a hidden window; `tse screenshot --gpu` does it with the desktop libtse 
 `backend.rs` implements `Backend` over typed arrays, `console.rs` gives QuickJS a console on stderr. With no arguments it runs the
 `game.js` beside the executable, which is how a packaged game starts. An uncaught exception prints its stack and exits with status 1.
 
+### The web host (`@tsengine/player-web`)
+
+A package of its own, which only `tse package --engine web` bundles: a native game (Node, the V8 package, the Rust host) does not
+import it, and nothing in the player, the runtime or libtse changed for it.
+
+`WebBackend` implements `Backend` in a browser, and `startWebHost` installs it and a frame loop on `globalThis` (`HOST_BACKEND_KEY`,
+`HOST_RUN_KEY`), so a game's entry file runs unchanged: `run` hands the loop the player, which steps once a `requestAnimationFrame`.
+
+- **Drawing** (`renderer.ts`) is `tse.c` again in WebGL2: every record becomes triangles transformed on the CPU (the view, then the
+  record's translate, rotate and scale) and batched until the texture, blend or target changes. The canvas and layers are
+  framebuffers, blended with raylib's factors; a layer's shader is the author's `effect` wrapped for GLSL ES 3.00 with the same
+  names (`image`, `pixel`, `resolution`, `time`, `params`). Boxes, rings and lights are built as `draw_box` and `draw_light` build
+  them. Tower Defense's title screen comes out pixel for pixel as libtse draws it on the GPU.
+- **Assets** are fetched and decoded before the game starts (`preloadAssets`), because the player asks for a texture and its size in
+  one synchronous call. Images are decoded without premultiplying or colour conversion. The built-in fonts are the sheets of
+  `native/src/fonts_data.h`, copied to `fonts-data.ts` by `tools/make-web-fonts.ts` (a test fails when they differ). A text record
+  without a bitmap font is drawn with the browser's monospace, since raylib's default font is not there.
+- **Input** comes from DOM events gathered between frames: keys by their `code`, a pointer (mouse, pen or finger) as `MouseLeft` at
+  its position, the standard gamepad mapping. A press and release inside one frame still reads as a press. The window's size and the
+  pointer start in CSS pixels, drawn at the screen's density, as libtse's high-DPI window; once a frame comes through a `<Screen>`
+  canvas they switch to device pixels, so a `fit="integer"` screen fills a phone at a whole multiple of its own pixels.
+- **Sound** is Web Audio (four voices a sound), music an `<audio>` element. Browsers start audio only from a gesture's own handler (Safari: a
+  finger lifting, not landing), so the page's "Tap to play" and every pointer-up resume it. **Saved data** is localStorage, under `tse:<game id>:`.
+- Not there: `overlaps` (the player sweeps in script), the software renderer's fallbacks, sharp scaling of a canvas at a scale that
+  is not whole.
+
 ### Packaging
 
-`tse package [folder] [--engine node|quickjs] [--headless]` writes `dist/<name>/` in the game's folder:
+`tse package [folder] [--engine node|quickjs|web] [--headless]` writes `dist/<name>/` in the game's folder:
 
 - **`node`** (the default): a Node single executable application (Node's binary with the game bundled in, injected with `postject`),
   `lib/libtse.so`, `node_modules/koffi` (its addon is found by paths relative to its own files, so it cannot be bundled) and
   `assets/`. About 125 MB, nearly all of it Node.
 - **`quickjs`**: the Rust host, `game.js` and `assets/`. A few MB.
+- **`web`**: `dist/<name>-web/`, a page any static host serves: `index.html`, `game.js` (the game, the player and
+  `@tsengine/player-web`, bundled for the browser), `assets/` and a web app manifest (full screen, landscape), so a phone can add it to
+  its home screen. It compiles the game first. The page shows "Tap to play" before the game starts: browsers allow sound, full screen
+  and turning to landscape only from a press. It cannot be opened as a file; it loads its assets over HTTP.
 
 Both run from their own folder. The parity scripts check that the demo prints byte for byte the same under Node, the V8 package and
 the Rust host; CI's `native` and `native-desktop` jobs run them. The macOS and Windows steps follow Node's documentation and are
