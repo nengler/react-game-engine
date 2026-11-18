@@ -65,6 +65,7 @@ export interface LayerShader {
   readonly resolution: WebGLUniformLocation | null;
   readonly time: WebGLUniformLocation | null;
   readonly params: WebGLUniformLocation | null;
+  readonly targetSize: WebGLUniformLocation | null;
   readonly image: WebGLUniformLocation | null;
   readonly colDiffuse: WebGLUniformLocation | null;
 }
@@ -132,16 +133,7 @@ const MAX_VERTICES = 65536;
 type Affine = [number, number, number, number, number, number];
 const IDENTITY: Affine = [1, 0, 0, 1, 0, 0];
 
-function multiply(m: Affine, n: Affine): Affine {
-  return [
-    m[0] * n[0] + m[2] * n[1],
-    m[1] * n[0] + m[3] * n[1],
-    m[0] * n[2] + m[2] * n[3],
-    m[1] * n[2] + m[3] * n[3],
-    m[0] * n[4] + m[2] * n[5] + m[4],
-    m[1] * n[4] + m[3] * n[5] + m[5],
-  ];
-}
+const WHITE: readonly number[] = [1, 1, 1, 1];
 
 /** A record field as an index or an op: -1 unless it is a whole number in range. */
 function toIndex(value: number): number {
@@ -177,7 +169,15 @@ export class WebRenderer {
   #canvas: Target | null = null;
   readonly #layers: (Target | null)[] = new Array(TSE_LAYER_MAX).fill(null);
   #warned = false;
+  // Scratch values reused for every record, so a frame allocates nothing per record.
   readonly #color = [0, 0, 0, 0];
+  readonly #color2 = [0, 0, 0, 0];
+  readonly #ringInner = [0, 0, 0, 1];
+  readonly #ringOuter = [0, 0, 0, 1];
+  readonly #local: Affine = [1, 0, 0, 1, 0, 0];
+  readonly #params = new Float32Array(8);
+  /** Target pixels per unit the records use: the device pixel ratio for a window drawn at full density, 1 for the canvas and layers in it. */
+  #scale = 1;
 
   // The frame's target state, as tse.c keeps it.
   #targetWidth = 0;
@@ -256,6 +256,7 @@ export class WebRenderer {
       resolution: gl.getUniformLocation(program, "resolution"),
       time: gl.getUniformLocation(program, "time"),
       params: gl.getUniformLocation(program, "params"),
+      targetSize: gl.getUniformLocation(program, "targetSize"),
       image: gl.getUniformLocation(program, "texture0"),
       colDiffuse: gl.getUniformLocation(program, "colDiffuse"),
     };
@@ -330,7 +331,7 @@ export class WebRenderer {
     const gl = this.gl;
     if (this.#program_ !== this.#program) {
       gl.useProgram(this.#program);
-      gl.uniform2f(this.#programTargetSize, this.#targetWidth, this.#targetHeight);
+      gl.uniform2f(this.#programTargetSize, this.#targetWidth / this.#scale, this.#targetHeight / this.#scale);
       this.#program_ = this.#program;
     }
     gl.activeTexture(gl.TEXTURE0);
@@ -436,7 +437,7 @@ export class WebRenderer {
     const half = Math.min(width, height) / 2;
     const r = Math.max(0, Math.min(finite(radius), half));
     const bw = Math.min(finite(borderWidth), half);
-    const fillColor = unpack(fill, [0, 0, 0, 0]);
+    const fillColor = unpack(fill, this.#color);
     if (fillColor[3]! > 0) {
       if (r > 0) {
         // The middle cross, then a quarter disc in each corner.
@@ -450,7 +451,7 @@ export class WebRenderer {
         this.#ring(m, r, height - r, 0, r, 90, 180, seg, fillColor);
       } else this.#rect(m, 0, 0, width, height, fillColor);
     }
-    const c = unpack(border, [0, 0, 0, 0]);
+    const c = unpack(border, this.#color2);
     if (!(c[3]! > 0 && bw > 0)) return;
     const k = Math.max(r, bw);
     const runX = width - 2 * k,
@@ -488,17 +489,22 @@ export class WebRenderer {
   /** TSE_OP_LIGHT: rings whose colour falls off as (1 - d)^2, premultiplied by the strength, opaque. */
   #light(m: Affine, radius: number, packed: number): void {
     if (!(radius > 0)) return;
-    const c = unpack(packed, [0, 0, 0, 0]);
+    const c = unpack(packed, this.#color);
     const strength = c[3]!;
     this.#useTexture(this.#white);
     const RINGS = 6,
       SEGMENTS = 48;
-    const k = (t: number) => (1 - t) * (1 - t) * strength;
+    const c0 = this.#ringInner,
+      c1 = this.#ringOuter;
     for (let ring = 0; ring < RINGS; ring++) {
       const t0 = ring / RINGS,
         t1 = (ring + 1) / RINGS;
-      const c0 = [c[0]! * k(t0), c[1]! * k(t0), c[2]! * k(t0), 1];
-      const c1 = [c[0]! * k(t1), c[1]! * k(t1), c[2]! * k(t1), 1];
+      const k0 = (1 - t0) * (1 - t0) * strength,
+        k1 = (1 - t1) * (1 - t1) * strength;
+      for (let i = 0; i < 3; i++) {
+        c0[i] = c[i]! * k0;
+        c1[i] = c[i]! * k1;
+      }
       for (let s = 0; s < SEGMENTS; s++) {
         const a0 = (2 * Math.PI * s) / SEGMENTS,
           a1 = (2 * Math.PI * (s + 1)) / SEGMENTS;
@@ -523,7 +529,7 @@ export class WebRenderer {
     }
   }
 
-  /** A region of a texture with its origin at the local origin; a negative source size mirrors it. */
+  /** A region of a texture drawn into the rectangle (dx, dy, dw, dh) in local coordinates. */
   #region(
     m: Affine,
     tex: GlTexture,
@@ -538,18 +544,13 @@ export class WebRenderer {
     c: readonly number[]
   ): void {
     this.#useTexture(tex);
-    let u0 = sx / tex.width,
+    const u0 = sx / tex.width,
       u1 = (sx + sw) / tex.width;
     let v0 = sy / tex.height,
       v1 = (sy + sh) / tex.height;
     if (tex.flipped) {
       v0 = 1 - v0;
       v1 = 1 - v1;
-    }
-    if (sw < 0) {
-      // A mirrored region: (sx, sw) runs back from sx + |sw|, as raylib reads a negative width.
-      u0 = (sx - sw) / tex.width;
-      u1 = sx / tex.width;
     }
     this.#quad(m, dx, dy, dx + dw, dy + dh, u0, v0, u1, v1, c);
   }
@@ -585,8 +586,14 @@ export class WebRenderer {
       return;
     }
     const [x, y, w, h] = this.#scissor;
+    const k = this.#scale;
     gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(Math.round(x), Math.round(this.#targetHeight - (y + h)), Math.max(0, Math.round(w)), Math.max(0, Math.round(h)));
+    gl.scissor(
+      Math.round(x * k),
+      Math.round(this.#targetHeight - (y + h) * k),
+      Math.max(0, Math.round(w * k)),
+      Math.max(0, Math.round(h * k))
+    );
   }
 
   /** Bind the target at the current depth: the innermost layer, or the base (the canvas, or the window when there is none). */
@@ -605,7 +612,7 @@ export class WebRenderer {
 
   #clear(color: number): void {
     const gl = this.gl;
-    const c = unpack(color, [0, 0, 0, 0]);
+    const c = unpack(color, this.#color);
     gl.disable(gl.SCISSOR_TEST);
     gl.clearColor(c[0]!, c[1]!, c[2]!, c[3]!);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -645,7 +652,7 @@ export class WebRenderer {
     this.#depth--;
     this.#bindCurrent(base);
     this.#setBlend(blend);
-    const c = unpack(tint, [0, 0, 0, 0]);
+    const c = unpack(tint, this.#color);
     // Screen and multiply read no alpha from the source colour: the opacity goes on the colour too, as tse.c does.
     if (blend === TSE_BLEND_SCREEN || blend === TSE_BLEND_MULTIPLY) {
       c[0]! *= c[3]!;
@@ -654,15 +661,19 @@ export class WebRenderer {
     }
     const shader = shaderHandle >= 0 ? this.#assets.shader(shaderHandle) : null;
     const gl = this.gl;
+    // The layer covers its target exactly: in units, its size over the scale.
+    const w = this.#targetWidth / this.#scale,
+      h = this.#targetHeight / this.#scale;
     if (shader !== null) {
       gl.useProgram(shader.program);
-      gl.uniform2f(gl.getUniformLocation(shader.program, "targetSize"), this.#targetWidth, this.#targetHeight);
-      if (shader.resolution !== null) gl.uniform2f(shader.resolution, this.#targetWidth, this.#targetHeight);
+      gl.uniform2f(shader.targetSize, w, h);
+      // In units, as libtse gives it.
+      if (shader.resolution !== null) gl.uniform2f(shader.resolution, w, h);
       if (shader.time !== null) gl.uniform1f(shader.time, time);
       if (shader.colDiffuse !== null) gl.uniform4f(shader.colDiffuse, 1, 1, 1, 1);
       if (shader.image !== null) gl.uniform1i(shader.image, 0);
       if (shader.params !== null) {
-        const p = new Float32Array(8);
+        const p = this.#params;
         for (let i = 0; i < 8; i++) p[i] = params !== null && Number.isFinite(params[at + 5 + i]) ? (params[at + 5 + i] as number) : 0;
         gl.uniform1fv(shader.params, p);
       }
@@ -670,13 +681,13 @@ export class WebRenderer {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, layer.texture.texture);
       this.#batchTexture = layer.texture;
-      this.#quad(IDENTITY, 0, 0, this.#targetWidth, this.#targetHeight, 0, 1, 1, 0, c);
+      this.#quad(IDENTITY, 0, 0, w, h, 0, 1, 1, 0, c);
       this.#flush();
       this.#program_ = null;
       this.#batchTexture = null;
     } else {
       this.#useTexture(layer.texture);
-      this.#quad(IDENTITY, 0, 0, this.#targetWidth, this.#targetHeight, 0, 1, 1, 0, c);
+      this.#quad(IDENTITY, 0, 0, w, h, 0, 1, 1, 0, c);
       this.#flush();
     }
     this.#setBlend(this.#childBlend[this.#depth]!);
@@ -685,10 +696,19 @@ export class WebRenderer {
   // ---------- A frame ----------
 
   /**
-   * Draw a frame into the window, whose drawing buffer is `width` x `height` pixels, and present nothing (the browser presents when
-   * the animation frame ends).
+   * Draw a frame into the window, whose drawing buffer is `width` x `height` pixels with `scale` of them to a unit the records use (the
+   * device pixel ratio when sizes are in CSS pixels, 1 when they are in device pixels), and present nothing (the browser presents when
+   * the animation frame ends). The canvas and the layers inside it are drawn at one pixel a unit, as libtse draws them.
    */
-  frame(width: number, height: number, clearColor: number, records: Float64Array, length: number, texts: readonly string[]): void {
+  frame(
+    width: number,
+    height: number,
+    scale: number,
+    clearColor: number,
+    records: Float64Array,
+    length: number,
+    texts: readonly string[]
+  ): void {
     const gl = this.gl;
     this.#count = 0;
     this.#program_ = null;
@@ -714,31 +734,34 @@ export class WebRenderer {
       }
       this.#targetWidth = cw;
       this.#targetHeight = ch;
+      this.#scale = 1;
       this.#execute(this.#canvas, clearColor, records, TSE_OP_CANVAS_LEN, length, texts);
       // The canvas, laid over the window opaque (blending off), in the dest rectangle.
       this.#flush();
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, width, height);
       gl.disable(gl.SCISSOR_TEST);
-      const border = unpack(records[7]!, [0, 0, 0, 0]);
+      const border = unpack(records[7]!, this.#color);
       gl.clearColor(border[0]!, border[1]!, border[2]!, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.disable(gl.BLEND);
       this.#targetWidth = width;
       this.#targetHeight = height;
+      this.#scale = scale;
       this.#program_ = null;
       this.#useTexture(this.#canvas.texture);
       const dx = records[3]!,
         dy = records[4]!,
         dw = records[5]!,
         dh = records[6]!;
-      this.#quad(IDENTITY, dx, dy, dx + dw, dy + dh, 0, 1, 1, 0, [1, 1, 1, 1]);
+      this.#quad(IDENTITY, dx, dy, dx + dw, dy + dh, 0, 1, 1, 0, WHITE);
       this.#flush();
       this.#blend = -1;
       return;
     }
     this.#targetWidth = width;
     this.#targetHeight = height;
+    this.#scale = scale;
     this.#execute(null, clearColor, records, 0, length, texts);
   }
 
@@ -746,9 +769,32 @@ export class WebRenderer {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
-    const c = unpack(color, [0, 0, 0, 0]);
+    const c = unpack(color, this.#color);
     gl.clearColor(c[0]!, c[1]!, c[2]!, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  /** The record at `at`'s transform under the view (translate, rotate, scale), in a scratch array the next record reuses. */
+  #transform(r: Float64Array, at: number): Affine {
+    const cos = Math.cos(r[at + 3]!),
+      sin = Math.sin(r[at + 3]!);
+    const sx = r[at + 4]!,
+      sy = r[at + 5]!;
+    const a = cos * sx,
+      b = sin * sx,
+      c = -sin * sy,
+      d = cos * sy,
+      e = r[at + 1]!,
+      f = r[at + 2]!;
+    const m = this.#view,
+      out = this.#local;
+    out[0] = m[0] * a + m[2] * b;
+    out[1] = m[1] * a + m[3] * b;
+    out[2] = m[0] * c + m[2] * d;
+    out[3] = m[1] * c + m[3] * d;
+    out[4] = m[0] * e + m[2] * f + m[4];
+    out[5] = m[1] * e + m[3] * f + m[5];
+    return out;
   }
 
   #execute(base: Target | null, clearColor: number, r: Float64Array, start: number, length: number, texts: readonly string[]): void {
@@ -811,14 +857,6 @@ export class WebRenderer {
         this.#report("record runs past the end", at);
         break;
       }
-      // The record's transform under the view: translate, rotate, scale.
-      const local = (): Affine => {
-        const cos = Math.cos(r[at + 3]!),
-          sin = Math.sin(r[at + 3]!);
-        const sx = r[at + 4]!,
-          sy = r[at + 5]!;
-        return multiply(this.#view, [cos * sx, sin * sx, -sin * sy, cos * sy, r[at + 1]!, r[at + 2]!]);
-      };
       switch (op) {
         case TSE_OP_VIEW:
           this.#view = [r[at + 1]!, r[at + 2]!, r[at + 3]!, r[at + 4]!, r[at + 5]!, r[at + 6]!];
@@ -853,7 +891,7 @@ export class WebRenderer {
           break;
         case TSE_OP_SPRITE: {
           const tex = this.#assets.texture(toIndex(r[at + 6]!));
-          if (tex !== null) this.#region(local(), tex, 0, 0, tex.width, tex.height, 0, 0, tex.width, tex.height, [1, 1, 1, 1]);
+          if (tex !== null) this.#region(this.#transform(r, at), tex, 0, 0, tex.width, tex.height, 0, 0, tex.width, tex.height, WHITE);
           break;
         }
         case TSE_OP_SPRITE_REGION: {
@@ -885,27 +923,28 @@ export class WebRenderer {
           }
           if (fx) [u0, u1] = [u1, u0];
           if (fy) [v0, v1] = [v1, v0];
-          this.#quad(local(), -ox, -oy, -ox + w, -oy + h, u0, v0, u1, v1, unpack(r[at + 14]!, c));
+          this.#quad(this.#transform(r, at), -ox, -oy, -ox + w, -oy + h, u0, v0, u1, v1, unpack(r[at + 14]!, c));
           break;
         }
         case TSE_OP_RECT:
-          this.#rect(local(), 0, 0, r[at + 6]!, r[at + 7]!, unpack(r[at + 8]!, c));
+          this.#rect(this.#transform(r, at), 0, 0, r[at + 6]!, r[at + 7]!, unpack(r[at + 8]!, c));
           break;
         case TSE_OP_BOX:
-          this.#box(local(), r[at + 6]!, r[at + 7]!, r[at + 8]!, r[at + 9]!, r[at + 10]!, r[at + 11]!);
+          this.#box(this.#transform(r, at), r[at + 6]!, r[at + 7]!, r[at + 8]!, r[at + 9]!, r[at + 10]!, r[at + 11]!);
           break;
         case TSE_OP_LIGHT:
-          this.#light(local(), finite(r[at + 6]!), r[at + 7]!);
+          this.#light(this.#transform(r, at), finite(r[at + 6]!), r[at + 7]!);
           break;
         case TSE_OP_ELLIPSE:
-          this.#ellipse(local(), r[at + 6]!, r[at + 7]!, unpack(r[at + 8]!, c));
+          this.#ellipse(this.#transform(r, at), r[at + 6]!, r[at + 7]!, unpack(r[at + 8]!, c));
           break;
         case TSE_OP_TEXT: {
           const index = toIndex(r[at + 6]!);
           const text = index >= 0 && index < texts.length ? texts[index]! : null;
           if (text === null || text === "") break;
           const tex = this.#assets.text(text, r[at + 7]!);
-          if (tex !== null) this.#region(local(), tex, 0, 0, tex.width, tex.height, 0, 0, tex.width, tex.height, unpack(r[at + 8]!, c));
+          if (tex !== null)
+            this.#region(this.#transform(r, at), tex, 0, 0, tex.width, tex.height, 0, 0, tex.width, tex.height, unpack(r[at + 8]!, c));
           break;
         }
       }

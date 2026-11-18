@@ -95,13 +95,25 @@ const showError = (e) => {
   error.style.display = "flex";
 };
 try {
-  await startWebHost({ canvas, files: ${JSON.stringify(files)}, onError: showError });
+  const backend = await startWebHost({ canvas, files: ${JSON.stringify(files)}, onError: showError });
   const status = start.querySelector("small");
   status.textContent = "Sound is on once you tap.";
-  await new Promise((resolve) => start.querySelector("button").addEventListener("click", resolve, { once: true }));
-  // Full screen and landscape, where the browser allows them (a phone's does, from a tap).
+  await new Promise((resolve) =>
+    start.querySelector("button").addEventListener(
+      "click",
+      () => {
+        // Inside the tap itself: browsers (Safari above all) start audio only from a gesture's own handler.
+        backend.unlockAudio();
+        resolve();
+      },
+      { once: true }
+    )
+  );
+  // Full screen and landscape, where the browser allows them (a phone's does, from a tap). In full screen, Escape is the game's:
+  // the keyboard lock keeps the browser from taking the first press to leave full screen (a long press still leaves).
   try {
     await document.documentElement.requestFullscreen?.({ navigationUI: "hide" });
+    await navigator.keyboard?.lock?.(["Escape"]);
     await screen.orientation?.lock?.("landscape");
   } catch {}
   start.remove();

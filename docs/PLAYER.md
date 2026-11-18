@@ -254,6 +254,9 @@ through a hidden window; `tse screenshot --gpu` does it with the desktop libtse 
 
 ### The web host (`@tsengine/player-web`)
 
+A package of its own, which only `tse package --engine web` bundles: a native game (Node, the V8 package, the Rust host) does not
+import it, and nothing in the player, the runtime or libtse changed for it.
+
 `WebBackend` implements `Backend` in a browser, and `startWebHost` installs it and a frame loop on `globalThis` (`HOST_BACKEND_KEY`,
 `HOST_RUN_KEY`), so a game's entry file runs unchanged: `run` hands the loop the player, which steps once a `requestAnimationFrame`.
 
@@ -268,9 +271,10 @@ through a hidden window; `tse screenshot --gpu` does it with the desktop libtse 
   without a bitmap font is drawn with the browser's monospace, since raylib's default font is not there.
 - **Input** comes from DOM events gathered between frames: keys by their `code`, a pointer (mouse, pen or finger) as `MouseLeft` at
   its position, the standard gamepad mapping. A press and release inside one frame still reads as a press. The window's size and the
-  pointer are in device pixels, so a `<Screen fit="integer">` fills a phone at a whole multiple of its own pixels.
-- **Sound** is Web Audio (four voices a sound), music an `<audio>` element. Browsers start audio only after a press, so the first one
-  resumes it. **Saved data** is localStorage, under `tse:<game id>:`.
+  pointer start in CSS pixels, drawn at the screen's density, as libtse's high-DPI window; once a frame comes through a `<Screen>`
+  canvas they switch to device pixels, so a `fit="integer"` screen fills a phone at a whole multiple of its own pixels.
+- **Sound** is Web Audio (four voices a sound), music an `<audio>` element. Browsers start audio only from a gesture's own handler (Safari: a
+  finger lifting, not landing), so the page's "Tap to play" and every pointer-up resume it. **Saved data** is localStorage, under `tse:<game id>:`.
 - Not there: `overlaps` (the player sweeps in script), the software renderer's fallbacks, sharp scaling of a canvas at a scale that
   is not whole.
 

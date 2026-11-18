@@ -4,7 +4,7 @@
  * may load is fetched and decoded before it starts (`preloadAssets`); a load is then a lookup, as it is from disk natively.
  */
 import type { Backend, StorageBackend, WindowConfig } from "@tsengine/player";
-import { TSE_IN_DT, TSE_IN_HEIGHT, TSE_IN_WIDTH, TSE_SOUND_VOICES } from "@tsengine/player";
+import { TSE_IN_DT, TSE_IN_HEIGHT, TSE_IN_WIDTH, TSE_OP_CANVAS, TSE_SOUND_VOICES } from "@tsengine/player";
 
 import { BUILTIN_FONT_BITS } from "./fonts-data.ts";
 import { WebInput } from "./input.ts";
@@ -75,13 +75,15 @@ export class WebBackend implements Backend {
   readonly #textCache = new Map<string, GlTexture>();
   #audio: AudioContext | null = null;
   #last = -1;
+  /** Device pixels to a unit of the sizes the player is given: the pixel ratio (CSS pixels), or 1 once the game draws through a canvas. */
+  #scale = globalThis.devicePixelRatio || 1;
   readonly #measure: CanvasRenderingContext2D | null;
 
   constructor(canvas: HTMLCanvasElement, files: ReadonlyMap<string, Preloaded>) {
     this.#canvas = canvas;
     this.#files = files;
     this.#input = new WebInput(canvas);
-    this.#input.onGesture = () => this.#unlockAudio();
+    this.#input.onGesture = () => this.unlockAudio();
     this.#measure = canvas.ownerDocument.createElement("canvas").getContext("2d");
   }
 
@@ -135,7 +137,7 @@ export class WebBackend implements Backend {
       alpha: false,
       antialias: false,
       premultipliedAlpha: false,
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: false,
     });
     if (gl === null) throw new Error("This browser cannot run WebGL2, which the game needs.");
     this.#renderer = new WebRenderer(gl, this.#assetsForRenderer(), config.smooth ?? false);
@@ -205,7 +207,7 @@ export class WebBackend implements Backend {
   // ---------- Sound ----------
 
   /** Browsers start audio only after the player has pressed something: the first press starts it, and any music asked for meanwhile. */
-  #unlockAudio(): void {
+  unlockAudio(): void {
     const ctx = this.#context();
     if (ctx !== null && ctx.state === "suspended") ctx.resume().catch(() => {});
     for (const m of this.#music) if (m.wanted && m.element.paused) m.element.play().catch(() => {});
@@ -251,7 +253,8 @@ export class WebBackend implements Backend {
   loadMusic(path: string): number {
     const file = this.#file(path);
     if (file?.kind !== "audio") return -1;
-    const element = new Audio(file.url);
+    // From the bytes already fetched, so the track is not downloaded a second time.
+    const element = new Audio(URL.createObjectURL(new Blob([file.bytes])));
     element.preload = "auto";
     this.#music.push({ element, wanted: false });
     return this.#music.length - 1;
@@ -313,10 +316,6 @@ export class WebBackend implements Backend {
       ctx.fillText(ch, x, 0);
       x += ctx.measureText(ch).width + size / 10;
     }
-    if (this.#textCache.size > 512) {
-      for (const t of this.#textCache.values()) this.#renderer?.gl.deleteTexture(t.texture);
-      this.#textCache.clear();
-    }
     const texture = this.#gl.makeTexture(canvas.width, canvas.height, canvas, true);
     this.#textCache.set(key, texture);
     return texture;
@@ -359,6 +358,8 @@ export class WebBackend implements Backend {
   /** Match the drawing buffer to the canvas's size on screen, in device pixels, so pixel art is drawn at the screen's own resolution. */
   #resize(): void {
     const ratio = globalThis.devicePixelRatio || 1;
+    // Sizes in CSS pixels, drawn at the screen's density, as libtse's high-DPI window: until a <Screen> canvas is seen (see `frame`).
+    if (this.#scale !== 1) this.#scale = ratio;
     const width = Math.max(1, Math.round(this.#canvas.clientWidth * ratio));
     const height = Math.max(1, Math.round(this.#canvas.clientHeight * ratio));
     if (this.#canvas.width !== width) this.#canvas.width = width;
@@ -367,13 +368,22 @@ export class WebBackend implements Backend {
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     const renderer = this.#gl;
-    renderer.frame(this.#canvas.width, this.#canvas.height, clearColor, records, length, texts);
+    // Text textures are let go between frames, never during one: the frame being drawn may still have one waiting in its batch.
+    if (this.#textCache.size > 512) {
+      for (const t of this.#textCache.values()) renderer.gl.deleteTexture(t.texture);
+      this.#textCache.clear();
+    }
+    renderer.frame(this.#canvas.width, this.#canvas.height, this.#scale, clearColor, records, length, texts);
+    // A game drawn through a <Screen> canvas is a picture scaled into the window: from now on its window is measured in device pixels,
+    // so a whole-number fit uses every pixel of a dense phone screen instead of a whole number of CSS pixels.
+    if (length > 0 && records[0] === TSE_OP_CANVAS) this.#scale = 1;
     this.#resize();
     const now = performance.now();
     input[TSE_IN_DT] = this.#last < 0 ? 1 / 60 : Math.min(0.25, Math.max(0, (now - this.#last) / 1000));
     this.#last = now;
-    input[TSE_IN_WIDTH] = this.#canvas.width;
-    input[TSE_IN_HEIGHT] = this.#canvas.height;
+    input[TSE_IN_WIDTH] = this.#canvas.width / this.#scale;
+    input[TSE_IN_HEIGHT] = this.#canvas.height / this.#scale;
+    this.#input.scale = this.#scale;
     this.#input.collect(input, keys);
   }
 

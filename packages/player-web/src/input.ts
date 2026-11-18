@@ -37,6 +37,21 @@ export function keyName(code: string): string | null {
   }
 }
 
+/** Keys whose default would scroll the page, move the focus or go back: the game takes them. */
+const PAGE_KEYS = new Set([
+  "Space",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Backspace",
+  "Tab",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+]);
+
 /** The standard gamepad mapping's buttons, as the key table names them. */
 const PAD_BUTTONS: Readonly<Record<string, number>> = { PadA: 0, PadB: 1, PadX: 2, PadY: 3, PadLB: 4, PadRB: 5, PadBack: 8, PadStart: 9 };
 const PAD_DPAD: Readonly<Record<string, number>> = { PadUp: 12, PadDown: 13, PadLeft: 14, PadRight: 15 };
@@ -52,6 +67,8 @@ export class WebInput {
   #typed = "";
   #lastTyped = "";
   deadzone = 0.35;
+  /** Device pixels to a unit of the pointer's position: the backend's scale (see `WebBackend`). */
+  scale = 1;
   readonly #canvas: HTMLCanvasElement;
   /** Called on the first press of any kind: the browser lets audio start only after one. */
   onGesture: (() => void) | null = null;
@@ -76,6 +93,8 @@ export class WebInput {
     canvas.addEventListener("pointerup", (e) => {
       this.#move(e);
       this.#button(e.pointerType === "mouse" ? e.button : 0, false);
+      // A finger's press starts sound only when it lifts: Safari counts touchend and pointerup as a user's gesture, not pointerdown.
+      this.onGesture?.();
     });
     canvas.addEventListener("pointercancel", (e) => this.#button(e.pointerType === "mouse" ? e.button : 0, false));
     canvas.addEventListener(
@@ -106,8 +125,8 @@ export class WebInput {
     }
     if (i === undefined) return;
     if (!e.repeat) this.#set(i, down);
-    // Keys the game reads are the game's: no scrolling with Space or the arrows, no going back with Backspace.
-    if (!e.ctrlKey && !e.metaKey) e.preventDefault();
+    // Keys that would scroll or leave the page are the game's; the rest (F5, F11, F12) keep what the browser does with them.
+    if (!e.ctrlKey && !e.metaKey && PAGE_KEYS.has(e.code)) e.preventDefault();
   }
 
   #button(button: number, down: boolean): void {
@@ -116,12 +135,12 @@ export class WebInput {
     if (i !== undefined) this.#set(i, down);
   }
 
-  /** The pointer in the canvas's drawing-buffer pixels: the units the window size is reported in. */
+  /** The pointer in the units the window size is reported in: the canvas's drawing-buffer pixels over `scale`. */
   #move(e: PointerEvent): void {
     const rect = this.#canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
-    this.#x = ((e.clientX - rect.left) * this.#canvas.width) / rect.width;
-    this.#y = ((e.clientY - rect.top) * this.#canvas.height) / rect.height;
+    this.#x = ((e.clientX - rect.left) * this.#canvas.width) / rect.width / this.scale;
+    this.#y = ((e.clientY - rect.top) * this.#canvas.height) / rect.height / this.scale;
   }
 
   #pollGamepad(): void {
