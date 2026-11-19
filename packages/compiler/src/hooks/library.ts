@@ -123,7 +123,9 @@ export function useBall(options) {
     b.x = b.ball.x;
     b.y = b.ball.y;
   };
-  return { x: b.x, y: b.y, contacts, push, place, speed };
+  const pin = (on: boolean) => b.ball.pin(on);
+  const setGravity = (gravity: number) => b.ball.setGravity(gravity);
+  return { x: b.x, y: b.y, contacts, push, place, speed, pin, setGravity };
 }
 
 /**
@@ -133,9 +135,14 @@ export function useBall(options) {
  */
 export function useStore(store, read) {
   const s = useMutable({ value: read() });
-  useMount(() => store.subscribe(() => {
+  useMount(() => {
+    // Read again: the store may have changed between the component being made and its joining the tree (the player reads the
+    // settings' file after it has built the first screen).
     s.value = keepIfEqual(s.value, read());
-  }));
+    return store.subscribe(() => {
+      s.value = keepIfEqual(s.value, read());
+    });
+  });
   return s.value;
 }
 `;

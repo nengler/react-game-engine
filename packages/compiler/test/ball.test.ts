@@ -78,7 +78,50 @@ function places(root: Entity): { x: number; y: number }[] {
   return root.children.slice(3).map((fruit) => ({ x: (fruit as Entity).transform.x, y: (fruit as Entity).transform.y }));
 }
 
+const ICE = `
+interface IceProps { x: number; frozen: boolean; light: boolean }
+export function Ice({ x, frozen, light }: IceProps) {
+  const { x: at, y, pin, setGravity } = useBall({ x: x, y: 0, radius: 5, gravity: 600 });
+  useUpdate(() => {
+    pin(frozen);
+    setGravity(light ? -600 : 600);
+  });
+  return <Entity x={at} y={y} />;
+}`;
+
 describe("useBall", () => {
+  it("pin holds a ball where it is and lets it go again; setGravity changes how it falls", async () => {
+    const compiled = compile(ICE);
+    assert.deepEqual(getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }]), []);
+    const { Ice } = await load<{
+      Ice: new (p: {
+        x: number;
+        frozen: boolean;
+        light: boolean;
+      }) => Entity & { updateProps(next: { frozen?: boolean; light?: boolean }): void };
+    }>(compiled);
+    const world = new World();
+    const root = new Entity({});
+    world.mount(root);
+    const ice = new Ice({ x: 10, frozen: false, light: false });
+    root.addChild(ice);
+    world.flush();
+    step(world, 10);
+    const fell = ice.transform.y;
+    assert.ok(fell > 0, "falling");
+
+    ice.updateProps({ frozen: true });
+    step(world, 30);
+    assert.ok(Math.abs(ice.transform.y - fell) < 3, `held where it was when it froze (${fell} to ${ice.transform.y})`);
+    const held = ice.transform.y;
+    step(world, 30);
+    assert.equal(ice.transform.y, held, "and not moving");
+
+    ice.updateProps({ frozen: false, light: true });
+    step(world, 30);
+    assert.ok(ice.transform.y < held, `let go with its gravity turned over, it floats up (${ice.transform.y})`);
+  });
+
   it("falls onto a solid collider and rests on it, rendered where the ball is", async () => {
     const { world, root, compiled } = await jar([{ id: 1, kind: "cherry", x: 30 }]);
     assert.match(compiled.code, /ownedHandles\(\)/, "the ball is told its world");

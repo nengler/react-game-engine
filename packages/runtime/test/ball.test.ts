@@ -111,4 +111,34 @@ describe("balls", () => {
     run([smooth], 20);
     assert.ok(rough.x < smooth.x - 5, `rough ${rough.x}, smooth ${smooth.x}`);
   });
+
+  it("a pinned ball stays where it is, holds what lands on it, takes no push, and falls from rest when let go", () => {
+    const peg = new Ball({ x: 30, y: 50, radius: 8, gravity: 600, pinned: true });
+    const fruit = new Ball({ x: 30, y: 20, radius: 5, gravity: 600 });
+    run([peg, fruit], 120);
+    assert.deepEqual([peg.x, peg.y], [30, 50], "not moved by gravity or by what fell on it");
+    assert.ok(fruit.y < 50 && worstOverlap([peg, fruit]) < 0.01, `the fruit rests on it or has rolled off, not through (y = ${fruit.y})`);
+    peg.push(500, 0);
+    run([peg], 10);
+    assert.deepEqual([peg.x, peg.y], [30, 50], "a push does nothing to it");
+
+    peg.pinned = false;
+    run([peg], 1);
+    assert.ok(peg.y > 50 && peg.y < 50.5, `let go, it starts from rest (y = ${peg.y})`);
+    run([peg], 120);
+    assert.ok(Math.abs(peg.y - 92) < 0.01, `and falls to the floor (y = ${peg.y})`);
+  });
+
+  it("a ball's gravity can change: none hangs it where it is, a negative one floats it up", () => {
+    const ball = new Ball({ x: 30, y: 50, radius: 5, gravity: 600, drag: 1 });
+    run([ball], 10);
+    assert.ok(ball.y > 50, "falling");
+    ball.gravity = 0;
+    ball.place(30, 60);
+    run([ball], 30);
+    assert.deepEqual([ball.x, ball.y], [30, 60], "hangs");
+    ball.gravity = -600;
+    run([ball], 10);
+    assert.ok(ball.y < 60, `floats up (y = ${ball.y})`);
+  });
 });
