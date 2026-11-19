@@ -13,7 +13,9 @@
  * Options:
  *   --script "<script>"     the input script (default: 1 idle step)
  *   --script-file <file>    the script, from a file
- *   --at 0,10,20            steps to capture (0 is after the first scripted frame); default is the last step
+ *   --at 0,10,20            steps to capture (0 is after the first scripted frame); default is the last step. A negative
+ *                           number counts back from the end (-1 is the last step) and `last` is the last step, so a shot of
+ *                           how a script ends does not need its frames counted: --at 0,-30,last
  *   --every N               capture every Nth step instead
  *   --from N --to N         with --every: only steps N to N (default the whole script), so a sheet shows one stretch of a long run
  *   --setup <file>          a module whose default export `(player, step) => void` is called before each scripted step (0
@@ -159,7 +161,11 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
   const frames = parseInputScript(script, { bindings: mod.bindings, screen: mod.screen });
   let at: number[] | undefined;
-  if (flags.has("at")) at = (flags.get("at") as string).split(",").map(Number);
+  if (flags.has("at"))
+    at = (flags.get("at") as string).split(",").map((step) => {
+      const n = step.trim() === "last" ? -1 : Number(step);
+      return Number.isInteger(n) && n < 0 ? frames.length + n : n;
+    });
   else if (flags.has("every")) {
     const every = Math.max(1, Number(flags.get("every")));
     const from = Number(flags.get("from") ?? 0);
@@ -173,7 +179,9 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     if (at.length === 0) at = [to];
   } else at = [frames.length - 1];
   if (at.some((n) => !Number.isInteger(n) || n < 0 || n >= frames.length)) {
-    console.error(`--at needs steps from 0 to ${frames.length - 1} (the script has ${frames.length} frames).`);
+    console.error(
+      `--at needs steps from 0 to ${frames.length - 1} (the script has ${frames.length} frames), or counted back from the end: -1 or \`last\` is the last step.`
+    );
     return 2;
   }
   const warnings: string[] = [];

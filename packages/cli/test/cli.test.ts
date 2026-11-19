@@ -239,6 +239,13 @@ test(
     assert.equal(shot.status, 0, shot.stdout + shot.stderr);
     assert.match(shot.stdout, /wrote step-11\.png, step-13\.png, step-15\.png to/);
     assert.equal(readFileSync(log, "utf8"), Array.from({ length: 20 }, (_, i) => `${i},`).join(""));
+    // Steps counted back from the end: the last one, and the one five before it.
+    const ending = tse(["screenshot", game, "--script", "_*20", "--at", "0,-6,last", "--out", out]);
+    assert.equal(ending.status, 0, ending.stdout + ending.stderr);
+    assert.match(ending.stdout, /wrote step-0\.png, step-14\.png, step-19\.png to/);
+    const before = tse(["screenshot", game, "--script", "_*20", "--at", "-21", "--out", out]);
+    assert.equal(before.status, 2);
+    assert.match(before.stderr, /or counted back from the end: -1 or `last` is the last step/);
     const outside = tse(["screenshot", game, "--script", "_*20", "--every", "2", "--from", "10", "--to", "20", "--out", out]);
     assert.equal(outside.status, 2);
     assert.match(outside.stderr, /--from and --to need steps from 0 to 19/);

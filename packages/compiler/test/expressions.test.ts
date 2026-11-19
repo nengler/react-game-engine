@@ -179,3 +179,37 @@ export function Pin({ at }: { at: unknown }) {
     assert.match(error.message, /A component has no `as`: move the cast into a function in a `\.ts` module/);
   });
 });
+
+describe("optional parameters", () => {
+  it("`(step?: number) =>` stays optional in the generated function, in a component's own function and in a hook's", async () => {
+    const compiled = compile(`
+function useCounter(start: number) {
+  const c = useMutable({ n: start });
+  const add = (step?: number) => { c.n += step ?? 1; };
+  return { n: c.n, add };
+}
+export function Counter({ big }: { big: boolean }) {
+  const { n, add } = useCounter(0);
+  const s = useMutable({ twice: 0 });
+  const bump = (by: number, again?: boolean) => { s.twice += again === true ? by * 2 : by; };
+  useUpdate(() => {
+    if (big) add(10);
+    else add();
+    bump(1);
+    bump(1, true);
+  });
+  return <Sprite image="n.png" x={n} y={s.twice} />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /step\?: number/);
+    assert.match(compiled.code, /again\?: boolean/);
+    const { Counter } = await load<{ Counter: new (p: { big: boolean }) => Sprite }>(compiled);
+    const world = new World();
+    const counter = new Counter({ big: false });
+    world.mount(counter);
+    world.flush();
+    world.tick(1 / 60, createInputState());
+    world.flush();
+    assert.deepEqual([counter.transform.x, counter.transform.y], [1, 3], "left out, each took its default");
+  });
+});

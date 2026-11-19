@@ -60,6 +60,8 @@ export interface ParamIR {
   readonly id: LocalId;
   readonly name: string;
   readonly type: TypeIR;
+  /** Written `name?`: the caller may leave it out, and the generated function says so too. */
+  readonly optional?: boolean;
 }
 
 /** A small function body: a hook handler or a callback. */
