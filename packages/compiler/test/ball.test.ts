@@ -81,10 +81,11 @@ function places(root: Entity): { x: number; y: number }[] {
 const ICE = `
 interface IceProps { x: number; frozen: boolean; light: boolean }
 export function Ice({ x, frozen, light }: IceProps) {
-  const { x: at, y, pin, setGravity } = useBall({ x: x, y: 0, radius: 5, gravity: 600 });
+  const { x: at, y, pin, setGravity, setGravityX } = useBall({ x: x, y: 0, radius: 5, gravity: 600 });
   useUpdate(() => {
     pin(frozen);
     setGravity(light ? -600 : 600);
+    setGravityX(light ? 300 : 0);
   });
   return <Entity x={at} y={y} />;
 }`;
@@ -153,6 +154,7 @@ describe("useBall", () => {
     ice.updateProps({ frozen: false, light: true });
     step(world, 30);
     assert.ok(ice.transform.y < held, `let go with its gravity turned over, it floats up (${ice.transform.y})`);
+    assert.ok(ice.transform.x > 10, `and its sideways pull carries it to the right (${ice.transform.x})`);
   });
 
   it("falls onto a solid collider and rests on it, rendered where the ball is", async () => {

@@ -202,6 +202,8 @@ export interface BallHandle {
   pin(on: boolean): void;
   /** Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. */
   setGravity(gravity: number): void;
+  /** Change its pull to the right, in pixels per second per second (a tilted table, wind); the `gravityX` option starts it with one. */
+  setGravityX(sideways: number): void;
   /**
    * Stick to every ball with this tag touching it now, and stay stuck: the two are held together, touching, and move as one
    * lump (honey, a magnet, a chain of beads). Call it every step to stick to whatever comes to touch it. Returns how many balls

@@ -185,4 +185,15 @@ describe("balls", () => {
     };
     assert.deepEqual(settle([0, 1, 2, 3]), settle([3, 1, 0, 2]));
   });
+  it("a sideways pull rolls a ball along the floor to the low wall, where it rests", () => {
+    const ball = new Ball({ x: 10, y: 95, radius: 5, gravity: 600, gravityX: 120, friction: 0 });
+    run([ball], 240);
+    assert.ok(Math.abs(ball.x - 55) < 0.05 && Math.abs(ball.y - 95) < 0.05, `against the right wall, on the floor (${ball.x}, ${ball.y})`);
+    assert.ok(ball.speed() < 1, "at rest");
+    ball.setGravity(600, -120);
+    run([ball], 240);
+    assert.ok(Math.abs(ball.x - 5) < 0.05, `turned over, it rolls back to the left wall (x = ${ball.x})`);
+    ball.setGravity(300);
+    assert.equal(ball.gravityX, -120, "the sideways pull is left alone when it is not given");
+  });
 });

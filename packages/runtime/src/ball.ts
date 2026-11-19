@@ -20,6 +20,8 @@ export interface BallOptions {
   readonly radius: number;
   /** Pixels per second per second, downwards. Default 0. */
   readonly gravity?: number;
+  /** Pixels per second per second, to the right (a tilted table, wind). Default 0. */
+  readonly gravityX?: number;
   /** How heavy it is against other balls. Default the radius squared (its area, give or take π). */
   readonly mass?: number;
   /** How much of its sliding it loses each substep it is pressed against a solid, 0 to 1. Default 0.1. */
@@ -83,6 +85,8 @@ export class Ball {
   py: number;
   readonly radius: number;
   gravity: number;
+  /** Its pull to the right, as `gravity` is its pull down. */
+  gravityX: number;
   mass: number;
   friction: number;
   drag: number;
@@ -107,6 +111,7 @@ export class Ball {
     this.py = options.y;
     this.radius = options.radius;
     this.gravity = options.gravity ?? 0;
+    this.gravityX = options.gravityX ?? 0;
     this.mass = options.mass ?? options.radius * options.radius;
     this.friction = options.friction ?? 0.1;
     this.drag = options.drag ?? 0.2;
@@ -185,9 +190,13 @@ export class Ball {
     this.stuck.clear();
   }
 
-  /** Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. */
-  setGravity(gravity: number): void {
+  /**
+   * Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. `sideways`
+   * is its pull to the right (a tilted table, wind); left alone when it is not given.
+   */
+  setGravity(gravity: number, sideways?: number): void {
     this.gravity = gravity;
+    if (sideways !== undefined) this.gravityX = sideways;
   }
 
   /** Put it somewhere, at rest, with no collision. */
@@ -258,7 +267,8 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
     const y = o.y + ball.y;
     // The solids near where it can get to this step: as far as its speed, what popping out can add each substep and gravity take it.
     const speed = (Math.abs(ball.x - ball.px) + Math.abs(ball.y - ball.py)) / ball.substep;
-    const reach = r + (speed + BALL_POP_SPEED * SUBSTEPS + Math.abs(ball.gravity) * dt) * dt + 2;
+    const pull = Math.abs(ball.gravity) + Math.abs(ball.gravityX);
+    const reach = r + (speed + BALL_POP_SPEED * SUBSTEPS + pull * dt) * dt + 2;
     return {
       ball,
       ox: o.x,
@@ -290,7 +300,7 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
       m.px = m.x;
       m.py = m.y;
       if (m.inv === 0) continue;
-      m.x += vx;
+      m.x += vx + m.ball.gravityX * h * h;
       m.y += vy + m.ball.gravity * h * h;
     }
     for (let it = 0; it < ITERATIONS; it++) {
@@ -325,7 +335,7 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
       const vx = m.x - m.px;
       const vy = m.y - m.py;
       const speed = Math.sqrt(vx * vx + vy * vy);
-      const limit = m.start + Math.abs(m.ball.gravity) * h * h * (sub + 1) + BALL_POP_SPEED * h;
+      const limit = m.start + (Math.abs(m.ball.gravity) + Math.abs(m.ball.gravityX)) * h * h * (sub + 1) + BALL_POP_SPEED * h;
       if (speed > limit) {
         m.px = m.x - (vx * limit) / speed;
         m.py = m.y - (vy * limit) / speed;
