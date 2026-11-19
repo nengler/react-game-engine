@@ -213,6 +213,22 @@ function C() {
     assert.deepEqual(typeCheck(compile(PACK, "Pack.tsx")), []);
   });
 
+  it("type-checks an item that switches between two elements whose props change (Jam Jar's effects: TS1003)", () => {
+    // Each branch's dynamic props are written through the item cast to its element, `($item as Sprite)`; their types are named
+    // through the class (`Sprite["image"]`), as `typeof` takes no expression.
+    const compiled = compile(`interface Effect { id: number; kind: string; age: number }
+export function Effects() {
+  const s = useMutable({ effects: [] as Effect[] });
+  return <Entity>{s.effects.map((e) => e.kind === "splat" ? (
+    <Sprite key={e.id} image={\`splat-\${e.id}.png\`} x={e.age} opacity={1 - e.age} />
+  ) : (
+    <Sprite key={e.id} image={\`boom-\${Math.floor(e.age * 9)}.png\`} x={e.age} scaleX={2} />
+  ))}</Entity>;
+}`);
+    assert.doesNotMatch(compiled.code, /typeof \(\$item as/);
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+
   it("type-checks authored source with a list", () => {
     const source = `import { useMutable, Entity, Sprite } from "@tsengine/runtime/jsx";
 interface Item { id: string; n: number }

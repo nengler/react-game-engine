@@ -20,8 +20,7 @@ import {
 
 import { visit } from "../analyzer/util.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import type { ChildIR, ElementIR, HostElementIR, IRModule, PropIR, SourceSpan } from "../ir/types.ts";
-import { walkExpr } from "../ir/walk.ts";
+import type { ChildIR, ElementIR, ExprIR, HostElementIR, IRModule, PropIR, SourceSpan } from "../ir/types.ts";
 import { spanOf, type TsxParser } from "../parser/parser.ts";
 import { nearest } from "../transform/helpers.ts";
 
@@ -132,6 +131,32 @@ function propertyName(name: object): string | undefined {
   return "text" in name && typeof name.text === "string" ? name.text : undefined;
 }
 
+/**
+ * The string literals an expression can evaluate to: itself, either branch of a `?:`, either side of `||` and `??`, the right of
+ * `&&`, the elements of an array (a list of frames), through a memo. Not a literal that is only compared or passed along (`phase === "order" ? a : b`, `imageFor("cherry")`):
+ * that is not a file name, and with derived values inlined it may come from a `const` the prop reads.
+ */
+function valueStrings(e: ExprIR): string[] {
+  switch (e.kind) {
+    case "StringLiteral":
+      return e.value === "" ? [] : [e.value];
+    case "Conditional":
+      return [...valueStrings(e.whenTrue), ...valueStrings(e.whenFalse)];
+    case "Binary":
+      if (e.operator === "||" || e.operator === "??") return [...valueStrings(e.left), ...valueStrings(e.right)];
+      return e.operator === "&&" ? valueStrings(e.right) : [];
+    case "Memo":
+      return valueStrings(e.value);
+    case "NonNull":
+      return valueStrings(e.expression);
+    // `<AnimatedSprite frames={["a1.png", "a2.png"]}>`: each element is a name.
+    case "ArrayLiteral":
+      return e.elements.flatMap((element) => valueStrings(element.value));
+    default:
+      return [];
+  }
+}
+
 export function checkAssets(modules: readonly IRModule[], options: AssetCheckOptions): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const report = missingAssetReporter(options, diagnostics);
@@ -140,14 +165,12 @@ export function checkAssets(modules: readonly IRModule[], options: AssetCheckOpt
     if (names === undefined) return;
     for (const prop of list) {
       if ((prop.kind !== "StaticProp" && prop.kind !== "DynamicProp") || !names.includes(prop.name)) continue;
-      walkExpr(prop.value, (e) => {
-        if (e.kind === "StringLiteral" && e.value !== "")
-          report(
-            tag === "Text" || tag === "Game" ? "font" : tag === "Music" ? "music file" : tag === "Layer" ? "shader" : "image",
-            e.value,
-            span
-          );
-      });
+      for (const name of valueStrings(prop.value))
+        report(
+          tag === "Text" || tag === "Game" ? "font" : tag === "Music" ? "music file" : tag === "Layer" ? "shader" : "image",
+          name,
+          span
+        );
     }
   };
   const child = (c: ChildIR): void => {

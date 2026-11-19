@@ -824,10 +824,15 @@ function memoized(key: string, value: ExprIR): ExprIR {
     e.kind !== "Memo" &&
     ((e.kind === "Call" && (e.callee.kind === "Plain" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod")) ||
       childExpressions(e).some(calls));
-  // `const cost = kind === null ? null : price(kind)`, `const name = hero?.name ?? ""`: a value that may be null is tested before it
-  // is used (`cost !== null && gold >= cost`). Written out at each use, TypeScript could not narrow one copy by testing another;
-  // as a memo it is one `const`, which narrows as the source does.
-  const mayBeNull = value.kind === "Conditional" || (value.kind === "Binary" && value.operator === "??");
+  // `const cost = kind === null ? null : price(kind)`, `const name = hero?.name ?? ""`, `const offer = offers[cursor]`: a value that
+  // may be null or undefined is tested before it is used (`cost !== null && gold >= cost`, `offer !== undefined && TABLE[offer]`).
+  // Written out at each use, TypeScript could not narrow one copy by testing another; as a memo it is one `const`, which narrows as
+  // the source does. An element read by index may be undefined (`noUncheckedIndexedAccess`), and so may an optional read.
+  const mayBeNull =
+    value.kind === "Conditional" ||
+    (value.kind === "Binary" && value.operator === "??") ||
+    value.kind === "IndexRead" ||
+    (value.kind === "MemberRead" && value.optional);
   return calls(value) || mayBeNull ? { kind: "Memo", key, value } : value;
 }
 
