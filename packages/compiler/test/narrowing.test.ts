@@ -11,7 +11,7 @@ import { after, describe, it } from "node:test";
 
 import { World } from "@tsengine/runtime";
 
-import { cleanOutput, closeCompiler, compile, load } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -129,6 +129,19 @@ export function Pads({ pads }: PadsProps) {
     });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.out("Pads.ts"), /\$assume\(p\.tower\);/);
+  });
+
+  it("a const read from a list by index is tested before it is used, so it is one memo the test narrows (Jam Jar: TS2538)", () => {
+    const compiled = compile(`const NAMES: Record<string, string> = { cherry: "Cherry" };
+export function Offer({ offers, cursor }: { offers: readonly string[]; cursor: number }) {
+  const offer = offers[cursor];
+  const first = offers[0]?.length;
+  return <Entity>
+    {offer !== undefined && <Text>{NAMES[offer]}</Text>}
+    {first !== undefined && <Text>{\`\${first + 1}\`}</Text>}
+  </Entity>;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
   });
 
   it("checks nothing: a callback still runs when its condition no longer holds (a useUnmount telling the parent)", async () => {

@@ -710,7 +710,13 @@ export function colliderTag(el: {
   return null;
 }
 
-/** The type of field `name` of the object `ref` names (`(typeof this.bar)["width"]`), for a declaration typed as the field is. */
+/**
+ * The type of field `name` of the object `ref` names (`(typeof this.bar)["width"]`), for a declaration typed as the field is. A list
+ * item that switches between two elements is reached through a cast (`($item as Sprite)`), which `typeof` cannot take: its field is
+ * typed through the class it is cast to (`Sprite["image"]`), a class name standing for its instances' type.
+ */
 function writtenFieldType(ref: string, name: string): string {
+  const cast = /^\(\$\w+ as ([\w.<>, {}"']+)\)$/.exec(ref);
+  if (cast !== null) return `${cast[1]}[${JSON.stringify(name)}]`;
   return `(typeof ${ref})[${JSON.stringify(name)}]`;
 }

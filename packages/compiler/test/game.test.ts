@@ -207,6 +207,31 @@ describe("<Game font>", () => {
     assert.match(found[0]!.message, /font 'font.png'.*did you mean 'fonts.png'/);
   });
 
+  it("checks only the names a path can be: not a literal it compares or passes along, nor one from a const it reads (Jam Jar)", () => {
+    const files = ["a.png", "b.png"];
+    const check = (source: string) =>
+      checkAssets([compile(source).ir], { folder: "assets", exists: (name) => files.includes(name), list: () => files }).map(
+        (d) => d.message
+      );
+    const source = `export function Hand({ phase, chosen, kinds }: { phase: string; chosen: boolean; kinds: readonly string[] }) {
+  const ordering = phase === "order";
+  return <Entity>
+    <Flex backgroundImage={phase === "order" && chosen ? "a.png" : "b.png"} />
+    <Flex backgroundImage={ordering ? "a.png" : "b.png"} />
+    <Flex backgroundImage={chosen && "a.png"} />
+    {kinds.map((k) => <Sprite key={k} image={k === "cherry" ? "a.png" : "b.png"} />)}
+  </Entity>;
+}`;
+    assert.deepEqual(check(source), [], "'order' and 'cherry' are compared, not shown");
+    // What a path can be is still checked: both branches, both sides of ||, the right of &&.
+    assert.deepEqual(
+      check(
+        `export function F({ c }: { c: boolean }) { return <Entity><Sprite image={c ? "a.png" : "c.png"} /><Sprite image={c && "d.png"} /></Entity>; }`
+      ),
+      ["The image 'c.png' is not in assets/ (did you mean 'a.png'?).", "The image 'd.png' is not in assets/ (did you mean 'a.png'?)."]
+    );
+  });
+
   it("takes tse:small, the built-in font, with no file; an unknown tse: font, or tse:small as an image, is an error", () => {
     const check = (source: string) =>
       checkAssets([compile(source).ir], { folder: "assets", exists: () => false, list: () => [] }).map((d) => d.message);
