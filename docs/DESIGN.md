@@ -2315,6 +2315,13 @@ so each fruit can be a component with its own state.
   has, so gravity and other balls do not move it and they are pushed out of it entirely; `push` does nothing to it, and it loses
   its velocity each substep, so it starts from rest when let go. `setGravity(g)` writes `Ball.gravity`, which the step already
   read each time: 0 hangs a ball, a negative one floats it. Both are plain fields, kept by snapshots and hot state.
+- **Sticking** (2026-11-19, for Jam Jar's honey). `stick(tag)` adds every ball with that tag touching this one to its `stuck` set,
+  and itself to theirs. In each solver pass, after the balls are pushed apart, each stuck pair further apart than touching is
+  pulled back together along the line between them, by mass, as the pushing apart is: so a stuck lump is a set of balls that
+  can roll round each other but not part. The pairs are taken in the sorted order of the pass, so a stuck pile does not depend
+  on the order its balls joined. Nothing is done for it when no ball is stuck. The set is not a plain field: a snapshot or a hot
+  reload does not keep it, so a component that wants to stay stuck calls `stick` every step, which is also how it catches what
+  comes to touch it later. There is no rod (a fixed distance apart) or rope yet.
 - **Cost.** Each pass sorts the balls and sweeps them, so a pile of n balls costs n log n plus the touching pairs, twelve times a
   step: a settled jar of 60 balls takes about 0.08 ms a step and a pile of 300 about 0.4 ms under Node (a 4-core cloud VM,
 2026-11-19). `contacts` scans every ball, which is fine for a jar; a crowd of

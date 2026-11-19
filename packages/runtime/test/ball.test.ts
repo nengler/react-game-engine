@@ -141,4 +141,48 @@ describe("balls", () => {
     run([ball], 10);
     assert.ok(ball.y < 60, `floats up (y = ${ball.y})`);
   });
+  it("stuck balls are held together, touching: one hangs from a pinned one, a blast moves the pair as a lump, and let go it falls", () => {
+    const peg = new Ball({ x: 30, y: 20, radius: 6, gravity: 600, pinned: true });
+    const drop = new Ball({ x: 30, y: 31, radius: 5, gravity: 600 });
+    const stick = (a: Ball, b: Ball): void => {
+      a.stuck.add(b);
+      b.stuck.add(a);
+    };
+    stick(peg, drop);
+    run([peg, drop], 120);
+    const apart = Math.hypot(drop.x - peg.x, drop.y - peg.y);
+    assert.ok(Math.abs(apart - 11) < 0.05, `it hangs from the peg, touching it (${apart} apart)`);
+    assert.ok(drop.y > peg.y, "below it");
+
+    // Two loose balls stuck together and flicked sideways travel as one.
+    const a = new Ball({ x: 20, y: 95, radius: 5, gravity: 600, friction: 0 });
+    const b = new Ball({ x: 30, y: 95, radius: 5, gravity: 600, friction: 0 });
+    stick(a, b);
+    b.push(200, 0);
+    run([a, b], 20);
+    assert.ok(a.x > 21, `the one that was not pushed is dragged along (x = ${a.x})`);
+    assert.ok(Math.abs(Math.hypot(b.x - a.x, b.y - a.y) - 10) < 0.2, "still touching");
+
+    drop.unstick();
+    assert.equal(peg.stuck.size, 0, "letting go is on both sides");
+    run([peg, drop], 120);
+    assert.ok(Math.abs(drop.y - 95) < 0.05, `let go, it falls to the floor (y = ${drop.y})`);
+  });
+
+  it("a stuck pile settles the same whatever order its balls were given in", () => {
+    const pile = (): Ball[] => [0, 1, 2, 3].map((i) => new Ball({ x: 12 + i * 11, y: 40 - i * 12, radius: 5, gravity: 600 }));
+    const settle = (order: readonly number[]): number[][] => {
+      const balls = pile();
+      for (let i = 0; i + 1 < balls.length; i++) {
+        balls[i]!.stuck.add(balls[i + 1]!);
+        balls[i + 1]!.stuck.add(balls[i]!);
+      }
+      run(
+        order.map((i) => balls[i]!),
+        180
+      );
+      return balls.map((ball) => [ball.x, ball.y]);
+    };
+    assert.deepEqual(settle([0, 1, 2, 3]), settle([3, 1, 0, 2]));
+  });
 });

@@ -571,6 +571,23 @@ export class World implements BodySpace, BallSpace {
     return out;
   }
 
+  /** The balls with `tag` touching `ball` now, in no particular order (`Ball.stick`). */
+  ballsTouching(ball: Ball, tag: string): Ball[] {
+    const home = ball.origin();
+    const ax = home.x + ball.x;
+    const ay = home.y + ball.y;
+    const out: Ball[] = [];
+    for (const other of this.#balls) {
+      if (other === ball || other.tag !== tag) continue;
+      const o = other.origin();
+      const dx = o.x + other.x - ax;
+      const dy = o.y + other.y - ay;
+      const reach = ball.radius + other.radius + BALL_TOUCH_TOLERANCE;
+      if (dx * dx + dy * dy <= reach * reach) out.push(other);
+    }
+    return out;
+  }
+
   /** The balls with `tag` touching `ball` now, nearest first, each where it is in `ball`'s parent's space. */
   ballContacts(ball: Ball, tag: string): BallContact[] {
     const home = ball.origin();
