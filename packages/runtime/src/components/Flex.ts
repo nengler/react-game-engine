@@ -112,6 +112,17 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   offsetX?: number;
   offsetY?: number;
   /**
+   * Pin the box to its parent's edges, as CSS's `left`, `right`, `top` and `bottom` do an absolutely placed box: each is the
+   * gap, in pixels, between that edge of the parent and the same edge of this box. Giving any of them takes the box out of the
+   * flow, as `float` does. With both edges of an axis and no size on it, the box stretches between them. An axis with neither
+   * is placed by `anchor`, `to` and the offset, as a floating box is. The parent's box is measured as for `float`: its whole
+   * box, padding included, or the game's area when the parent is not a `<Flex>`.
+   */
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+  /**
    * What happens to children outside the box (see `FlexOverflow`). `"hidden"` clips to the inside of the box's border (so content never paints over it);
    * `"scroll"` also lets the mouse wheel move the content, and stops the children shrinking to fit, so there is something to scroll.
    * A clipped child cannot be pressed where it is cut off. Give a `"scroll"` box a size (or a `maxHeight`) smaller than its content.
@@ -359,6 +370,10 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   to: FlexAnchor;
   offsetX: number;
   offsetY: number;
+  left: number | undefined;
+  right: number | undefined;
+  top: number | undefined;
+  bottom: number | undefined;
   onPress: (() => void) | undefined;
   onPointerEnter: (() => void) | undefined;
   onPointerLeave: (() => void) | undefined;
@@ -432,6 +447,10 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.to = hostProps.to ?? "top-left";
     this.offsetX = hostProps.offsetX ?? 0;
     this.offsetY = hostProps.offsetY ?? 0;
+    this.left = hostProps.left;
+    this.right = hostProps.right;
+    this.top = hostProps.top;
+    this.bottom = hostProps.bottom;
     this.onPress = hostProps.onPress;
     this.onPointerEnter = hostProps.onPointerEnter;
     this.onPointerLeave = hostProps.onPointerLeave;
@@ -448,6 +467,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     if (dx === 0 || this.onAdjust === undefined) return false;
     this.onAdjust(dx);
     return true;
+  }
+
+  /** Out of its parent's flow: `float`, or pinned to an edge (`left`, `right`, `top`, `bottom`). */
+  get floats(): boolean {
+    return this.float || this.left !== undefined || this.right !== undefined || this.top !== undefined || this.bottom !== undefined;
   }
 
   /**
