@@ -23,6 +23,7 @@ import {
   isJsxElement,
   isJsxExpression,
   isJsxSelfClosingElement,
+  isObjectBindingPattern,
   isJsxText,
   isArrowFunction,
   isJsxFragment,
@@ -365,8 +366,44 @@ export class ElementLowering extends HookLowering {
     return this.inScope((): KeyedListChildIR | null => {
       const params: ParamIR[] = [];
       for (const param of fn.parameters) {
+        // `({ id, x }) =>`: the item taken apart. The item gets a name of its own and each name it gives reads the item's member,
+        // so everything after this sees an item parameter as before. Only plain members: no default, rest or nested pattern.
+        if (
+          param === fn.parameters[0] &&
+          isObjectBindingPattern(param.name) &&
+          !param.initializer &&
+          !param.dotDotDotToken &&
+          !param.type
+        ) {
+          const id = localId(this.componentName, EACH_ITEM, this.nextSerial());
+          const whole: ParamIR = { id, name: EACH_ITEM, type: { kind: "Contextual" } };
+          this.scope.declare(EACH_ITEM, { kind: "param", id, name: EACH_ITEM, type: { kind: "Contextual" } });
+          for (const element of param.name.elements) {
+            const target = element.name;
+            const member = element.propertyName ?? target;
+            if (!target || !member || !isIdentifier(target) || !isIdentifier(member) || element.initializer || element.dotDotDotToken) {
+              this.report(code, "A list item is taken apart into plain members only: `({ id, x }) =>` or `({ id: n }) =>`.", element);
+              return null;
+            }
+            const name = target.text;
+            if (!checkFreshName(this, name, element)) return null;
+            const value: ExprIR = {
+              kind: "MemberRead",
+              object: { kind: "ParamRead", param: id, name: EACH_ITEM },
+              name: member.text,
+              optional: false,
+            };
+            this.scope.declare(name, { kind: "derived", name, value });
+          }
+          params.push(whole);
+          continue;
+        }
         if (!isIdentifier(param.name) || param.initializer || param.dotDotDotToken || param.type) {
-          this.report(code, "The list callback's parameters are plain names: `(item, index) =>`.", param);
+          this.report(
+            code,
+            "The list callback's parameters are names, or the item taken apart: `(item, index) =>`, `({ id, x }) =>`.",
+            param
+          );
           return null;
         }
         const name = param.name.text;
@@ -536,7 +573,10 @@ export class ElementLowering extends HookLowering {
     if (!lowered) return null;
     const children = this.listItemChildren(lowered.children, item, null, jsx);
     if (!children) return null;
-    const source: ExprIR = { kind: "ArrayLiteral", elements: [{ spread: false, value: keyValue }] };
+    // `{hero !== null && <Badge key={hero.id} />}`: the key is only read while the condition holds, as the source's `&&` has it.
+    const one: ExprIR = { kind: "ArrayLiteral", elements: [{ spread: false, value: keyValue }] };
+    const source: ExprIR =
+      condition === null ? one : { kind: "Conditional", test: condition, whenTrue: one, whenFalse: { kind: "ArrayLiteral", elements: [] } };
     const key: ExprIR = { kind: "ParamRead", param: id, name: KEYED_ITEM };
     const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
     return {
@@ -1044,6 +1084,9 @@ export class ElementLowering extends HookLowering {
     );
   }
 }
+
+/** The name a list item has in generated code when the source took it apart (`({ id, x }) =>`). */
+const EACH_ITEM = "$each";
 
 const ROUTE_TAG = "Route";
 

@@ -23,14 +23,19 @@ export class ElementEmitter extends HandlerEmitter {
 
   // -- fields ---------------------------------------------------------------
 
-  protected emitElementFields(children: readonly ChildIR[], presence: Presence): void {
+  /** `conditions` are those the children sit under (`{run !== null && <>…</>}`), outermost first. */
+  protected emitElementFields(children: readonly ChildIR[], presence: Presence, conditions: readonly ExprIR[] = []): void {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
-      this.w.at(child.element.span, () => this.emitElementField(child, presence));
+      this.w.at(child.element.span, () => this.emitElementField(child, presence, conditions));
     }
   }
 
-  protected emitElementField(child: Exclude<ChildIR, { kind: "ChildrenSlot" }>, presence: Presence): void {
+  protected emitElementField(
+    child: Exclude<ChildIR, { kind: "ChildrenSlot" }>,
+    presence: Presence,
+    conditions: readonly ExprIR[] = []
+  ): void {
     const el = child.element;
     const type = fieldType(el);
     if (child.kind === "KeyedListChild") {
@@ -41,7 +46,7 @@ export class ElementEmitter extends HandlerEmitter {
       this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
       if (this.listNeedsRecords(child))
         this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
-      this.emitListSourceMethods(child, []);
+      this.emitListSourceMethods(child, [], conditions);
       return;
     }
     const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
@@ -50,7 +55,7 @@ export class ElementEmitter extends HandlerEmitter {
     } else {
       this.w.line(`${el.fieldName}: ${type} | null = null;`);
     }
-    this.emitElementFields(el.children, childPresence);
+    this.emitElementFields(el.children, childPresence, child.kind === "ConditionalChild" ? [...conditions, child.condition] : conditions);
   }
 
   /**
@@ -58,11 +63,18 @@ export class ElementEmitter extends HandlerEmitter {
    * a list inside a list item's (`row.cells`), which takes the items it reads of the lists around it as parameters. The lists inside
    * this one's items are visited too: they are not fields of the component (their state lives in the item's record).
    */
-  protected emitListSourceMethods(list: KeyedListChildIR, around: readonly KeyedListChildIR[]): void {
+  protected emitListSourceMethods(list: KeyedListChildIR, around: readonly KeyedListChildIR[], conditions: readonly ExprIR[] = []): void {
     if (!isNamedListSource(list.source) || around.some((outer) => readsListParams(list.source, outer))) {
       const params = this.aroundParams(list.source, around);
+      // A list under a condition (`{run !== null && <>{run.items.map(…)}</>}`) is only read while the condition holds, but its
+      // source is worked out here, in a method of its own, where TypeScript has not seen the test: `$assume` narrows it again.
+      let assume = "";
+      if (conditions.length > 0) {
+        this.usesAssume = true;
+        assume = `$assume(${conditions.map((c) => `(${this.expr(c)})`).join(" && ")}); `;
+      }
       this.w.line(
-        `${listSourceMethod(list)}(${params.map((p) => `${p.name}: ${p.type}`).join(", ")}) { return ${this.expr(list.source, true)}; }`
+        `${listSourceMethod(list)}(${params.map((p) => `${p.name}: ${p.type}`).join(", ")}) { ${assume}return ${this.expr(list.source, true)}; }`
       );
     }
     const inner = [...around, list];

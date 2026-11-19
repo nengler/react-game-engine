@@ -470,7 +470,9 @@ function C() {
       compile(list(`items.map((e) => <Entity key={e.id}>{items.map((f) => <Sprite key={f.id} image={f.id} />)}</Entity>)`))
     );
     assert.deepEqual(listCodes(`items.map()`), [DiagnosticCode.InvalidList]);
-    assert.deepEqual(listCodes(`items.map(({ id }) => <Sprite key={id} image={id} />)`), [DiagnosticCode.InvalidList]);
+    // The item taken apart is allowed now (see "a list item taken apart" below); a typed or defaulted parameter is not.
+    assert.doesNotThrow(() => compile(list(`items.map(({ id }) => <Sprite key={id} image={id} />)`)));
+    assert.deepEqual(listCodes(`items.map((e: Item) => <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
     assert.doesNotThrow(
       () => compile(list(`items.map((e) => { return <Sprite key={e.id} image={e.id} />; })`)),
       "a block with one return is fine"
@@ -760,5 +762,100 @@ export function Row({ items, show }: { items: { id: number }[]; show: boolean })
 }`)
     );
     assert.deepEqual(typeCheck(compiled), []);
+  });
+});
+
+describe("narrowing under a condition", () => {
+  it("a list and a keyed element under `value !== null` read the value as the source's `&&` narrowed it, and nothing is read while it is null", async () => {
+    const compiled = compile(
+      withAuthoring(`
+interface Hand { id: number; cards: { id: number; x: number }[] }
+export function Table({ hand }: { hand: Hand | null }) {
+  return (
+    <Entity>
+      {hand !== null && <>{hand.cards.map((card) => <Sprite key={card.id} image="card.png" x={card.x} />)}</>}
+      {hand !== null && <Sprite key={hand.id} image="hand.png" x={hand.cards.length} />}
+    </Entity>
+  );
+}`)
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    type Hand = { id: number; cards: { id: number; x: number }[] };
+    const { Table } = await load<{ Table: new (p: { hand: Hand | null }) => Entity & { updateProps(next: { hand: Hand | null }): void } }>(
+      compiled
+    );
+    const world = new World();
+    const table = new Table({ hand: null });
+    world.mount(table);
+    world.flush();
+    const sprites = (object: Entity): number[] =>
+      object.children.flatMap((child) => (child instanceof Sprite ? [child.transform.x] : sprites(child as Entity)));
+    assert.deepEqual(sprites(table), [], "nothing while there is no hand");
+    table.updateProps({
+      hand: {
+        id: 7,
+        cards: [
+          { id: 1, x: 10 },
+          { id: 2, x: 20 },
+        ],
+      },
+    });
+    world.flush();
+    assert.deepEqual(sprites(table), [10, 20, 2]);
+    table.updateProps({ hand: null });
+    world.flush();
+    assert.deepEqual(sprites(table), [], "and nothing again once it is gone");
+  });
+});
+
+describe("a list item taken apart", () => {
+  it("`({ id, x: at }) =>` reads the item's members in the key, the props, a condition and a handler", async () => {
+    const compiled = compile(
+      withAuthoring(`
+interface Card { id: number; x: number; shown: boolean }
+export function Hand({ cards, onPick }: { cards: Card[]; onPick: (id: number) => void }) {
+  return (
+    <Entity>
+      {cards.map(({ id, x: at, shown }, i) => (
+        <Flex key={id} x={at + i} onPress={() => onPick(id)}>
+          {shown && <Sprite image="card.png" x={at} />}
+        </Flex>
+      ))}
+    </Entity>
+  );
+}`)
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    type Card = { id: number; x: number; shown: boolean };
+    const { Hand } = await load<{ Hand: new (p: { cards: Card[]; onPick: (id: number) => void }) => Entity }>(compiled);
+    const picked: number[] = [];
+    const world = new World();
+    const hand = new Hand({
+      cards: [
+        { id: 4, x: 10, shown: true },
+        { id: 9, x: 30, shown: false },
+      ],
+      onPick: (id) => picked.push(id),
+    });
+    world.mount(hand);
+    world.flush();
+    const [first, second] = hand.children as [Entity, Entity];
+    assert.deepEqual([first.transform.x, second.transform.x], [10, 31]);
+    assert.deepEqual([first.children.length, second.children.length], [1, 0], "only the shown card has its picture");
+    (second as unknown as { onPress(): void }).onPress();
+    assert.deepEqual(picked, [9]);
+  });
+
+  it("only into plain members: a default, a rest or a nested pattern is refused", () => {
+    for (const pattern of ["{ id, x = 0 }", "{ id, ...rest }", "{ id, at: { x } }"]) {
+      const [error] = compileErrors(
+        withAuthoring(`
+export function Hand({ cards }: { cards: { id: number; x: number; at: { x: number } }[] }) {
+  return <Entity>{cards.map((${pattern}) => <Sprite key={id} image="card.png" />)}</Entity>;
+}`)
+      );
+      assert.equal(error?.code, DiagnosticCode.InvalidList, pattern);
+      assert.match(error.message, /taken apart into plain members only/, pattern);
+    }
   });
 });
