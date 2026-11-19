@@ -95,6 +95,8 @@ export class Ball {
   pinned: boolean;
   /** The length of the last substep, in seconds, to turn the motion back into a velocity. */
   substep = 1 / 240;
+  /** The balls this one is stuck to (see `stick`); each has this one in its own. */
+  readonly stuck = new Set<Ball>();
   #owner: GameObject | null = null;
   #world: World | null = null;
 
@@ -121,6 +123,7 @@ export class Ball {
   }
 
   detachOwner(): void {
+    this.unstick();
     this.#world?.removeBall(this);
     this.#owner = null;
     this.#world = null;
@@ -159,6 +162,27 @@ export class Ball {
   /** Hold it in place, or let it go (see `pinned`). */
   pin(on: boolean): void {
     this.pinned = on;
+  }
+
+  /**
+   * Stick to every ball with this tag touching it now: from then on the two are held together, touching, and move as one lump
+   * (the pair is pulled together by mass, as overlapping balls are pushed apart). It keeps what it was stuck to before, so
+   * calling it every step sticks it to whatever comes to touch it. Returns how many balls it is stuck to. Before the owner is
+   * mounted, it sticks to nothing.
+   */
+  stick(tag: string): number {
+    if (this.#world !== null)
+      for (const other of this.#world.ballsTouching(this, tag)) {
+        this.stuck.add(other);
+        other.stuck.add(this);
+      }
+    return this.stuck.size;
+  }
+
+  /** Let go of every ball it is stuck to. A ball that leaves the world lets go by itself. */
+  unstick(): void {
+    for (const other of this.stuck) other.stuck.delete(this);
+    this.stuck.clear();
   }
 
   /** Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. */
@@ -210,6 +234,8 @@ interface Moving {
   /** Kept of its velocity each substep (`drag`). */
   keep: number;
   solids: SolidBox[];
+  /** Its place in the solving order this iteration: only kept up when something is stuck. */
+  at: number;
 }
 
 /** Left to right by the left edge, then top to bottom, then by size: an order that depends only on where the balls are. */
@@ -248,8 +274,14 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
       // Linear in the substep, not a power: Math.pow may round differently in the two hosts, and parity must be exact.
       keep: Math.max(0, 1 - Math.max(0, Math.min(1, ball.drag)) * h),
       solids: space.solidBoxesNear(x - reach, y - reach, reach * 2, reach * 2, ball.owner),
+      at: 0,
     };
   });
+
+  // Only when something is stuck is the work for it done at all.
+  const sticky = balls.some((ball) => ball.stuck.size > 0);
+  const byBall = new Map<Ball, Moving>();
+  if (sticky) for (const m of moving) byBall.set(m.ball, m);
 
   for (let sub = 0; sub < SUBSTEPS; sub++) {
     for (const m of moving) {
@@ -270,6 +302,20 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
           const b = moving[j] as Moving;
           if (b.x - b.r >= right) break;
           separate(a, b);
+        }
+      }
+      if (sticky) {
+        // Stuck pairs, in an order that depends only on where the balls are (the sort above), as the pushing apart does.
+        moving.forEach((m, i) => (m.at = i));
+        for (const a of moving) {
+          if (a.ball.stuck.size === 0) continue;
+          const partners: Moving[] = [];
+          for (const other of a.ball.stuck) {
+            const b = byBall.get(other);
+            if (b !== undefined && b.at > a.at) partners.push(b);
+          }
+          partners.sort((p, q) => p.at - q.at);
+          for (const b of partners) pullTogether(a, b);
         }
       }
       for (const m of moving) if (m.inv > 0) for (const box of m.solids) pushOut(m, box);
@@ -319,6 +365,25 @@ function separate(a: Moving, b: Moving): void {
   a.y -= ny * overlap * wa;
   b.x += nx * overlap * wb;
   b.y += ny * overlap * wb;
+}
+
+/** Pull two stuck balls back together until they touch, along the line between their centres, the lighter one further. */
+function pullTogether(a: Moving, b: Moving): void {
+  const total = a.inv + b.inv;
+  if (total === 0) return;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const min = a.r + b.r;
+  const d2 = dx * dx + dy * dy;
+  if (d2 <= min * min) return;
+  const d = Math.sqrt(d2);
+  const gap = d - min;
+  const wa = a.inv / total;
+  const wb = b.inv / total;
+  a.x += (dx / d) * gap * wa;
+  a.y += (dy / d) * gap * wa;
+  b.x -= (dx / d) * gap * wb;
+  b.y -= (dy / d) * gap * wb;
 }
 
 /**

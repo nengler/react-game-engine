@@ -125,7 +125,9 @@ export function useBall(options) {
   };
   const pin = (on: boolean) => b.ball.pin(on);
   const setGravity = (gravity: number) => b.ball.setGravity(gravity);
-  return { x: b.x, y: b.y, contacts, push, place, speed, pin, setGravity };
+  const stick = (tag: string) => b.ball.stick(tag);
+  const unstick = () => b.ball.unstick();
+  return { x: b.x, y: b.y, contacts, push, place, speed, pin, setGravity, stick, unstick };
 }
 
 /**

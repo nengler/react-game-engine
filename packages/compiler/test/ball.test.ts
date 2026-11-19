@@ -89,7 +89,40 @@ export function Ice({ x, frozen, light }: IceProps) {
   return <Entity x={at} y={y} />;
 }`;
 
+const BEAD = `
+interface BeadProps { x: number; y: number; held: boolean; sticky: boolean }
+export function Bead({ x, y, held, sticky }: BeadProps) {
+  const s = useMutable({ stuck: 0 });
+  const { x: at, y: down, pin, stick, unstick } = useBall({ x: x, y: y, radius: 5, gravity: 600, tag: "bead", pinned: held });
+  useUpdate(() => {
+    pin(held);
+    if (sticky) s.stuck = stick("bead");
+    else unstick();
+  });
+  return <Entity x={at} y={down} />;
+}`;
+
 describe("useBall", () => {
+  it("stick holds it to the balls it touches, so one hangs from a held one; unstick lets it fall", async () => {
+    const compiled = compile(BEAD);
+    assert.deepEqual(getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }]), []);
+    type BeadProps = { x: number; y: number; held: boolean; sticky: boolean };
+    const { Bead } = await load<{ Bead: new (p: BeadProps) => Entity & { updateProps(next: Partial<BeadProps>): void } }>(compiled);
+    const world = new World();
+    const root = new Entity({});
+    world.mount(root);
+    const top = new Bead({ x: 10, y: 0, held: true, sticky: false });
+    const hung = new Bead({ x: 10, y: 10, held: false, sticky: true });
+    root.addChild(top);
+    root.addChild(hung);
+    world.flush();
+    step(world, 60);
+    assert.ok(Math.abs(hung.transform.y - 10) < 0.5, `it hangs from the held one (y = ${hung.transform.y})`);
+    hung.updateProps({ sticky: false });
+    step(world, 30);
+    assert.ok(hung.transform.y > 40, `let go, it falls (y = ${hung.transform.y})`);
+  });
+
   it("pin holds a ball where it is and lets it go again; setGravity changes how it falls", async () => {
     const compiled = compile(ICE);
     assert.deepEqual(getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }]), []);
