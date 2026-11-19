@@ -654,3 +654,38 @@ describe("layoutContents", () => {
     assert.deepEqual(size(root), [80, 4 + 10 + 2 + 5 + 2 + 5 + 4]);
   });
 });
+
+describe("layout: a box pinned to its parent's edges", () => {
+  it("left, right, top and bottom place it from that edge, out of the flow", () => {
+    const flowed = box(10, 10);
+    const corner = flex({ right: 4, bottom: 6 }, box(20, 8));
+    const near = flex({ left: 3, top: 5 }, box(20, 8));
+    const parent = lay(flex({ width: 100, height: 60, padding: 10 }, flowed, corner, near));
+    assert.deepEqual(at(flowed), [10, 10], "the flow does not see them");
+    assert.deepEqual(size(parent), [100, 60]);
+    assert.deepEqual(at(corner), [100 - 20 - 4, 60 - 8 - 6], "from the parent's own edges, its padding included");
+    assert.deepEqual(at(near), [3, 5]);
+  });
+
+  it("an axis with no edge is placed by anchor, to and the offset, as a floating box is", () => {
+    const pinned = flex({ bottom: 2, anchor: "top-center", to: "top-center", offsetX: 1 }, box(20, 8));
+    lay(flex({ width: 100, height: 60 }, pinned));
+    assert.deepEqual(at(pinned), [40 + 1, 60 - 8 - 2]);
+  });
+
+  it("both edges of an axis stretch a box with no size of its own between them; one with a size keeps it", () => {
+    const stretched = flex({ left: 10, right: 20, top: 5, bottom: 5 });
+    const sized = flex({ left: 10, right: 20, width: 30, top: 0 }, box(1, 1));
+    lay(flex({ width: 100, height: 60 }, stretched, sized));
+    assert.deepEqual(size(stretched), [70, 50]);
+    assert.deepEqual(at(stretched), [10, 5]);
+    assert.deepEqual(size(sized)[0], 30);
+    assert.deepEqual(at(sized), [10, 0], "placed from the near edge");
+  });
+
+  it("a pinned box with no Flex parent is pinned to the area it is laid out in", () => {
+    const root = flex({ right: 12, top: 28, width: 192, height: 100 });
+    lay(root, 640, 360);
+    assert.deepEqual(at(root), [640 - 192 - 12, 28]);
+  });
+});

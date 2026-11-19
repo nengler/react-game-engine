@@ -723,3 +723,33 @@ export function Bar({ pct }: { pct: number }) {
     for (const error of errors) assert.match(error.message, /is not assignable to type 'FlexSizing/);
   });
 });
+
+describe("Flex: pinned to its parent's edges", () => {
+  it("left, right, top and bottom are props like any other: a badge stays at its board's corner as the board grows", async () => {
+    const compiled = compile(`
+export function Board({ wide, inset }: { wide: number; inset: number }) {
+  return (
+    <Flex width={wide} height={60}>
+      <Flex right={inset} bottom={4} width={10} height={8} />
+      <Flex left={0} right={0} top={0} height={6} />
+    </Flex>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    type Props = { wide: number; inset: number };
+    const { Board } = await load<{ Board: new (p: Props) => Flex & { updateProps(next: Partial<Props>): void } }>(compiled);
+    const world = new World();
+    const board = new Board({ wide: 100, inset: 6 });
+    world.mount(board);
+    world.flush();
+    const builder = new FrameBuilder({ loadTexture: () => 0 });
+    builder.build(board, 640, 360);
+    const [badge, bar] = board.children as [Flex, Flex];
+    assert.deepEqual([badge.layoutX, badge.layoutY], [100 - 10 - 6, 60 - 8 - 4]);
+    assert.deepEqual([bar.layoutX, bar.box.size[0]], [0, 100], "stretched from edge to edge");
+    board.updateProps({ wide: 140, inset: 2 });
+    world.flush();
+    builder.build(board, 640, 360);
+    assert.deepEqual([badge.layoutX, bar.box.size[0]], [140 - 10 - 2, 140], "and follows the board and its own inset");
+  });
+});

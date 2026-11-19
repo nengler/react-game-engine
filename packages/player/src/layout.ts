@@ -93,13 +93,19 @@ export class Layouter {
     this.#distribute(root, Y);
     this.#position(root);
     // A floating root has no `Flex` parent: it hangs off the available box (the HUD's, the screen's or the window's).
-    if (root.float) this.#attach(root, availableWidth, availableHeight);
+    if (root.floats) this.#attach(root, availableWidth, availableHeight);
   }
 
   /** Attach a floating box to its parent's box of `width` × `height` (the parent's origin is the corner): its `anchor` on the parent's `to`, plus its offset. */
   #attach(kid: Flex, width: number, height: number): void {
-    const x = width * this.#fraction(kid.to, X) - (kid.box.size[X] as number) * this.#fraction(kid.anchor, X) + finiteOr0(kid.offsetX);
-    const y = height * this.#fraction(kid.to, Y) - (kid.box.size[Y] as number) * this.#fraction(kid.anchor, Y) + finiteOr0(kid.offsetY);
+    // An axis pinned to an edge is placed from that edge (the near one when both are given: the far one sized it); one that is
+    // not is placed by the two points and the offset.
+    let x = width * this.#fraction(kid.to, X) - (kid.box.size[X] as number) * this.#fraction(kid.anchor, X) + finiteOr0(kid.offsetX);
+    let y = height * this.#fraction(kid.to, Y) - (kid.box.size[Y] as number) * this.#fraction(kid.anchor, Y) + finiteOr0(kid.offsetY);
+    if (kid.left !== undefined) x = finiteOr0(kid.left);
+    else if (kid.right !== undefined) x = width - (kid.box.size[X] as number) - finiteOr0(kid.right);
+    if (kid.top !== undefined) y = finiteOr0(kid.top);
+    else if (kid.bottom !== undefined) y = height - (kid.box.size[Y] as number) - finiteOr0(kid.bottom);
     kid.layoutX = Math.round(x);
     kid.layoutY = Math.round(y);
   }
@@ -206,7 +212,7 @@ export class Layouter {
     for (let i = 0; i < kids.length; i++) {
       const kid = kids[i] as GameObject;
       if (kid instanceof Flex) {
-        box.childKind[i] = kid.float ? FLOATING : IN_FLOW;
+        box.childKind[i] = kid.floats ? FLOATING : IN_FLOW;
         (box.childOrigin[X] as Float64Array)[i] = 0;
         (box.childOrigin[Y] as Float64Array)[i] = 0;
         continue;
@@ -351,7 +357,21 @@ export class Layouter {
     if (mode === GROW) size = Math.max(box.minimum[axis] as number, Math.min(Math.max(available, 0), this.#maxProp(root, axis)));
     else if (mode === PERCENT)
       size = Math.min(Math.max((box.sizingValue[axis] as number) * available, this.#minProp(root, axis)), this.#maxProp(root, axis));
+    const between = this.#between(root, axis, available);
+    if (between !== null && mode !== FIXED && mode !== PERCENT)
+      size = Math.min(Math.max(between, this.#minProp(root, axis)), this.#maxProp(root, axis));
     box.size[axis] = size;
+  }
+
+  /**
+   * The size a box pinned to both edges of an axis (`left` and `right`, or `top` and `bottom`) stretches to in a parent of
+   * `whole` along it, or null when it is not pinned to both. A box with a size of its own on the axis keeps that.
+   */
+  #between(kid: Flex, axis: number, whole: number): number | null {
+    const near = axis === X ? kid.left : kid.top;
+    const far = axis === X ? kid.right : kid.bottom;
+    if (near === undefined || far === undefined) return null;
+    return Math.max(whole - finiteOr0(near) - finiteOr0(far), 0);
   }
 
   /** Step B: given this box's size on the axis, decide each child's size, then do the same inside each child `Flex`. */
@@ -417,6 +437,9 @@ export class Layouter {
         else if (mode === PERCENT)
           sizes[i] = Math.min(Math.max((kid.box.sizingValue[axis] as number) * inner, this.#minProp(kid, axis)), this.#maxProp(kid, axis));
         else if (mode === GROW) sizes[i] = Math.max(Math.min(inner, this.#maxProp(kid, axis)), minimums[i] as number);
+        const between = this.#between(kid, axis, box.size[axis] as number);
+        if (between !== null && mode !== FIXED && mode !== PERCENT)
+          sizes[i] = Math.min(Math.max(between, this.#minProp(kid, axis)), this.#maxProp(kid, axis));
       }
       kid.box.size[axis] = sizes[i] as number;
       this.#distribute(kid, axis);

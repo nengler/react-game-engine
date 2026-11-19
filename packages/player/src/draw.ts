@@ -2381,7 +2381,7 @@ export class FrameBuilder {
         }
       }
       // The world was worked out before layout; a floating root's own offset is only known now.
-      if (flex.float) world = placed = flex.worldTransform();
+      if (flex.floats) world = placed = flex.worldTransform();
     }
     flex.drawnAlpha = 1; // what was pushed last frame is not what this frame pops
     if (paints(flex)) this.#paintFlex(flex, world);
