@@ -2276,6 +2276,44 @@ same for a component, against the world it is mounted in:
 Not done: a body is not itself a collider that others hit (a component draws a `<Collider>` at its position), there are no
 one-way platforms or slopes. Kite's `Runner` is written with it beside the rules: see "Kite's movement with `useBody`, compared".
 
+## Balls: `useBall` (2026-11-19)
+
+Colliders only report touching, and a body (`useBody`) is moved by its own component, a pixel at a time, against what is solid. A
+pile of things that push each other (fruit in a jar, marbles, a ball pit) needs bodies the world moves together. Jam Jar, a
+Suika-like roguelike built on the engine, first wrote its own solver for a jar of fruit; this is that solver, moved into the engine
+so each fruit can be a component with its own state.
+
+- **`Ball`** (`runtime/src/ball.ts`) is a handle state, as a `Body` is: `useMutable({ ball: createBall(options) })`, attached to its
+  owner's world by `ownedHandles()`, which registers it with `World.addBall` (and `detachOwner` removes it). Its centre is in its
+  owner's parent's space, placed by translation only, as a body's box is.
+- **When it moves.** `World.tick` steps every ball (`stepBalls`) once, before `beforeUpdate` and the updates, and only when the
+  update runs (not frozen, not paused). So every `useUpdate` of a step sees the balls where that step put them, and `useBall`'s own
+  update copies the ball's centre into the component's `x` and `y`, which render in the same step.
+- **The solver** is position-based (Verlet): a ball keeps its centre and where it was a substep ago. Four substeps a step, each
+  moving every ball under its gravity and drag, then three passes of pushing overlapping balls apart (by inverse mass) and out of
+  solid boxes. No restitution, so piles come to rest. Being pushed out of a solid adds no speed (only the motion into it is dropped,
+  and while pressed into it, `friction` of the motion along it). Being pushed out of other balls is limited to adding
+  `BALL_POP_SPEED` (300 px/s) over a step: two balls made in one place pop apart instead of crossing the world, which position-based
+  solvers otherwise do.
+- **Order and determinism.** The pairs are found by a sweep over x, and the balls are sorted each pass by their left edge, then y,
+  then radius: the order depends on where the balls are, not on the order they joined the world. A rewind rebuilds the tree, so
+  join order can change between a recording and its replay; the solve order cannot. The ball's fields (`x`, `y`, `px`, `py`,
+  `substep`) are plain numbers, copied by snapshots and hot state like a body's.
+- **What is solid** is what bodies see: `<Collider solid>` boxes (from the same per-phase index as `solidIn`, by box: shapes are not
+  used) and the solid tiles of `<Tilemap solid>`, gathered once per step near where each ball can reach in that step (its speed,
+  what popping can add, and gravity). The ball's own component's colliders do not count.
+- **`contacts(tag)`** answers the balls with the tag within `BALL_TOUCH_TOLERANCE` (1.5 px) of touching, nearest first, ties by
+  place, each `{ tag, data, owner, x, y, radius }`: `data` typed by tag through `ColliderData` (one place where a game declares
+  what its tags carry), `owner` named as a collider contact's is, and the centre in the asking ball's parent's space. A type
+  argument at a call (`contacts<Data>(…)`) would be dropped by the generator, which is why the data is typed by tag.
+- **Cost.** Each pass sorts the balls and sweeps them, so a pile of n balls costs n log n plus the touching pairs, twelve times a
+  step: a settled jar of 60 balls takes about 0.08 ms a step and a pile of 300 about 0.4 ms under Node (a 4-core cloud VM,
+2026-11-19). `contacts` scans every ball, which is fine for a jar; a crowd of
+  balls asking for contacts every step would want the grid the colliders use.
+
+Not done, on purpose until a game needs it: bounce (restitution), rotation and rolling, friction between balls, balls that colliders
+see, shaped solids, and boxes or polygons as bodies the solver moves.
+
 ## Finding and hitting colliders: `nearby` and `send` (2026-11-17)
 
 A component has no handle on another (on purpose), so a tower defense's moves reached enemies through colliders made for

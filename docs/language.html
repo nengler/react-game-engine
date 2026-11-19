@@ -437,6 +437,8 @@ const time = useTime();                            // seconds since it mounted
 const values = useStore(settings, settingsView);   // a store outside the game state, kept up to date
 
 const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });   // moves, stopped by what is solid
+
+const { x, y, contacts } = useBall({ x: 40, y: 0, radius: 6, gravity: 600 });      // falls and piles up with other balls
 </script></pre>
   <p><code>useStore(store, read)</code> takes anything with <code>subscribe(listener)</code> that returns a stop function (<code>createSettings</code> stores, <code>controls</code>, a store of your own) and a function of no arguments that returns what to show, both imported from <code>.ts</code> files. It renders only when the data <code>read</code> returns differs (<code>keepIfEqual</code>, which a handler can call too).</p>
 

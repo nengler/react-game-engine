@@ -211,6 +211,16 @@ export {
   type InspectedObject,
 } from "./inspect.ts";
 export { ContextReader, createContext, Provider, readContext, type Context, type ProviderProps } from "./context.ts";
+export {
+  Ball,
+  createBall,
+  stepBalls,
+  BALL_TOUCH_TOLERANCE,
+  type BallContact,
+  type BallOptions,
+  type BallSpace,
+  type SolidBox,
+} from "./ball.ts";
 export { Body, createBody, boxesOverlap, type BodyHit, type BodyOptions, type BodySpace, type Box } from "./body.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { CALLBACK_PRIMITIVES, CALLBACK_CONTEXTUAL, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

@@ -1,3 +1,4 @@
+import { BALL_TOUCH_TOLERANCE, stepBalls, type Ball, type BallContact, type BallSpace, type SolidBox } from "./ball.ts";
 import type { BodySpace, Box } from "./body.ts";
 import { Collider, type Contact, type Nearby, type SendTarget } from "./components/Collider.ts";
 import { Menu } from "./components/Menu.ts";
@@ -40,7 +41,7 @@ interface TextEntry {
   submit(): void;
 }
 
-export class World implements BodySpace {
+export class World implements BodySpace, BallSpace {
   readonly root: GameObject = new GameObject();
   /**
    * A counter the player's frame builder advances once per frame it builds. A change to an object is stamped with
@@ -133,6 +134,8 @@ export class World implements BodySpace {
     }
     if (this.#frozen > 0) this.#frozen--;
     else if (!this.paused) {
+      // Balls first, so the step's updates see them where this step put them (DESIGN.md, "Balls: `useBall`").
+      if (this.#balls.size > 0) stepBalls([...this.#balls], this, dt);
       beforeUpdate?.();
       const updates = order.update;
       if (profiler === null) {
@@ -506,6 +509,78 @@ export class World implements BodySpace {
     }
     for (const collider of this.#indexOf(SOLID).query(box)) if (!isUnder(collider, ignore)) return collider.tag;
     return null;
+  }
+
+  /** The balls in this world (`useBall`), in the order they joined it; `stepBalls` solves them in an order of their own. */
+  readonly #balls = new Set<Ball>();
+
+  /** Called by a ball when its owner joins this world. */
+  addBall(ball: Ball): void {
+    this.#balls.add(ball);
+  }
+
+  removeBall(ball: Ball): void {
+    this.#balls.delete(ball);
+  }
+
+  /** How many balls are in this world. */
+  get ballCount(): number {
+    return this.#balls.size;
+  }
+
+  /**
+   * `BallSpace`: the solid boxes near a box in world space: every `<Collider solid>` (by its box: shapes are not used here) and the
+   * solid tiles of every `<Tilemap solid>`. Colliders under `ignore` do not count.
+   */
+  solidBoxesNear(x: number, y: number, width: number, height: number, ignore: GameObject | null): SolidBox[] {
+    const out: SolidBox[] = [];
+    for (const map of this.#tilemaps) {
+      if (!map.solid) continue;
+      const grid = findTilemap(map.map);
+      if (grid === undefined) continue;
+      const at = map.worldTransform();
+      const { tileWidth, tileHeight } = grid.data;
+      const left = Math.floor((x - at.x) / tileWidth);
+      const right = Math.floor((x + width - at.x) / tileWidth);
+      const top = Math.floor((y - at.y) / tileHeight);
+      const bottom = Math.floor((y + height - at.y) / tileHeight);
+      for (let row = top; row <= bottom; row++)
+        for (let col = left; col <= right; col++)
+          if (grid.solidAt(col, row))
+            out.push({ x: at.x + col * tileWidth, y: at.y + row * tileHeight, width: tileWidth, height: tileHeight });
+    }
+    for (const collider of this.#indexOf(SOLID).query({ x, y, width, height })) {
+      if (ignore !== null && isUnder(collider, ignore)) continue;
+      const at = collider.worldTransform();
+      out.push({ x: at.x, y: at.y, width: collider.width, height: collider.height });
+    }
+    return out;
+  }
+
+  /** The balls with `tag` touching `ball` now, nearest first, each where it is in `ball`'s parent's space. */
+  ballContacts(ball: Ball, tag: string): BallContact[] {
+    const home = ball.origin();
+    const ax = home.x + ball.x;
+    const ay = home.y + ball.y;
+    const found: { contact: BallContact; d: number }[] = [];
+    for (const other of this.#balls) {
+      if (other === ball || other.tag !== tag) continue;
+      const o = other.origin();
+      const bx = o.x + other.x;
+      const by = o.y + other.y;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const reach = ball.radius + other.radius + BALL_TOUCH_TOLERANCE;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > reach * reach) continue;
+      found.push({
+        contact: { tag: other.tag, data: other.data, owner: other.ownerName, x: bx - home.x, y: by - home.y, radius: other.radius },
+        d: d2,
+      });
+    }
+    // Nearest first; ties by place, so the answer does not depend on the order the balls joined the world.
+    found.sort((p, q) => p.d - q.d || p.contact.x - q.contact.x || p.contact.y - q.contact.y);
+    return found.map((f) => f.contact);
   }
 
   /** `BodySpace`: whether a collider with this tag overlaps `box` (a shaped one, by its shape). */

@@ -6,7 +6,7 @@
  */
 export const LIBRARY_FILE = "tse:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate } from "@tsengine/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBall, createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \`recover\` a second.
@@ -105,6 +105,28 @@ export function useBody(options) {
 }
 
 /**
+ * A ball: a circle the world steps with every other ball, before the step's updates, falling, rolling and piling up against what is
+ * solid. Its centre is state, copied from the ball each step so the component renders where it is.
+ *   const { x, y, contacts, push } = useBall({ x: 40, y: 0, radius: 6, gravity: 600, tag: "fruit", data: { id } });
+ */
+export function useBall(options) {
+  const b = useMutable({ ball: createBall(options), x: options.x as number, y: options.y as number });
+  useUpdate(() => {
+    b.x = b.ball.x;
+    b.y = b.ball.y;
+  });
+  const contacts = <Tag extends string>(tag: Tag) => b.ball.contacts(tag);
+  const push = (vx: number, vy: number) => b.ball.push(vx, vy);
+  const speed = () => b.ball.speed();
+  const place = (toX: number, toY: number) => {
+    b.ball.place(toX, toY);
+    b.x = b.ball.x;
+    b.y = b.ball.y;
+  };
+  return { x: b.x, y: b.y, contacts, push, place, speed };
+}
+
+/**
  * A value read from a store outside the game state (the settings, the controls, a store of the game's own), kept up to date: it
  * is read when the component mounts and again each time the store says it changed, and renders only when what is read differs.
  *   const values = useStore(settings, settingsView);
@@ -119,4 +141,13 @@ export function useStore(store, read) {
 `;
 
 /** The names of the library's hooks. */
-export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake", "useTime", "useStore", "useBody", "useSpring", "useTween"];
+export const LIBRARY_HOOKS: readonly string[] = [
+  "useSquash",
+  "useShake",
+  "useTime",
+  "useStore",
+  "useBody",
+  "useBall",
+  "useSpring",
+  "useTween",
+];

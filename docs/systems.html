@@ -469,6 +469,34 @@ export function Hero() {
     <li><code>overlapping(tag)</code>: every collider with that tag overlapping the body now, as contacts with their <code>data</code> (typed by tag through <code>ColliderData</code>). A tower that never moves keeps a body as big as its reach to ask which enemies are near: <code>pickTarget(overlapping("enemy").map((e) =&gt; e.data))</code>. It sees the colliders where they were when the step's updates began.</li>
     <li>Bodies move in the order their components update, each against the world as it is at that moment. Others see a body through a <code>&lt;Collider&gt;</code> the component draws at its position.</li>
   </ul>
+  <h3 id="balls">Balls that pile up: <code>useBall</code></h3>
+  <p>A body is moved by its own component. Things that push each other, such as fruit piling up in a jar, marbles or a ball pit, are balls: circles the world steps together, once a step, before the step's updates. They fall under their gravity, push each other apart (the lighter one further) and are stopped by every <code>&lt;Collider solid&gt;</code> and the solid tiles of a <code>&lt;Tilemap solid&gt;</code>. A pile is a list of components that each call <code>useBall</code>.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+// colliders.ts: the data each tag carries, once for the game (balls use ColliderData, as colliders do).
+declare global {
+  interface ColliderData { fruit: { id: number; kind: string } }
+}
+
+export function Fruit({ id, kind, x, onMerge }: FruitProps) {
+  const { x: at, y, contacts } = useBall({ x: x, y: 0, radius: 6, gravity: 600, tag: "fruit", data: { id: id, kind: kind } });
+  useUpdate(() => {
+    const twin = contacts("fruit").find((c) => c.data.kind === kind);   // the balls touching it now
+    if (twin) onMerge(id, twin.data.id);
+  });
+  return <Sprite image={`${kind}.png`} x={at} y={y} originX={6} originY={6} />;
+}
+
+// The jar: <Collider width={96} height={4} y={120} solid /> and two walls, then {fruits.map((f) => <Fruit key={f.id} {...f} />)}.
+</script></pre>
+  <ul>
+    <li><code>x</code> and <code>y</code> are the centre, as state, in the component's parent's space; they are copied from the ball each step, so the component renders where the ball is.</li>
+    <li>Options: <code>radius</code>; <code>gravity</code> (pixels per second per second, downwards, default 0); <code>mass</code> (default the radius squared); <code>friction</code> (how much of its sliding it loses each substep it is pressed against a solid, default 0.1); <code>drag</code> (how much of its speed it loses each second, default 0.2); <code>tag</code> and <code>data</code>, which other balls see.</li>
+    <li><code>contacts(tag)</code>: the balls with that tag touching this one now (within a pixel and a half, as a settled pile jitters), nearest first, each with its <code>tag</code>, <code>data</code> (typed by <code>ColliderData</code>), <code>owner</code>, <code>radius</code> and where its centre is.</li>
+    <li><code>push(vx, vy)</code> adds to its velocity in pixels per second (a blast); <code>place(x, y)</code> puts it somewhere at rest; <code>speed()</code> is how fast it moves, so a pile has settled when every ball is slow.</li>
+    <li>No bounce: piles settle rather than jitter. Balls that start overlapping (two made in one place) pop apart at no more than 300 pixels per second, not across the world.</li>
+    <li>The step is deterministic, and balls are solved in an order worked out from where they are, so rewind and replays reproduce a pile exactly. While the world is paused or frozen, balls do not move.</li>
+    <li>Balls touch balls and solids only: a collider does not see a ball. A component that should be hit by others draws a <code>&lt;Collider&gt;</code> at its ball's position, as a body's does. Shaped solid colliders count as their boxes.</li>
+  </ul>
   <h3>Moving with plain functions</h3>
   <p>A <code>useBody</code> component and plain functions produce the same movement. Kite's running, falling and jumping written as a component with <code>useBody</code> (<code>games/kite/src/Runner.tsx</code>) puts the character on the same pixel every step as Kite's rules do, through walls, ceiling corners and pits (<code>test/runner.test.ts</code>). Choose by who else needs the movement. Use a component when only it does, and plain functions when something else must run it too, such as a search or a solver that plays a room thousands of times without a world.</p>
   <p>Kite's plain movement functions read the same tile data as a <code>&lt;Tilemap&gt;</code>:</p>

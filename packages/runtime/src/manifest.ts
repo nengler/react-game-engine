@@ -778,6 +778,7 @@ export const runtimeManifest: RuntimeManifest = {
     stepTween: 4,
     keepIfEqual: 2,
     createBody: 1,
+    createBall: 1,
     readContext: 1,
   },
 };
