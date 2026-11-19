@@ -147,7 +147,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
               : { kind: "Contextual" }
             : options.paramTypes[index]!;
       scope.declare(name, { kind: "param", id, name, type });
-      params.push({ id, name, type });
+      params.push(param.questionToken === undefined ? { id, name, type } : { id, name, type, optional: true });
     }
 
     let body: StatementIR[] | null;

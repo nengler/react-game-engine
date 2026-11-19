@@ -59,7 +59,7 @@ export type Presence = "persistent" | "conditional";
 
 /** A function parameter as written in generated code; a contextual one has no annotation. */
 export function param(p: ParamIR): string {
-  return annotated(p.name, p.type);
+  return annotated(p.optional === true ? `${p.name}?` : p.name, p.type);
 }
 
 export function annotated(name: string, type: TypeIR): string {

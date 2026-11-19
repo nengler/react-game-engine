@@ -2316,7 +2316,7 @@ so each fruit can be a component with its own state.
   its velocity each substep, so it starts from rest when let go. `setGravity(g)` writes `Ball.gravity`, which the step already
   read each time: 0 hangs a ball, a negative one floats it. Both are plain fields, kept by snapshots and hot state.
 - **A sideways pull.** `gravityX` is to the right what `gravity` is down, added in the same line of the substep; the hook's
-  `setGravityX` sets it. Jam Jar's Tilted jar is a jar drawn leaning whose fruit are pulled along its floor.
+  `setGravityX` sets it, as does `setGravity`'s optional second argument. Jam Jar's Tilted jar is a jar drawn leaning whose fruit are pulled along its floor.
 - **Sticking** (2026-11-19, for Jam Jar's honey). `stick(tag)` adds every ball with that tag touching this one to its `stuck` set,
   and itself to theirs. In each solver pass, after the balls are pushed apart, each stuck pair further apart than touching is
   pulled back together along the line between them, by mass, as the pushing apart is: so a stuck lump is a set of balls that

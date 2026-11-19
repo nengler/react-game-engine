@@ -200,8 +200,11 @@ export interface BallHandle {
    * solid (a frozen fruit, a peg). Let go, it starts from rest.
    */
   pin(on: boolean): void;
-  /** Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. */
-  setGravity(gravity: number): void;
+  /**
+   * Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. `sideways`
+   * sets its pull to the right as well; left out, that stays as it was.
+   */
+  setGravity(gravity: number, sideways?: number): void;
   /** Change its pull to the right, in pixels per second per second (a tilted table, wind); the `gravityX` option starts it with one. */
   setGravityX(sideways: number): void;
   /**
