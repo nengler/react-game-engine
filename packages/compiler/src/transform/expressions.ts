@@ -29,6 +29,8 @@ import {
   isBlock,
   isElementAccessExpression,
   isNonNullExpression,
+  isAsExpression,
+  isSatisfiesExpression,
   isTypeOfExpression,
   isNewExpression,
 } from "typescript/ast/is";
@@ -288,6 +290,12 @@ export class ExpressionLowering extends LoweringBase {
       const expression = this.lowerNode(node.expression);
       return expression && { kind: "NonNull", expression };
     }
+    if (isAsExpression(node)) {
+      const expression = this.lowerNode(node.expression);
+      return expression && { kind: "Cast", expression, type: node.type.getText(this.sourceFile) };
+    }
+    // `value satisfies Type` checks the source and changes nothing: the value alone is kept.
+    if (isSatisfiesExpression(node)) return this.lowerNode(node.expression);
     if (isElementAccessExpression(node)) {
       // `TABLE[kind]`, `pads[cursor]`: any index; the type-check of the generated code checks the element's type.
       const object = this.lowerNode(node.expression);

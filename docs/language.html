@@ -389,6 +389,7 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
       <li>Template literals</li>
     </ul></div>
   </div>
+  <p>A type assertion is kept as written: <code>value as Point</code> and <code>table[key]!</code> reach the generated code, so it type-checks as the source did, and <code>value satisfies Point</code> keeps the value alone.</p>
   <p>Anything else (<code>var</code>, a labelled <code>break</code>, assigning to anything but a <code>useMutable</code> field or a <code>let</code>) is <code>TSE1301</code>, <code>TSE1401</code> or <code>TSE1402</code>.</p>
 </section>
 <section id="logic" data-group="Language" data-title="Custom hooks and plain functions">
@@ -590,6 +591,7 @@ export function Label({ color = "#fff1d6", children }: LabelProps) {
 <section id="control" data-group="Language" data-title="Conditions and lists">
   <h2>Conditions and lists</h2>
   <p>JSX children are elements, conditionals or keyed lists. Anything else (text, other expressions) is <code>TSE1202</code>, except text inside <code>&lt;Text&gt;</code> and inside a <a href="#text-children">text wrapper</a>.</p>
+  <p>A list under a condition goes in a fragment: <code>{show &amp;&amp; &lt;&gt;{items.map((item) =&gt; &lt;Row key={item.id} /&gt;)}&lt;/&gt;}</code>.</p>
   <h3>Conditionals</h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 {health < 25 && <WarningIcon />}

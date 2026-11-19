@@ -1001,6 +1001,14 @@ export class ElementLowering extends HookLowering {
         }
         return;
       }
+      if (isCallExpression(right) && isPropertyAccessExpression(right.expression) && right.expression.name.text === "map") {
+        this.report(
+          DiagnosticCode.UnsupportedJsxChild,
+          "A list under a condition goes in a fragment: `{condition && <>{items.map((item) => <Element key={item.id} />)}</>}`.",
+          child
+        );
+        return;
+      }
     }
     if (isConditionalExpression(expression)) {
       // `{c ? <A /> : <B />}` (either branch may be `null`): one conditional child per branch, the
