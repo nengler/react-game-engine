@@ -210,6 +210,47 @@ test(
 );
 
 test(
+  "screenshot: --from and --to keep --every to one stretch, --setup is called before each step, and a missing default export is refused",
+  { timeout: 120_000, skip: findLibrary("headless") === null ? "libtse is not built (npm run native:build:headless)" : false },
+  () => {
+    const out = join(root, "stretch");
+    const log = join(root, "setup.log");
+    const setup = join(root, "setup.mjs");
+    writeFileSync(
+      setup,
+      `import { appendFileSync } from "node:fs";\nexport default (player, step) => appendFileSync(${JSON.stringify(log)}, step + (player.world ? "" : "?") + ",");\n`
+    );
+    const shot = tse([
+      "screenshot",
+      game,
+      "--script",
+      "_*20",
+      "--every",
+      "2",
+      "--from",
+      "10",
+      "--to",
+      "15",
+      "--setup",
+      setup,
+      "--out",
+      out,
+    ]);
+    assert.equal(shot.status, 0, shot.stdout + shot.stderr);
+    assert.match(shot.stdout, /wrote step-11\.png, step-13\.png, step-15\.png to/);
+    assert.equal(readFileSync(log, "utf8"), Array.from({ length: 20 }, (_, i) => `${i},`).join(""));
+    const outside = tse(["screenshot", game, "--script", "_*20", "--every", "2", "--from", "10", "--to", "20", "--out", out]);
+    assert.equal(outside.status, 2);
+    assert.match(outside.stderr, /--from and --to need steps from 0 to 19/);
+    const empty = join(root, "empty.mjs");
+    writeFileSync(empty, "export const nothing = 1;\n");
+    const refused = tse(["screenshot", game, "--setup", empty, "--out", out]);
+    assert.equal(refused.status, 2);
+    assert.match(refused.stderr, /no default export that is a function/);
+  }
+);
+
+test(
   "screenshot compiles first: a change to a component shows in the next shot without tse build, and a compile error shoots nothing",
   { timeout: 120_000, skip: findLibrary("headless") === null ? "libtse is not built (npm run native:build:headless)" : false },
   () => {

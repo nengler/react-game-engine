@@ -1,4 +1,4 @@
-import type { Backend } from "./backend.ts";
+import type { Backend, StorageBackend } from "./backend.ts";
 import { createPlayer, type Player, type PlayerConfig } from "./loop.ts";
 import { TSE_IN_HEIGHT, TSE_IN_WIDTH } from "./protocol.ts";
 import { applyInputFrame, RecordingBackend, type InputFrame, type RecordingOptions } from "./recording.ts";
@@ -22,7 +22,8 @@ export class ScriptedInputBackend implements Backend {
   readonly setGamepadDeadzone: Backend["setGamepadDeadzone"];
   readonly storage: Backend["storage"];
 
-  constructor(inner: Backend, frames: readonly InputFrame[] = []) {
+  /** `storage` replaces the inner backend's saved data: `memoryStorage()` keeps a run away from the player's own saves. */
+  constructor(inner: Backend, frames: readonly InputFrame[] = [], options: { readonly storage?: StorageBackend } = {}) {
     this.#inner = inner;
     this.#queue = [...frames];
     this.measureText = inner.measureText?.bind(inner);
@@ -34,7 +35,7 @@ export class ScriptedInputBackend implements Backend {
     this.setMusicVolume = inner.setMusicVolume?.bind(inner);
     this.stopMusic = inner.stopMusic?.bind(inner);
     this.setGamepadDeadzone = inner.setGamepadDeadzone?.bind(inner);
-    this.storage = inner.storage;
+    this.storage = options.storage ?? inner.storage;
   }
 
   queueInput(frame: InputFrame): void {
@@ -52,6 +53,17 @@ export class ScriptedInputBackend implements Backend {
     this.#inner.frame(clearColor, records, length, texts, input, keys);
     applyInputFrame(this.#queue.shift() ?? {}, input, keys, input[TSE_IN_WIDTH] as number, input[TSE_IN_HEIGHT] as number);
   }
+}
+
+/** Saved data kept in memory and gone with the run: for a run that must not read or change the player's own saves. */
+export function memoryStorage(initial: Readonly<Record<string, string>> = {}): StorageBackend {
+  const stored = new Map(Object.entries(initial));
+  return {
+    open: () => true,
+    read: (name) => stored.get(name) ?? null,
+    write: (name, text) => (stored.set(name, text), true),
+    remove: (name) => void stored.delete(name),
+  };
 }
 
 export interface RunResult<T> {

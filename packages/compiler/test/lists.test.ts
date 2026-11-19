@@ -742,3 +742,23 @@ export function Foes() {
     assert.equal((beetle as Sprite).transform.x, 9);
   });
 });
+
+describe("a list under a condition", () => {
+  it("is written in a fragment, and `{condition && items.map(…)}` says so", () => {
+    const [error] = compileErrors(
+      withAuthoring(`
+export function Row({ items, show }: { items: { id: number }[]; show: boolean }) {
+  return <Entity>{show && items.map((e) => <Sprite key={e.id} image="a.png" />)}</Entity>;
+}`)
+    );
+    assert.equal(error?.code, DiagnosticCode.UnsupportedJsxChild);
+    assert.match(error.message, /A list under a condition goes in a fragment: `\{condition && <>\{items\.map/);
+    const compiled = compile(
+      withAuthoring(`
+export function Row({ items, show }: { items: { id: number }[]; show: boolean }) {
+  return <Entity>{show && <>{items.map((e) => <Sprite key={e.id} image="a.png" />)}</>}</Entity>;
+}`)
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+});

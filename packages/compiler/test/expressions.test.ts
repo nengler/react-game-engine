@@ -154,3 +154,28 @@ export function Jumper() {
     assert.equal(jumper.name, "1 1");
   });
 });
+
+describe("type assertions", () => {
+  it("`value as Type` is kept with its type, in render, derived values and handlers; `satisfies` keeps the value alone", async () => {
+    const compiled = compile(`
+interface Point { x: number; y: number; }
+interface PinProps { at: unknown; label: string | number; }
+export function Pin({ at, label }: PinProps) {
+  const s = useMutable({ seen: 0 });
+  const point = at as Point;
+  useUpdate(() => { s.seen = (at as Point).y; });
+  return <Sprite image="pin.png" x={point.x + 1} y={(label as number) * 2} frame={(3 satisfies number) + s.seen} />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /as Point\)/);
+    const { Pin } = await load<{ Pin: new (p: { at: unknown; label: string | number }) => Sprite }>(compiled);
+    const world = new World();
+    const pin = new Pin({ at: { x: 4, y: 9 }, label: 6 });
+    world.mount(pin);
+    world.flush();
+    assert.deepEqual([pin.transform.x, pin.transform.y, pin.frame], [5, 12, 3]);
+    world.tick(1 / 60, createInputState());
+    world.flush();
+    assert.equal(pin.frame, 12, "the handler read through the assertion");
+  });
+});

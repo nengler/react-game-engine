@@ -2287,7 +2287,9 @@ so each fruit can be a component with its own state.
 
 - **`Ball`** (`runtime/src/ball.ts`) is a handle state, as a `Body` is: `useMutable({ ball: createBall(options) })`, attached to its
   owner's world by `ownedHandles()`, which registers it with `World.addBall` (and `detachOwner` removes it). Its centre is in its
-  owner's parent's space, placed by translation only, as a body's box is.
+  owner's parent's space, placed by translation only, as a body's box is. A ball inside a rotated or scaled parent is therefore
+  not where its picture is drawn; the player says so once (`World.turnedBall`). To draw a leaning jar, keep the balls and the
+  solid colliders outside the turned entity and turn what is drawn.
 - **When it moves.** `World.tick` steps every ball (`stepBalls`) once, before `beforeUpdate` and the updates, and only when the
   update runs (not frozen, not paused). So every `useUpdate` of a step sees the balls where that step put them, and `useBall`'s own
   update copies the ball's centre into the component's `x` and `y`, which render in the same step.

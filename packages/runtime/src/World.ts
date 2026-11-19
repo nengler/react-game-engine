@@ -514,6 +514,20 @@ export class World implements BodySpace, BallSpace {
   /** The balls in this world (`useBall`), in the order they joined it; `stepBalls` solves them in an order of their own. */
   readonly #balls = new Set<Ball>();
 
+  #turnedBall: Ball | null = null;
+
+  /**
+   * The first ball that was stepped inside a rotated or scaled parent, or null. A ball follows its parent's position only, so
+   * it is then not where its picture is drawn; the player warns about it once.
+   */
+  get turnedBall(): Ball | null {
+    return this.#turnedBall;
+  }
+
+  ballTurned(ball: Ball): void {
+    this.#turnedBall ??= ball;
+  }
+
   /** Called by a ball when its owner joins this world. */
   addBall(ball: Ball): void {
     this.#balls.add(ball);

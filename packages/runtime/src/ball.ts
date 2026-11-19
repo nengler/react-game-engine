@@ -59,6 +59,8 @@ export interface SolidBox {
 /** What a world answers for its balls: the solid boxes near a box in world space (solid colliders and solid tiles). */
 export interface BallSpace {
   solidBoxesNear(x: number, y: number, width: number, height: number, ignore: GameObject | null): SolidBox[];
+  /** Told of a ball whose owner's parent is turned or scaled, which a ball does not follow (see `Ball.origin`). */
+  ballTurned?(ball: Ball): void;
 }
 
 const SUBSTEPS = 4;
@@ -128,12 +130,16 @@ export class Ball {
     return this.#owner;
   }
 
-  /** Where the owner's parent's space starts in the world (balls are placed by translation only, as bodies are). */
-  origin(): { x: number; y: number } {
+  /**
+   * Where the owner's parent's space starts in the world (balls are placed by translation only, as bodies are), and whether
+   * that space is `turned`: rotated or scaled, which a ball does not follow. Its picture, a child of the same parent, does, so
+   * under a turned parent the ball is not where it is drawn.
+   */
+  origin(): { x: number; y: number; turned: boolean } {
     const parent = this.#owner?.parent ?? null;
-    if (parent === null) return { x: 0, y: 0 };
+    if (parent === null) return { x: 0, y: 0, turned: false };
     const at = parent.worldTransform();
-    return { x: at.x, y: at.y };
+    return { x: at.x, y: at.y, turned: at.rotation !== 0 || at.scaleX !== 1 || at.scaleY !== 1 };
   }
 
   /** Pixels per second. */
@@ -220,6 +226,7 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
   const h = dt / SUBSTEPS;
   const moving: Moving[] = balls.map((ball) => {
     const o = ball.origin();
+    if (o.turned) space.ballTurned?.(ball);
     const r = ball.radius;
     const x = o.x + ball.x;
     const y = o.y + ball.y;

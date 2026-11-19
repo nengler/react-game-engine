@@ -41,7 +41,7 @@ export {
 } from "./recording.ts";
 export { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
 export { Warner } from "./warn.ts";
-export { runScript, ScriptedInputBackend, type RunOptions, type RunResult } from "./harness.ts";
+export { memoryStorage, runScript, ScriptedInputBackend, type RunOptions, type RunResult } from "./harness.ts";
 export { parseInputScript, scriptLength, type InputBindings, type ScriptFrame, type ScriptOptions } from "./script.ts";
 export {
   gameLook,

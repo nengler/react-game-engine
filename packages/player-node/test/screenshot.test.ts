@@ -77,6 +77,39 @@ describe("renderRun", { skip }, () => {
   });
 });
 
+describe("renderRun's beforeStep", { skip }, () => {
+  it("is called before each step, so it can put the game where a shot needs it, and the change shows in that step's picture", () => {
+    const steps: number[] = [];
+    const shots = renderRun(
+      {
+        width: 32,
+        height: 16,
+        background: "#000000",
+        root: () => {
+          const root = new Entity();
+          root.addChild(new Shape({ kind: "rect", width: 4, height: 4, color: "#ffffff" }));
+          return root;
+        },
+      },
+      parseInputScript("_*3"),
+      {
+        at: [1, 2],
+        beforeStep: (player, step) => {
+          steps.push(step);
+          if (step !== 2) return;
+          const square = player.world.root.children[0]!;
+          square.transform.x = 20;
+          square.markChanged();
+        },
+      }
+    );
+    assert.deepEqual(steps, [0, 1, 2]);
+    const white = (shot: number, x: number): boolean => shots[shot]!.pixels.rgba[(2 * shots[shot]!.pixels.width + x) * 4] === 255;
+    assert.deepEqual([white(0, 1), white(0, 21)], [true, false], "step 1: where it started");
+    assert.deepEqual([white(1, 1), white(1, 21)], [false, true], "step 2: where it was put before the step");
+  });
+});
+
 describe("sharp upscaling, through libtse", { skip }, () => {
   it("keeps the picture the right way up at a scale between whole numbers (full screen), as nearest does", async () => {
     const { Game, Screen } = await import("@tsengine/runtime");
