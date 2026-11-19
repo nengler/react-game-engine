@@ -156,26 +156,26 @@ export function Jumper() {
 });
 
 describe("type assertions", () => {
-  it("`value as Type` is kept with its type, in render, derived values and handlers; `satisfies` keeps the value alone", async () => {
+  it("`satisfies` keeps the value alone and `!` is kept; `as` is refused, with where the cast goes instead", async () => {
     const compiled = compile(`
-interface Point { x: number; y: number; }
-interface PinProps { at: unknown; label: string | number; }
-export function Pin({ at, label }: PinProps) {
-  const s = useMutable({ seen: 0 });
-  const point = at as Point;
-  useUpdate(() => { s.seen = (at as Point).y; });
-  return <Sprite image="pin.png" x={point.x + 1} y={(label as number) * 2} frame={(3 satisfies number) + s.seen} />;
+const SIZES: Record<string, number> = { small: 2 };
+export function Pin({ size }: { size: string }) {
+  return <Sprite image="pin.png" x={(3 satisfies number) + SIZES[size]!} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
-    assert.match(compiled.code, /as Point\)/);
-    const { Pin } = await load<{ Pin: new (p: { at: unknown; label: string | number }) => Sprite }>(compiled);
+    const { Pin } = await load<{ Pin: new (p: { size: string }) => Sprite }>(compiled);
     const world = new World();
-    const pin = new Pin({ at: { x: 4, y: 9 }, label: 6 });
+    const pin = new Pin({ size: "small" });
     world.mount(pin);
     world.flush();
-    assert.deepEqual([pin.transform.x, pin.transform.y, pin.frame], [5, 12, 3]);
-    world.tick(1 / 60, createInputState());
-    world.flush();
-    assert.equal(pin.frame, 12, "the handler read through the assertion");
+    assert.equal(pin.transform.x, 5);
+
+    const [error] = compileErrors(`
+interface Point { x: number; }
+export function Pin({ at }: { at: unknown }) {
+  return <Sprite image="pin.png" x={(at as Point).x} />;
+}`);
+    assert.equal(error?.code, DiagnosticCode.UnsupportedExpression);
+    assert.match(error.message, /A component has no `as`: move the cast into a function in a `\.ts` module/);
   });
 });

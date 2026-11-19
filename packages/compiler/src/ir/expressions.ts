@@ -21,7 +21,6 @@ export type ExprIR =
   | MemberReadIR
   | IndexReadIR
   | NonNullIR
-  | CastIR
   | ActionRefIR
   | ArrayLiteralIR
   | ObjectLiteralIR
@@ -184,13 +183,6 @@ export interface IndexReadIR {
 export interface NonNullIR {
   readonly kind: "NonNull";
   readonly expression: ExprIR;
-}
-
-/** `value as Type`: TypeScript's assertion, kept with its type as written so the generated code type-checks as the source did. */
-export interface CastIR {
-  readonly kind: "Cast";
-  readonly expression: ExprIR;
-  readonly type: string;
 }
 
 /** `[a, ...rest]`. */

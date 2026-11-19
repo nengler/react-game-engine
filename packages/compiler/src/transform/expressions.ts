@@ -291,8 +291,13 @@ export class ExpressionLowering extends LoweringBase {
       return expression && { kind: "NonNull", expression };
     }
     if (isAsExpression(node)) {
-      const expression = this.lowerNode(node.expression);
-      return expression && { kind: "Cast", expression, type: node.type.getText(this.sourceFile) };
+      // A cast overrides the type-checker, so it is kept out of components: in a `.ts` module it is easy to find and to test.
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `A component has no \`as\`: move the cast into a function in a \`.ts\` module and call that (\`toPoint(value)\`). \`satisfies\` and \`!\` are fine here.`,
+        node
+      );
+      return null;
     }
     // `value satisfies Type` checks the source and changes nothing: the value alone is kept.
     if (isSatisfiesExpression(node)) return this.lowerNode(node.expression);
