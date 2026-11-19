@@ -46,8 +46,10 @@ import type { OpacityShorthand, TransformShorthand } from "./jsx-runtime.ts";
 
 export { clamp, grace, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
+export { createBall, type BallContact, type BallOptions } from "./ball.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
+import type { BallContact, BallOptions } from "./ball.ts";
 import type { BodyHit, BodyOptions } from "./body.ts";
 import type { Context } from "./context.ts";
 
@@ -179,6 +181,40 @@ export interface BodyHandle {
  */
 export function useBody(_options: BodyOptions): BodyHandle {
   return compileTimeOnly("useBody");
+}
+
+/** What `useBall` returns: the ball's centre, as state, and what it can do, as functions of the component. */
+export interface BallHandle {
+  readonly x: number;
+  readonly y: number;
+  /** The balls with this tag touching this one now, nearest first, each with its `data` (typed by `ColliderData`) and where it is. */
+  contacts<Tag extends string>(tag: Tag): BallContact<Tag>[];
+  /** Add to its velocity, in pixels per second (a blast, a flick). */
+  push(vx: number, vy: number): void;
+  /** Put it somewhere, at rest, with no collision. */
+  place(x: number, y: number): void;
+  /** How fast it is moving, in pixels per second: a pile has settled when every ball is slow. */
+  speed(): number;
+}
+
+/**
+ * A ball: a circle that falls, rolls and piles up, pushed apart by the other balls in the world and stopped by what is solid (every
+ * `<Collider solid>` and the solid tiles of a `<Tilemap solid>`). The world steps all its balls together, once a step, before the
+ * step's updates, so a pile of fruit in a jar is a list of components that each call `useBall`.
+ *
+ *     // in a .ts file: declare global { interface ColliderData { fruit: { id: number; kind: string } } }
+ *     const { x, y, contacts } = useBall({ x: 40, y: 0, radius: 6, gravity: 600, tag: "fruit", data: { id, kind } });
+ *     useUpdate(() => {
+ *       const twin = contacts("fruit").find((c) => c.data.kind === kind);
+ *       if (twin) onMerge(id, twin.data.id);
+ *     });
+ *     return <Sprite image="cherry.png" x={x} y={y} originX={6} originY={6} />;
+ *
+ * The centre is in the component's parent's space, as an element's `x` and `y` are; `x` and `y` are state, updated each step.
+ * An ordinary hook the engine ships (\`useMutable\`, \`useUpdate\` and functions of the component, inlined like any custom hook).
+ */
+export function useBall(_options: BallOptions): BallHandle {
+  return compileTimeOnly("useBall");
 }
 
 /**
