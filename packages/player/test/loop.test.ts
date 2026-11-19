@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import {
+  Ball,
   Camera,
   Collider,
   Entity,
@@ -679,5 +680,40 @@ describe("<Game font>", () => {
     };
     assert.deepEqual(draw("font.png"), ["sprite assets/font.png", "sprite assets/font.png", "sprite assets/other.png"]);
     assert.deepEqual(draw(undefined), ["text AB", "sprite assets/other.png"]);
+  });
+});
+
+describe("a ball inside a turned parent", () => {
+  class Rolling extends Entity {
+    readonly ball = new Ball({ x: 10, y: 10, radius: 4, gravity: 100 });
+    protected override ownedHandles(): readonly unknown[] {
+      return [this.ball];
+    }
+  }
+  const scene = (rotation: number) => () => {
+    const root = new Entity();
+    const turned = new Entity();
+    turned.transform.rotation = rotation;
+    turned.addChild(new Rolling());
+    root.addChild(turned);
+    return root;
+  };
+
+  it("is warned about once: a ball follows its parent's position only, so it is not where its picture is", () => {
+    const { warnings, player: p } = player(scene(0.1));
+    for (let i = 0; i < 3; i++) p.step();
+    assert.equal(warnings.filter((w) => /rotated or scaled parent/.test(w)).length, 1);
+    assert.match(warnings.join("\n"), /A ball \(useBall\) in Rolling/);
+    p.close();
+  });
+
+  it("is not warned about when the parent is only moved", () => {
+    const { warnings, player: p } = player(scene(0));
+    for (let i = 0; i < 3; i++) p.step();
+    assert.deepEqual(
+      warnings.filter((w) => /rotated or scaled parent/.test(w)),
+      []
+    );
+    p.close();
   });
 });

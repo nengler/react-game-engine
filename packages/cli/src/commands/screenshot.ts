@@ -15,6 +15,11 @@
  *   --script-file <file>    the script, from a file
  *   --at 0,10,20            steps to capture (0 is after the first scripted frame); default is the last step
  *   --every N               capture every Nth step instead
+ *   --from N --to N         with --every: only steps N to N (default the whole script), so a sheet shows one stretch of a long run
+ *   --setup <file>          a module whose default export `(player, step) => void` is called before each scripted step (0
+ *                           first; the game is built by then): it puts the game where the shot needs it, and what it changes
+ *                           shows in that step's picture (`findComponent` from @tsengine/testing reaches a component's state)
+ *   --saves                 read and write the player's own saved data; without it a run starts with none and keeps nothing
  *   --out <dir>             where to write (default ./shots); frames are step-<n>.png
  *   --sheet <name>          also write a contact sheet <name>.png of the captured frames
  *   --columns N --scale N   the sheet's frames per row and enlargement; --scale also enlarges the single frames
@@ -30,7 +35,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
+import { parseInputScript, type InputBindings, type Player, type PlayerConfig, type ScriptOptions } from "@tsengine/player";
 import {
   compileArgs,
   contactSheet,
@@ -45,10 +50,10 @@ import {
 import { cliScript, node } from "../run.ts";
 
 const usage =
-  'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
+  'usage: tse screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N [--from N] [--to N]] [--setup file] [--saves] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
 
 /** Options that take no value. */
-const SWITCHES = new Set(["gpu", "update"]);
+const SWITCHES = new Set(["gpu", "update", "saves"]);
 
 /** The virtual display `--gpu` runs under when there is none: large enough for a game's hidden window at its default scale. */
 const XVFB_SCREEN = "-screen 0 1920x1080x24";
@@ -138,6 +143,17 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     bindings?: InputBindings;
     screen?: ScriptOptions["screen"];
   };
+  let beforeStep: ((player: Player, step: number) => void) | undefined;
+  if (flags.has("setup")) {
+    // Resolved before the working directory moves to the game's folder, as the other paths on the command line are.
+    const file = resolve(flags.get("setup") as string);
+    const setup = (await import(pathToFileURL(file).href)) as { default?: unknown };
+    if (typeof setup.default !== "function") {
+      console.error(`--setup: ${file} has no default export that is a function (player, step) => void.`);
+      return 2;
+    }
+    beforeStep = setup.default as (player: Player, step: number) => void;
+  }
   process.chdir(gameDir);
   const script =
     flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
@@ -146,14 +162,28 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
   if (flags.has("at")) at = (flags.get("at") as string).split(",").map(Number);
   else if (flags.has("every")) {
     const every = Math.max(1, Number(flags.get("every")));
-    at = frames.map((_, i) => i).filter((i) => i % every === every - 1);
+    const from = Number(flags.get("from") ?? 0);
+    const to = Number(flags.get("to") ?? frames.length - 1);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to >= frames.length || from > to) {
+      console.error(`--from and --to need steps from 0 to ${frames.length - 1}, --from no later than --to.`);
+      return 2;
+    }
+    at = [];
+    for (let step = from + every - 1; step <= to; step += every) at.push(step);
+    if (at.length === 0) at = [to];
   } else at = [frames.length - 1];
   if (at.some((n) => !Number.isInteger(n) || n < 0 || n >= frames.length)) {
     console.error(`--at needs steps from 0 to ${frames.length - 1} (the script has ${frames.length} frames).`);
     return 2;
   }
   const warnings: string[] = [];
-  const shots = renderRun(mod.gameConfig, frames, { at, warnings, ...(library !== undefined ? { library } : {}) });
+  const shots = renderRun(mod.gameConfig, frames, {
+    at,
+    warnings,
+    saves: flags.has("saves"),
+    ...(beforeStep !== undefined ? { beforeStep } : {}),
+    ...(library !== undefined ? { library } : {}),
+  });
   const scale = Math.max(1, Number(flags.get("scale") ?? 1));
   const out = resolve(flags.get("out") ?? "shots");
   mkdirSync(out, { recursive: true });

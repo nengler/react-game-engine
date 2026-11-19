@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { Entity } from "@tsengine/runtime";
 
-import { parseInputScript, runScript, ScriptedInputBackend, RecordingBackend, type PlayerConfig } from "../src/index.ts";
+import { memoryStorage, parseInputScript, runScript, ScriptedInputBackend, RecordingBackend, type PlayerConfig } from "../src/index.ts";
 
 /** A hand-written object that counts the frames in which it saw a key down and a key pressed: the observable of this test. */
 class Counter extends Entity {
@@ -48,5 +48,22 @@ describe("ScriptedInputBackend", () => {
     scripted.frame(0, new Float64Array(0), 0, [], input, keys);
     assert.equal(input[0], 1 / 60, "an empty queue is an idle frame");
     assert.equal(keys[0], 0);
+  });
+});
+
+describe("memoryStorage", () => {
+  it("keeps what is written for the run only, and stands in for the wrapped backend's saved data", () => {
+    const inner = new RecordingBackend({ storage: { settings: "the player's own" } });
+    const scripted = new ScriptedInputBackend(inner, [], { storage: memoryStorage({ run: "seeded" }) });
+    const storage = scripted.storage!;
+    assert.equal(storage.open("game"), true);
+    assert.equal(storage.read("settings"), null, "the player's saves are not read");
+    assert.equal(storage.read("run"), "seeded");
+    storage.write("settings", "changed");
+    assert.equal(storage.read("settings"), "changed");
+    storage.remove("run");
+    assert.equal(storage.read("run"), null);
+    assert.equal(inner.stored.get("settings"), "the player's own", "nor written");
+    assert.equal(new ScriptedInputBackend(inner).storage, inner.storage, "without the option, the wrapped backend's is used");
   });
 });

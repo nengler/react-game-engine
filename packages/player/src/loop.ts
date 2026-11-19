@@ -313,13 +313,15 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const tick = (dt: number, beforeUpdate?: () => void): void => {
     input.beginStep(dt);
     const profiler = activeProfiler();
-    if (profiler === null) {
-      world.tick(dt, input, beforeUpdate);
-      return;
-    }
-    const started = profiler.now();
+    const started = profiler === null ? 0 : profiler.now();
     world.tick(dt, input, beforeUpdate);
-    profiler.phase("steps", profiler.now() - started);
+    if (profiler !== null) profiler.phase("steps", profiler.now() - started);
+    const turned = world.turnedBall;
+    if (turned !== null)
+      warner.once(
+        "ball-turned",
+        `A ball (useBall) in ${turned.owner?.constructor.name ?? "a component"} is inside a rotated or scaled parent. A ball follows its parent's position only, so it is not where its picture is drawn: keep balls and solid colliders outside the turned entity, and turn what is drawn.`
+      );
   };
   let pointers: readonly Pressable[] = [];
   let hudPointersFrom = 0;
