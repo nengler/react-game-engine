@@ -281,8 +281,6 @@ export class ExpressionEmitter {
         return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
       case "NonNull":
         return `${this.expr(e.expression)}!`;
-      case "Cast":
-        return `(${this.expr(e.expression)} as ${e.type})`;
       case "IndexRead":
         return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;
       case "ArrayLiteral":

@@ -148,7 +148,6 @@ function valueStrings(e: ExprIR): string[] {
     case "Memo":
       return valueStrings(e.value);
     case "NonNull":
-    case "Cast":
       return valueStrings(e.expression);
     // `<AnimatedSprite frames={["a1.png", "a2.png"]}>`: each element is a name.
     case "ArrayLiteral":

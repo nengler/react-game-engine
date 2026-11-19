@@ -34,7 +34,6 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "IndexRead":
       return [e.object, e.index];
     case "NonNull":
-    case "Cast":
       return [e.expression];
     case "Memo":
       return [e.value];

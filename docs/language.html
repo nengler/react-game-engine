@@ -389,7 +389,7 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
       <li>Template literals</li>
     </ul></div>
   </div>
-  <p>A type assertion is kept as written: <code>value as Point</code> and <code>table[key]!</code> reach the generated code, so it type-checks as the source did, and <code>value satisfies Point</code> keeps the value alone.</p>
+  <p>A component has no <code>as</code>: a cast overrides the type-checker, so it goes in a function in a <code>.ts</code> module, where it is easy to find and to test, and the component calls that. <code>table[key]!</code> is kept as written and <code>value satisfies Point</code> keeps the value alone. (The one <code>as</code> a component writes is the type of a <code>useMutable</code> field, <code>spawns: [] as Spawn[]</code>.)</p>
   <p>Anything else (<code>var</code>, a labelled <code>break</code>, assigning to anything but a <code>useMutable</code> field or a <code>let</code>) is <code>TSE1301</code>, <code>TSE1401</code> or <code>TSE1402</code>.</p>
 </section>
 <section id="logic" data-group="Language" data-title="Custom hooks and plain functions">
