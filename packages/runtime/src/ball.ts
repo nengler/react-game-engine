@@ -30,6 +30,8 @@ export interface BallOptions {
   readonly tag?: string;
   /** Anything other balls see in `contacts`: what this ball is (`{ id, kind }`). */
   readonly data?: unknown;
+  /** Start held in place (see `Ball.pinned`). Default false. */
+  readonly pinned?: boolean;
 }
 
 /**
@@ -84,6 +86,11 @@ export class Ball {
   drag: number;
   tag: string;
   data: unknown;
+  /**
+   * Held in place: it does not fall, is not pushed by other balls or by `push`, and stops dead; other balls pile up on it and
+   * are pushed out of it as out of something solid (a frozen fruit, a peg). Unpinned, it starts from rest.
+   */
+  pinned: boolean;
   /** The length of the last substep, in seconds, to turn the motion back into a velocity. */
   substep = 1 / 240;
   #owner: GameObject | null = null;
@@ -101,6 +108,7 @@ export class Ball {
     this.drag = options.drag ?? 0.2;
     this.tag = options.tag ?? "";
     this.data = options.data;
+    this.pinned = options.pinned ?? false;
   }
 
   /** Called by the owner when it joins a world (`GameObject.ownedHandles`). */
@@ -135,10 +143,21 @@ export class Ball {
     return Math.sqrt(vx * vx + vy * vy);
   }
 
-  /** Add to its velocity, in pixels per second (a blast, a flick). */
+  /** Add to its velocity, in pixels per second (a blast, a flick). A pinned ball takes none. */
   push(vx: number, vy: number): void {
+    if (this.pinned) return;
     this.px -= vx * this.substep;
     this.py -= vy * this.substep;
+  }
+
+  /** Hold it in place, or let it go (see `pinned`). */
+  pin(on: boolean): void {
+    this.pinned = on;
+  }
+
+  /** Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. */
+  setGravity(gravity: number): void {
+    this.gravity = gravity;
   }
 
   /** Put it somewhere, at rest, with no collision. */
@@ -216,7 +235,8 @@ export function stepBalls(balls: readonly Ball[], space: BallSpace, dt: number):
       px: o.x + ball.px,
       py: o.y + ball.py,
       r,
-      inv: ball.mass > 0 && Number.isFinite(ball.mass) ? 1 / ball.mass : 0,
+      // A pinned ball, like one with no mass or an infinite one, is not moved: not by gravity, not by what it touches.
+      inv: !ball.pinned && ball.mass > 0 && Number.isFinite(ball.mass) ? 1 / ball.mass : 0,
       start: speed * h,
       // Linear in the substep, not a power: Math.pow may round differently in the two hosts, and parity must be exact.
       keep: Math.max(0, 1 - Math.max(0, Math.min(1, ball.drag)) * h),

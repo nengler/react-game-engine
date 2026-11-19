@@ -567,7 +567,9 @@ which replaced the module-level `settings.subscribe` that mirrored the settings 
 ### `useStore` (2026-11-13)
 
 `const values = useStore(settings, settingsView)` is React's `useSyncExternalStore`: a value read from a store outside the game
-state, read at mount and again on each notification, rendering only when the data read differs. Bramble's settings screen wrote it
+state, read at mount and again on each notification, rendering only when the data read differs. (It is first read when the component
+is made, for its first render, and since 2026-11-20 again when it mounts: the player builds the first screen and then reads the
+settings' file, and a title screen showing a setting had missed that change, having not yet subscribed.) Bramble's settings screen wrote it
 out by hand (two state fields and a `useMount` that subscribed and set both), which is what it replaces.
 
 - It is a shipped hook (`hooks/library.ts`), written from `useMutable({ value: read() })` and a `useMount` that returns the
@@ -2306,6 +2308,11 @@ so each fruit can be a component with its own state.
   place, each `{ tag, data, owner, x, y, radius }`: `data` typed by tag through `ColliderData` (one place where a game declares
   what its tags carry), `owner` named as a collider contact's is, and the centre in the asking ball's parent's space. A type
   argument at a call (`contacts<Data>(…)`) would be dropped by the generator, which is why the data is typed by tag.
+- **Pinning and gravity** (2026-11-20). Jam Jar wanted fruit frozen in place (a Snow Pear), a peg in the jar, and fruit that float
+  in juice. `pin(on)` holds a ball where it is: `Ball.pinned` gives it no inverse mass in the solver, as a ball of infinite mass
+  has, so gravity and other balls do not move it and they are pushed out of it entirely; `push` does nothing to it, and it loses
+  its velocity each substep, so it starts from rest when let go. `setGravity(g)` writes `Ball.gravity`, which the step already
+  read each time: 0 hangs a ball, a negative one floats it. Both are plain fields, kept by snapshots and hot state.
 - **Cost.** Each pass sorts the balls and sweeps them, so a pile of n balls costs n log n plus the touching pairs, twelve times a
   step: a settled jar of 60 balls takes about 0.08 ms a step and a pile of 300 about 0.4 ms under Node (a 4-core cloud VM,
 2026-11-19). `contacts` scans every ball, which is fine for a jar; a crowd of

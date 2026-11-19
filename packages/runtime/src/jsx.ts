@@ -195,6 +195,13 @@ export interface BallHandle {
   place(x: number, y: number): void;
   /** How fast it is moving, in pixels per second: a pile has settled when every ball is slow. */
   speed(): number;
+  /**
+   * Hold it in place, or let it go: pinned, it does not fall and nothing pushes it, and other balls pile up on it as on something
+   * solid (a frozen fruit, a peg). Let go, it starts from rest.
+   */
+  pin(on: boolean): void;
+  /** Change its gravity, in pixels per second per second downwards: 0 hangs it in the air, a negative one floats it up. */
+  setGravity(gravity: number): void;
 }
 
 /**

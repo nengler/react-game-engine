@@ -89,6 +89,14 @@ describe("useStore", () => {
     root.removeChild(panel);
     world.flush();
     assert.equal(store.settings.listening(), 0, "the subscription ends with the component");
+
+    // A change between the component being made and its joining the tree is not missed: the player builds the first screen and
+    // then reads the settings' file, so a title that shows a setting was made with the defaults.
+    const early = new Panel();
+    store.settings.set({ music: 9, muted: false });
+    root.addChild(early);
+    world.flush();
+    assert.equal((early.children[0] as Text).text, "music 9");
   });
 });
 
