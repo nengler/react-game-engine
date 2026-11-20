@@ -633,7 +633,8 @@ export class HookLowering extends ExpressionLowering {
     }
     const field = this.claimField(name, at, DiagnosticCode.InvalidComponentBody);
     if (field === null) return;
-    this.componentScope.declare(name, { kind: "function", name, field });
+    const params = arrow.parameters.some((p) => p.dotDotDotToken !== undefined) ? Infinity : arrow.parameters.length;
+    this.componentScope.declare(name, { kind: "function", name, field, params });
     const fn = this.within({ inHandler: true }, () =>
       lowerFunction(this, arrow, { paramTypes: "declared", returns: "any", what: `The function '${name}'` })
     );

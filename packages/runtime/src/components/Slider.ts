@@ -122,7 +122,7 @@ export class Slider<P extends object = {}> extends Flex<P> {
     this.moveTo(x, y);
   }
 
-  onDrag(x: number, y: number): void {
+  onHeldAt(x: number, y: number): void {
     this.moveTo(x, y);
   }
 

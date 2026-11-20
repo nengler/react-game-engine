@@ -173,6 +173,11 @@ export {
   type InputState,
   type InputSnapshot,
   type KeyName,
+  getInputDevice,
+  inputDeviceOf,
+  setInputDevice,
+  watchInputDevice,
+  type InputDevice,
 } from "./input.ts";
 export {
   clamp,

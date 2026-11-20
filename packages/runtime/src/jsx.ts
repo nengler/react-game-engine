@@ -46,6 +46,8 @@ import type { OpacityShorthand, TransformShorthand } from "./jsx-runtime.ts";
 
 export { clamp, grace, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
+export { getInputDevice, watchInputDevice, type InputDevice } from "./input.ts";
+import type { InputDevice } from "./input.ts";
 export { createBall, type BallContact, type BallOptions } from "./ball.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
@@ -129,6 +131,17 @@ export function useTime(): number {
  */
 export function useSound(_path: string): (volume?: number) => void {
   return compileTimeOnly("useSound");
+}
+
+/**
+ * What the player is using, kept up to date: `"keyboard"`, `"pointer"` (a mouse or a finger) or `"gamepad"`, by whatever was pressed
+ * last. `const device = useInputDevice();`, then `device === "keyboard" ? "Press Enter" : "Tap to start"`. It is `"pointer"` until
+ * something is pressed, and the component renders only when it changes.
+ *
+ * An ordinary hook the engine ships (\`useMutable\` and \`useMount\`, inlined like any custom hook).
+ */
+export function useInputDevice(): InputDevice {
+  return compileTimeOnly("useInputDevice");
 }
 
 /** Anything that says when it changed: `subscribe` takes a listener and returns the function that stops it (`createSettings` stores do). */

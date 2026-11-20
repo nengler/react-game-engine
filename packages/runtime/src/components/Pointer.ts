@@ -30,8 +30,14 @@ export interface Pressable {
   disabled?: boolean;
   /** A press landed on it at this point (the layer's coordinates, as `contains` takes), just before `onPress`: for what needs to know where, such as a slider. */
   onPressAt?(x: number, y: number): void;
-  /** The button that pressed it is still held and the mouse is at this point, each step, wherever the mouse has gone: a drag. */
-  onDrag?(x: number, y: number): void;
+  /** The button that pressed it is still held and the mouse is at this point, each step, wherever the mouse has gone: what a slider's thumb follows. */
+  onHeldAt?(x: number, y: number): void;
+  /** A press landed on it at this point: a drag may begin (see `PressableProps.onDragStart`). */
+  onDragStart?: ((x: number, y: number) => void) | undefined;
+  /** The press that began on it is still held and the mouse has moved to this point. */
+  onDrag?: ((x: number, y: number) => void) | undefined;
+  /** The press that began on it was let go at this point. */
+  onDragEnd?: ((x: number, y: number) => void) | undefined;
   /** A direction (`dx`, `dy` each -1, 0 or 1) was pressed while it has the focus: true if it used it, and the focus then stays where it is. */
   onNavigate?(dx: number, dy: number): boolean;
   onFocus?: (() => void) | undefined;
@@ -48,6 +54,16 @@ export interface PressableProps {
   onPointerEnter?: () => void;
   /** Called when the mouse leaves it, or something drawn over it takes the mouse. */
   onPointerLeave?: () => void;
+  /**
+   * Dragging, with a mouse or a finger alike. `onDragStart` is called when a press lands on it, with where (in its layer's coordinates:
+   * the world's, or the HUD's inside a `<Hud>`; with no camera these are `input.pointerX` and `pointerY`). While that press is held,
+   * `onDrag` is called each time the pointer has moved, wherever it has gone, off the box included; `onDragEnd` when it is let go,
+   * with where. A press let go where it began is a tap: `onDragStart` then `onDragEnd`, with no `onDrag` between. `onPress` is still
+   * called, before `onDragStart`. One that leaves the tree while it is held hears no more of the drag.
+   */
+  onDragStart?: (x: number, y: number) => void;
+  onDrag?: (x: number, y: number) => void;
+  onDragEnd?: (x: number, y: number) => void;
   /**
    * A key (`"Space"`) or an action of the game's controls (`"wave"`) that presses it, as a click would, while it is mounted and not
    * inert: a button that owns its shortcut, as the DOM's `accessKey`. Every mounted pressable with that key is pressed.
@@ -94,6 +110,9 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
   onPress: (() => void) | undefined;
   onPointerEnter: (() => void) | undefined;
   onPointerLeave: (() => void) | undefined;
+  onDragStart: ((x: number, y: number) => void) | undefined;
+  onDrag: ((x: number, y: number) => void) | undefined;
+  onDragEnd: ((x: number, y: number) => void) | undefined;
   originX: number;
   originY: number;
   pressKey: string | undefined;
@@ -111,6 +130,9 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
     this.onPress = hostProps.onPress;
     this.onPointerEnter = hostProps.onPointerEnter;
     this.onPointerLeave = hostProps.onPointerLeave;
+    this.onDragStart = hostProps.onDragStart;
+    this.onDrag = hostProps.onDrag;
+    this.onDragEnd = hostProps.onDragEnd;
     this.originX = hostProps.originX ?? 0;
     this.originY = hostProps.originY ?? 0;
     this.pressKey = hostProps.pressKey;

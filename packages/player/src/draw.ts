@@ -858,12 +858,18 @@ export class DrawList {
   }
 }
 
+/** Whether a pressable hears a drag: it has one of `onDragStart`, `onDrag` and `onDragEnd`. */
+export function draggable(pointer: Pressable): boolean {
+  return pointer.onDragStart !== undefined || pointer.onDrag !== undefined || pointer.onDragEnd !== undefined;
+}
+
 /** A `<Flex>` takes the mouse when it has a press or a hover callback, or a prop that is drawn while the mouse is over it. */
 function hoverable(flex: Flex): boolean {
   return (
     flex.onPress !== undefined ||
     flex.onPointerEnter !== undefined ||
     flex.onPointerLeave !== undefined ||
+    draggable(flex) ||
     flex.hoverBackground !== undefined ||
     flex.hoverBorderColor !== undefined ||
     flex.hoverBackgroundImage !== undefined ||

@@ -852,7 +852,13 @@ export class ElementLowering extends HookLowering {
               passed.kind === "action"
                 ? [{ kind: "CallAction", action: passed.action, args }]
                 : passed.kind === "function"
-                  ? [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Own", name: passed.field }, args } }]
+                  ? // A function that takes fewer than the callback is given (`onDragEnd={drop}`, `drop` taking nothing) is handed no more, as in TypeScript.
+                    [
+                      {
+                        kind: "ExpressionStatement",
+                        expression: { kind: "Call", callee: { kind: "Own", name: passed.field }, args: args.slice(0, passed.params) },
+                      },
+                    ]
                   : [
                       {
                         kind: "ExpressionStatement",
@@ -886,11 +892,16 @@ export class ElementLowering extends HookLowering {
    */
   protected functionValue(
     expression: Expression
-  ): { kind: "action"; action: string } | { kind: "prop"; name: string } | { kind: "function"; field: string } | null | undefined {
+  ):
+    | { kind: "action"; action: string }
+    | { kind: "prop"; name: string }
+    | { kind: "function"; field: string; params: number }
+    | null
+    | undefined {
     if (isIdentifier(expression)) {
       const binding = this.scope.get(expression.text);
       if (binding?.kind === "action") return { kind: "action", action: binding.action };
-      if (binding?.kind === "function") return { kind: "function", field: binding.field };
+      if (binding?.kind === "function") return { kind: "function", field: binding.field, params: binding.params };
       if (binding?.kind === "prop" && binding.role === "callback") return { kind: "prop", name: binding.name };
       return undefined;
     }

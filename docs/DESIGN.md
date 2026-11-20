@@ -583,6 +583,27 @@ out by hand (two state fields and a `useMount` that subscribed and set both), wh
   nothing is evaluated a different number of times.
 - `read` takes no arguments; the store is anything with `subscribe(listener): () => void` (`Subscribable` in the authoring module).
 
+### Drags and the device in use (2026-11-20)
+
+Jam Jar's shelf is reordered by dragging, on a phone as well as with a mouse, and its prompts must not name keys to someone
+holding a phone. Both were built in the game from raw input (`input.down("MouseLeft")`, `input.pointerX`, `input.lastPressed()`)
+and both are what any other game would write again, so they moved here.
+
+- **`onDragStart`, `onDrag`, `onDragEnd`** are props of every pressable (`<Flex>`, `<Pointer>` and the widgets), each told the
+  pointer's place in the pressable's layer. The player already kept the pressable a press began on (`World.pressed`) and told a
+  slider where the mouse was each step; that internal call is now `onHeldAt`, and the public `onDrag` is called only when the pointer
+  has moved, so a handler that sets state does not render every step of a still hold. `onDragEnd` is called before the release is
+  reported. A `<Flex>` with only drag handlers takes the press, as one with `onPress` does. A pressable that leaves the tree while
+  held hears no more: a list that is re-keyed as it is reordered should put the handlers on the box around the items, not on an item.
+- There is no drop target, payload or ghost, as the DOM's drag and drop has: a game draws what is dragged where it likes and
+  works out what is under it from the point. That is the part that differs between games.
+- **`useInputDevice()`** returns `"keyboard"`, `"pointer"` or `"gamepad"`: the device of the last press (`World.tick` reads the
+  step's first press, whoever in the tree hears it, an inert screen included). A mouse and a finger are one device on purpose: the
+  hosts report a touch as `MouseLeft`, and a game that treats them alike works on both without thinking about it. The value lives
+  in the runtime module, not in a world or a component, so a screen mounted after the press starts with the right wording; the
+  hook is a `useMutable` and a `useMount` that subscribes (`watchInputDevice`), like `useStore`. It starts as `"pointer"` and each
+  player resets it. For the hook, an engine function may now be handed an arrow in a handler, as an imported function already could.
+
 ## Why there is no `useEffect` (2026-11-12)
 
 `useEffect` is the first hook a React author reaches for, and it stays out on purpose; each of its uses has a replacement,

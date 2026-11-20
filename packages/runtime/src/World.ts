@@ -7,7 +7,7 @@ import { Tilemap } from "./components/Tilemap.ts";
 import { GameObject } from "./GameObject.ts";
 import { takeTreeRestore } from "./gameTree.ts";
 import { restoreHotState } from "./hot.ts";
-import { NO_INPUT, type InputState } from "./input.ts";
+import { inputDeviceOf, NO_INPUT, setInputDevice, type InputState } from "./input.ts";
 import { activeProfiler, PROFILE_INPUT, PROFILE_RENDER, PROFILE_UPDATE } from "./profile.ts";
 import { geometryOf, geometryOverlapsBox } from "./shapes.ts";
 import { countStep } from "./Sound.ts";
@@ -118,6 +118,11 @@ export class World implements BodySpace, BallSpace {
     this.#space = null;
     this.#indexes = null;
     const anyInert = this.#hasInert();
+    if (input !== NO_INPUT) {
+      // Whatever was pressed last is what the player is using (`getInputDevice()`), whoever in the tree hears the press.
+      const last = input.lastPressed?.();
+      if (last !== undefined) setInputDevice(inputDeviceOf(last));
+    }
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const order = (this.#order ??= this.#treeOrder());
     const inputs = order.input;
@@ -213,6 +218,7 @@ export class World implements BodySpace, BallSpace {
     this.#pressed = pointer;
     pointer.onPressAt?.(x, y);
     pointer.onPress?.();
+    pointer.onDragStart?.(x, y);
     return true;
   }
 
