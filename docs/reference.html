@@ -159,7 +159,7 @@ mark { background: var(--accent-soft); color: inherit; }
     <li>If nothing moves, check that you multiplied by <code>dt</code> and that the component is mounted.</li>
     <li>A change to a list item through another name is refused (<code>const e = s.list[0]; e.hp = 0</code>, or a loop variable). Write through the field (<code>s.list[0].hp = 0</code>), or give it a new list: <code>s.list = s.list.map(…)</code>. <code>s.list.push(x)</code> itself is fine.</li>
     <li>A callback under <code>{s.x !== null &amp;&amp; …}</code> does not narrow <code>s.x</code>. Take <code>const x = s.x</code> above it and read <code>x</code>: TypeScript keeps a <code>const</code>'s narrowing in a closure.</li>
-    <li><code>&lt;Game&gt;</code> settings are literals (<code>width={640}</code>, never state), and <code>&lt;Game&gt;</code> is only ever a root.</li>
+    <li><code>&lt;Game&gt;</code> settings are literals or constants imported from a <code>.ts</code> module (<code>width={640}</code>, <code>width={SCREEN_W}</code>, never state), and <code>&lt;Game&gt;</code> is only ever a root.</li>
     <li><code>&lt;Text&gt;</code> takes its words as children (<code>Score: {score}</code>). A <code>text=</code> attribute is an error (<code>TSE1203</code>), and the editor's quick fix moves it into the children.</li>
     <li>If a collider never fires, check both sides: each one's <code>hits</code> must allow the other's <code>layer</code>, and neither may be in a <code>&lt;Hud&gt;</code>.</li>
     <li>For sharp pixel art, keep <code>smooth</code> off and use <code>Screen fit="integer"</code>.</li>

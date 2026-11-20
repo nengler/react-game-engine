@@ -50,7 +50,6 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - A key reading only the index warns, and a callback on a list item cannot read the index.
 - `useMutable({ x, y })` is refused (`TSE1103`): fields are written `x: x`. A `.map` in JSX returns one element, so a value worked
   out per item (`const a = …` inside the callback) has to be put in the items first (Swarm's blades).
-- `<Game background>` must be a literal, so the theme's colour cannot be used there.
 - `nearby` measures to the edge of each box, not its middle: a reach that looks small finds many neighbours in a crowd (Swarm's
   separation found eleven at 7 pixels, and cost a third of a step).
 - `Math.hypot` is about four times slower than `Math.sqrt(dx * dx + dy * dy)` in V8. In a component that runs for each of a

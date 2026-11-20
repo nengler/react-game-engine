@@ -139,6 +139,28 @@ describe("<Game> as a component's root", () => {
     assert.doesNotThrow(() => build(`function A() { return <Game width={-5} title="x" resizable={true} vsync smooth={false} />; }`));
   });
 
+  it("takes a constant imported from a .ts module, which exists before the tree is built as a literal does", async () => {
+    mkdirSync(join(ROOT, "out"), { recursive: true });
+    // The generated module, in out/<n>/, imports it from one folder up.
+    writeFileSync(
+      join(ROOT, "out", "Theme.ts"),
+      `export const SCREEN_W = 400;\nexport const WALL = "#10141f";\nexport const BODY = "tse:m5x7";\n`
+    );
+    const compiled = build(`import { BODY, SCREEN_W, WALL } from "./Theme.ts";
+export default function Main() {
+  return <Game width={SCREEN_W} height={300} background={WALL} font={BODY} />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { default: Main } = await load<{ default: new () => Game }>(compiled);
+    const game = new Main();
+    assert.deepEqual([game.width, game.height, game.background, game.font], [400, 300, "#10141f", "tse:m5x7"]);
+    assert.match(
+      errors(`function A() { const s = useMutable({ w: 400 }); return <Game width={s.w} />; }`)[0]!.message,
+      /<Game width> must be a literal \(a number, string or true\/false\) or a constant imported from a \.ts module/,
+      "state still is not"
+    );
+  });
+
   it("takes state for timeScale and paused, which the player reads every frame", async () => {
     const compiled = build(`export default function Main() {
   const s = useMutable({ fast: false, stopped: false });

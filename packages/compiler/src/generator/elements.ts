@@ -138,9 +138,19 @@ export class ElementEmitter extends HandlerEmitter {
       case "ConditionalChild": {
         const el = child.element;
         const ref = this.fieldRef(el);
-        w.open(`if (${this.expr(child.condition, true)}) {`);
+        // A memo the condition tests (`{open && … {looked !== null && <Tip kind={looked} />}}`) is read once, into a local just
+        // before the test, so the test and the branch read one value that TypeScript narrows, as it does the source. A memo read
+        // on every render is already a local at the top of `render()` (`alwaysReadMemos`); one under an outer condition is not.
+        const renderMemos = new Map(this.mode.renderMemos);
+        for (const memo of this.memosRead(child.condition)) {
+          if (renderMemos.has(memo.key)) continue;
+          const local = `$${++this.renderTemps}`;
+          w.line(`const ${local} = ${this.within({ renderMemos }, () => this.expr(memo, true))};`);
+          renderMemos.set(memo.key, local);
+        }
+        w.open(`if (${this.within({ renderMemos }, () => this.expr(child.condition, true))}) {`);
         // Not guarded: an element made in this render must have every value written, whatever changed.
-        this.within({ conditions: [...this.mode.conditions, child.condition], guard: null }, () => {
+        this.within({ conditions: [...this.mode.conditions, child.condition], guard: null, renderMemos }, () => {
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.construct(el)};`);
             this.emitStaticTransform(el.transform, ref);
@@ -516,15 +526,7 @@ export class ElementEmitter extends HandlerEmitter {
   protected alwaysReadMemos(): Extract<ExprIR, { kind: "Memo" }>[] {
     const found: Extract<ExprIR, { kind: "Memo" }>[] = [];
     const visit = (e: ExprIR): void => {
-      if (e.kind === "Memo") {
-        if (found.some((m) => m.key === e.key)) return;
-        visit(e.value);
-        found.push(e);
-        return;
-      }
-      if (e.kind === "Callback") return; // runs later, with its own reads
-      for (const child of childExpressions(e)) visit(child);
-      if (e.kind === "Block") walkStatements(e.fn.body, (inner) => inner.kind === "Memo" && visit(inner));
+      for (const memo of this.memosRead(e)) if (!found.some((m) => m.key === memo.key)) found.push(memo);
     };
     const element = (el: Pick<ElementIR, "props" | "transform" | "children">): void => {
       for (const p of el.props) if (p.kind === "DynamicProp" || p.kind === "SpreadProp") visit(p.value);
@@ -538,6 +540,24 @@ export class ElementEmitter extends HandlerEmitter {
       }
     };
     element(this.c.root);
+    return found;
+  }
+
+  /** The memos an expression reads, each once, the ones a memo reads before it; not those a callback in it reads, which runs later. */
+  protected memosRead(e: ExprIR): Extract<ExprIR, { kind: "Memo" }>[] {
+    const found: Extract<ExprIR, { kind: "Memo" }>[] = [];
+    const visit = (x: ExprIR): void => {
+      if (x.kind === "Memo") {
+        if (found.some((m) => m.key === x.key)) return;
+        visit(x.value);
+        found.push(x);
+        return;
+      }
+      if (x.kind === "Callback") return;
+      for (const child of childExpressions(x)) visit(child);
+      if (x.kind === "Block") walkStatements(x.fn.body, (inner) => inner.kind === "Memo" && visit(inner));
+    };
+    visit(e);
     return found;
   }
 
