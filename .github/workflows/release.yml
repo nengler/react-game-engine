@@ -5,6 +5,12 @@ name: Release
 # stamped with the tag's version, @tsengine/native holding every platform's binaries), attaches the packs to a GitHub release
 # of that tag, and publishes them to npm as @tsengine/* by trusted publishing (no token: README.md, Releases). A run from the Actions tab with
 # `dry_run` builds, smoke-tests and packs everything, keeps the packs as the run's artifact, and releases and publishes nothing.
+#
+# The binaries are only built when what they are built from has changed. The `plan` job hashes those files (native/, host/,
+# tools/pack.ts and this file, as git holds them); each release carries that hash as `native-sources.txt`. When the latest
+# release's hash is the same, its binaries are taken from its @tsengine/native pack and the `native` matrix is skipped: a
+# release that changed only TypeScript takes a couple of minutes, not ten. The binaries are then the very ones that release
+# built and smoke-tested. Tick `rebuild` to build them anyway.
 # A game installs them from npm (`npx @tsengine/cli create my-game`), or by the release's URL:
 #
 #   "@tsengine/runtime": "https://github.com/nengler/tse/releases/download/v0.2.0/tsengine-runtime-0.2.0.tgz"
@@ -29,6 +35,11 @@ on:
         required: false
         type: boolean
         default: false
+      rebuild:
+        description: "Build libtse and tse-host on every platform even if nothing they are built from has changed"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -44,10 +55,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Whether the last release's binaries can be used as they are: its `native-sources.txt` names the same sources as this commit's.
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      hash: ${{ steps.plan.outputs.hash }}
+      reuse: ${{ steps.plan.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare the native sources with the last release's
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          hash=$(node tools/native-sources.ts)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          reuse=""
+          if [ "$REBUILD" != true ]; then
+            last=$(gh release list --limit 1 --exclude-drafts --json tagName --jq '.[0].tagName // ""')
+            if [ -n "$last" ] && [ "$(gh release download "$last" --pattern native-sources.txt --output - 2>/dev/null)" = "$hash" ]; then reuse="$last"; fi
+          fi
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+          if [ -n "$reuse" ]; then echo "The native sources are those of $reuse ($hash): its binaries are used, and none are built." >> "$GITHUB_STEP_SUMMARY"
+          else echo "The native sources ($hash) are not the last release's, or \`rebuild\` was asked for: building on every platform." >> "$GITHUB_STEP_SUMMARY"; fi
+
   # libtse and tse-host, desktop and headless, built on each platform and laid out as @tsengine/native holds them
   # (lib/<platform>-<arch>/<flavor>/…, bin/…), then smoke-tested there: the C smoke test and the Node host against the headless
   # libtse, and the demo's parity run against the headless tse-host. No build cache: a release builds from scratch.
   native:
+    needs: plan
+    if: needs.plan.outputs.reuse == ''
     strategy:
       fail-fast: false
       matrix:
@@ -79,6 +118,8 @@ jobs:
       - name: Install the window libraries
         if: runner.os == 'Linux'
         run: |
+          # The manual pages' index is rebuilt after every install, which can take minutes on a runner: nothing here reads it.
+          sudo rm -f /var/lib/man-db/auto-update
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
       # --strict: a missing tool or a failed build (desktop included) is an error, and all four binaries must be there.
@@ -105,8 +146,9 @@ jobs:
           if-no-files-found: error
 
   packs:
-    needs: native
-    # Packs JavaScript and the binaries the matrix built; nothing here is compiled.
+    needs: [plan, native]
+    # Packs JavaScript and the binaries the matrix built, or the last release's when the matrix was skipped; nothing here is compiled.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.native.result == 'success' || needs.native.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -130,15 +172,30 @@ jobs:
       - run: npm ci
       - run: npm run generate
       - uses: actions/download-artifact@v8
+        if: needs.plan.outputs.reuse == ''
         with:
           pattern: native-*
           path: dist/native-parts
+      # The binaries of the release whose sources these are, out of its @tsengine/native pack (lib/ and bin/, as the matrix lays them out).
+      - name: Take the last release's binaries
+        if: needs.plan.outputs.reuse != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE: ${{ needs.plan.outputs.reuse }}
+        run: |
+          gh release download "$REUSE" --pattern 'tsengine-native-*.tgz' --dir dist/reused
+          tar -xzf dist/reused/tsengine-native-*.tgz -C dist/reused
+          mkdir -p dist/native-parts/reused
+          cp -R dist/reused/package/lib dist/reused/package/bin dist/native-parts/reused/
       # Each platform's binaries go into the one @tsengine/native; a platform missing any of its four is an error.
       - name: Pack (stamped with the tag's version)
         run: |
           from=()
           for dir in dist/native-parts/*/; do from+=(--native-from "$dir"); done
           node tools/pack.ts --version "$VERSION" "${from[@]}" --platforms linux-x64,darwin-arm64,darwin-x64,win32-x64
+          echo "$NATIVE_HASH" > dist/packs/native-sources.txt
+        env:
+          NATIVE_HASH: ${{ needs.plan.outputs.hash }}
       - name: Keep the packs (a dry run's result)
         if: inputs.dry_run
         uses: actions/upload-artifact@v7
@@ -162,7 +219,7 @@ jobs:
             exit 0
           fi
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then where=(--target "$GITHUB_SHA"); else where=(--verify-tag); fi
-          gh release create "$TAG" dist/packs/*.tgz "${where[@]}" --generate-notes \
+          gh release create "$TAG" dist/packs/*.tgz dist/packs/native-sources.txt "${where[@]}" --generate-notes \
             --title "$TAG" \
             --notes "Install a pack by URL: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/<file>. Linux x64, macOS arm64 and x64, Windows x64."
       # Publish each pack to npm, @tsengine/* depending on the others at this version (stamped above), dependencies first so a

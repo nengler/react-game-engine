@@ -138,7 +138,11 @@ runs [`.github/workflows/release.yml`](.github/workflows/release.yml). It builds
 arm64 and x64, and Windows x64, and smoke-tests each (C smoke test, the Node host against the software renderer, the demo's
 parity run under tse-host). Then it packs the engine with every platform's binaries in `@tsengine/native` (stamped with that
 version), attaches the packs to a GitHub release and publishes them to npm as `@tsengine/*`, with provenance. The platform
-matrix is about 25 runner-minutes a release (free while the repository is public). To try it without releasing, run the
+matrix is about 25 runner-minutes a release (free while the repository is public). The binaries are built only when what
+they are built from has changed: each release carries a hash of those sources (`native-sources.txt`, from
+`node tools/native-sources.ts`: `native/`, `host/`, `tools/pack.ts` and the workflow itself), and when the latest release's
+is the same, its binaries are used and the matrix is skipped, so a release that changed only TypeScript takes a couple of
+minutes. Run the workflow with `rebuild` ticked to build them anyway. To try it without releasing, run the
 workflow from the Actions tab with `dry_run` ticked: it builds, tests and packs everything and keeps the packs as the run's
 artifact, but neither releases nor publishes. A game made on the engine is packaged on the platform it is for: run
 `tse package` on each (for example in a matrix in the game's own CI).
