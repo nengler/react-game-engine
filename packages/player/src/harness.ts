@@ -2,6 +2,7 @@ import type { Backend, StorageBackend } from "./backend.ts";
 import { createPlayer, type Player, type PlayerConfig } from "./loop.ts";
 import { TSE_IN_HEIGHT, TSE_IN_WIDTH } from "./protocol.ts";
 import { applyInputFrame, RecordingBackend, type InputFrame, type RecordingOptions } from "./recording.ts";
+import { parseInputScript, type InputBindings } from "./script.ts";
 
 /**
  * A backend that draws with another one and takes its input from a script instead of devices. Each frame is drawn by
@@ -106,4 +107,90 @@ export function runScript<T>(
     player.close();
   }
   return { states, backend, warnings };
+}
+
+export interface PlayOptions extends RecordingOptions {
+  /** The game's actions and their keys, so a script can say `jump`: `controls.toJSON()`, or what the game's `game.ts` exports. */
+  readonly bindings?: InputBindings;
+}
+
+export interface UntilOptions {
+  /** The most steps to run. Default 3600: a minute at 60 steps a second. */
+  readonly maxSteps?: number;
+  /** false: return `maxSteps` when not done by then, instead of throwing. Default true. */
+  readonly throws?: boolean;
+}
+
+/** A game being played by a test, a step at a time: see `playGame`. */
+export interface GamePlay {
+  readonly player: Player;
+  readonly backend: RecordingBackend;
+  /** What the game warned of so far. */
+  readonly warnings: string[];
+  /** How many steps have run, the warm-up one not counted. */
+  readonly steps: number;
+  /** Run the steps of an input script (`"right*30, jump, _"`, `"click@120,64"`), one step a frame. */
+  input(script: string): GamePlay;
+  /**
+   * Run steps with nothing pressed (the mouse left where the last script put it) until `done()` is true: it is asked before the
+   * first step and after each. Returns how many steps it ran. Not done after `maxSteps`: it throws, or with `throws: false` returns
+   * `maxSteps`. A test that waits for the game ("until the jar has settled") says so, where a count of frames (`_*330`) breaks
+   * the day the game takes a little longer.
+   */
+  stepUntil(done: () => boolean, options?: UntilOptions): number;
+  close(): void;
+}
+
+/**
+ * A game played by a test without a window, as `runScript` plays one, but a piece at a time: press some keys, wait for
+ * something to be true, look, press more. The warm-up step has run, so the tree is mounted.
+ *
+ *     const game = playGame(gameConfig, { bindings });
+ *     game.input("_*2, Enter, _*5, Space");
+ *     game.stepUntil(() => run().phase === "pick");
+ *     game.input("click@320,150");
+ *     game.close();
+ *
+ * As in `runScript`, a step sees the input of the frame before it, so a press shows in the game one step after its frame.
+ */
+export function playGame(config: PlayerConfig, options: PlayOptions = {}): GamePlay {
+  const backend = new RecordingBackend(options);
+  const warnings: string[] = [];
+  const player = createPlayer(backend, { ...config, warn: (message) => warnings.push(message) });
+  player.step();
+  let steps = 0;
+  let mouse: InputFrame["mouse"];
+  const step = (frame: InputFrame): void => {
+    backend.queueInput(frame);
+    player.step();
+    steps++;
+  };
+  const play: GamePlay = {
+    player,
+    backend,
+    warnings,
+    get steps() {
+      return steps;
+    },
+    input(script) {
+      for (const frame of parseInputScript(script, options.bindings === undefined ? {} : { bindings: options.bindings })) {
+        if (frame.mouse !== undefined) mouse = frame.mouse;
+        step(frame);
+      }
+      return play;
+    },
+    stepUntil(done, until = {}) {
+      const maxSteps = until.maxSteps ?? 3600;
+      for (let ran = 0; ; ran++) {
+        if (done()) return ran;
+        if (ran >= maxSteps) {
+          if (until.throws === false) return ran;
+          throw new Error(`stepUntil: not done after ${maxSteps} steps`);
+        }
+        step(mouse === undefined ? {} : { mouse });
+      }
+    },
+    close: () => player.close(),
+  };
+  return play;
 }

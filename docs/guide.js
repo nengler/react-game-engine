@@ -132,6 +132,7 @@
         ["onDragStart", "(x, y) =&gt; void", "–", "Called when a press lands on it, with where (a mouse and a finger alike)."],
         ["onDrag", "(x, y) =&gt; void", "–", "Called while that press is held, each time the pointer has moved, off the box included."],
         ["onDragEnd", "(x, y) =&gt; void", "–", "Called when that press is let go, with where. A tap is a start and an end with no <code>onDrag</code> between."],
+        ["onPressOutside", "() =&gt; void", "–", "Called when a click or a tap lands anywhere but on it or on something inside it: what closes a menu or clears a choice."],
         ["originX / originY", "number", "0", "Where the area's origin is, from its top-left corner: <code>originX={5} originY={5}</code> centres a 10 × 10 area."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands inside it, its <code>pressKey</code> is pressed, or it has the focus and <code>confirm</code> is pressed."]
       ] },
@@ -192,6 +193,7 @@
         ["onDragStart", "(x, y) =&gt; void", "–", "Called when a press lands on it, with where (a mouse and a finger alike)."],
         ["onDrag", "(x, y) =&gt; void", "–", "Called while that press is held, each time the pointer has moved, off the box included."],
         ["onDragEnd", "(x, y) =&gt; void", "–", "Called when that press is let go, with where. A tap is a start and an end with no <code>onDrag</code> between."],
+        ["onPressOutside", "() =&gt; void", "–", "Called when a click or a tap lands anywhere but on it or on something inside it: what closes a menu or clears a choice."],
         ["float", "boolean", "false", "Take the box out of its parent's flow."],
         ["anchor", "9-point anchor", '"top-left"', "Which point of this box is attached. One of <code>top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right</code>."],
         ["to", "9-point anchor", '"top-left"', "Which point of the parent it attaches to."],
