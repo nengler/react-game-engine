@@ -1,7 +1,7 @@
 import type { Backend, StorageBackend } from "./backend.ts";
 import { createPlayer, type Player, type PlayerConfig } from "./loop.ts";
 import { TSE_IN_HEIGHT, TSE_IN_WIDTH } from "./protocol.ts";
-import { applyInputFrame, RecordingBackend, type InputFrame, type RecordingOptions } from "./recording.ts";
+import { aimFrame, applyInputFrame, RecordingBackend, type AimState, type InputFrame, type RecordingOptions } from "./recording.ts";
 import { parseInputScript, type InputBindings } from "./script.ts";
 
 /**
@@ -12,6 +12,8 @@ import { parseInputScript, type InputBindings } from "./script.ts";
 export class ScriptedInputBackend implements Backend {
   readonly #inner: Backend;
   readonly #queue: InputFrame[];
+  /** How a frame's `aim` (a label, `click@Play`) is found: whoever makes the player sets `aim.lookup` to its `pointOf`. */
+  readonly aim: AimState = { lookup: undefined, last: undefined };
   readonly measureText: Backend["measureText"];
   readonly textureSize: Backend["textureSize"];
   readonly overlaps: Backend["overlaps"];
@@ -52,7 +54,13 @@ export class ScriptedInputBackend implements Backend {
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     this.#inner.frame(clearColor, records, length, texts, input, keys);
-    applyInputFrame(this.#queue.shift() ?? {}, input, keys, input[TSE_IN_WIDTH] as number, input[TSE_IN_HEIGHT] as number);
+    applyInputFrame(
+      aimFrame(this.#queue.shift() ?? {}, this.aim),
+      input,
+      keys,
+      input[TSE_IN_WIDTH] as number,
+      input[TSE_IN_HEIGHT] as number
+    );
   }
 }
 
@@ -96,6 +104,8 @@ export function runScript<T>(
   const warnings: string[] = [];
   for (const frame of frames) backend.queueInput(frame);
   const player = createPlayer(backend, { ...config, warn: (message) => warnings.push(message) });
+  backend.aim.lookup = (label) => player.pointOf(label);
+  backend.aim.labels = () => player.labels();
   const states: T[] = [];
   try {
     player.step(); // warm-up: its input is the empty first frame; the first scripted frame is read by the next step
@@ -157,9 +167,12 @@ export function playGame(config: PlayerConfig, options: PlayOptions = {}): GameP
   const backend = new RecordingBackend(options);
   const warnings: string[] = [];
   const player = createPlayer(backend, { ...config, warn: (message) => warnings.push(message) });
+  backend.aim.lookup = (label) => player.pointOf(label);
+  backend.aim.labels = () => player.labels();
   player.step();
   let steps = 0;
   let mouse: InputFrame["mouse"];
+  let aim: InputFrame["aim"];
   const step = (frame: InputFrame): void => {
     backend.queueInput(frame);
     player.step();
@@ -175,6 +188,7 @@ export function playGame(config: PlayerConfig, options: PlayOptions = {}): GameP
     input(script) {
       for (const frame of parseInputScript(script, options.bindings === undefined ? {} : { bindings: options.bindings })) {
         if (frame.mouse !== undefined) mouse = frame.mouse;
+        aim = frame.aim === undefined ? undefined : { label: frame.aim.label, fresh: false };
         step(frame);
       }
       return play;
@@ -187,7 +201,7 @@ export function playGame(config: PlayerConfig, options: PlayOptions = {}): GameP
           if (until.throws === false) return ran;
           throw new Error(`stepUntil: not done after ${maxSteps} steps`);
         }
-        step(mouse === undefined ? {} : { mouse });
+        step(aim !== undefined ? { aim } : mouse === undefined ? {} : { mouse });
       }
     },
     close: () => player.close(),

@@ -109,7 +109,7 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     const found = findNativeLibraryOf("desktop");
     if (found === null) {
       console.error(
-        "--gpu needs the desktop build of libtse: run `npm run native:build` (it needs the window libraries; see Getting started)."
+        "--gpu needs the desktop build of libtse: run `npm run native:build`. On Debian or Ubuntu it needs the window libraries first: `sudo apt-get install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev` (see Getting started)."
       );
       return 2;
     }

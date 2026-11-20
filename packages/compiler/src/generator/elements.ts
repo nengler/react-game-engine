@@ -12,6 +12,7 @@ import {
   readsParam,
   walkStatements,
 } from "../ir/types.ts";
+import { walkExpr } from "../ir/walk.ts";
 import { HandlerEmitter } from "./handlers.ts";
 import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, propertyKey, access } from "./helpers.ts";
 
@@ -213,7 +214,11 @@ export class ElementEmitter extends HandlerEmitter {
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     if (el.component.kind === "Intrinsic") {
       this.emitReportedWrites(
-        dynamic.map((prop) => ({ target: access(ref, prop.name), value: prop.value, type: writtenFieldType(ref, prop.name) })),
+        dynamic.map((prop) => ({
+          target: access(ref, prop.name),
+          value: prop.value,
+          type: writtenFieldType(ref, prop.name, el.component.name),
+        })),
         `${ref}.markChanged()`
       );
     } else if (hasDynamicProps(el.props)) {
@@ -581,10 +586,27 @@ export class ElementEmitter extends HandlerEmitter {
     const emit = <T>(f: () => T): T => this.within({ inCallback: true, itemLookups: [] }, f);
     // Under the conditions the child is made under (`tower !== null && <Tower …/>`) as they hold now: where they do not, the child is on its
     // way out, and the getter says nothing (the child's last props stand), so it never reads what the condition kept it from.
-    const when = this.mode.conditions.map((c) => emit(() => this.expr(this.live(c))));
+    const conditions = this.mode.conditions.map((c) => this.live(c));
     const value = (e: ExprIR): string => {
-      const text = emit(() => this.expr(this.live(e), true));
-      return when.length === 0 ? text : `(${when.join(" && ")}) ? ${text} : undefined`;
+      if (conditions.length === 0) return emit(() => this.expr(this.live(e), true));
+      // A memo the conditions read (`const lesson = lessonNow(…)`, then `{lesson !== null && <Coach lesson={lesson} />}`) is a
+      // call, which TypeScript cannot narrow from one call to the next: the getter reads each once into a local and tests and
+      // returns the local, as a callback made under a condition does (see `callback`).
+      const memoLocals = new Map<string, string>();
+      const hoisted: string[] = [];
+      for (const condition of conditions) {
+        walkExpr(condition, (c) => {
+          if (c.kind !== "Memo" || memoLocals.has(c.key)) return;
+          const local = `$m${memoLocals.size}`;
+          hoisted.push(`const ${local} = ${emit(() => this.within({ memoLocals }, () => this.expr(c, true)))};`);
+          memoLocals.set(c.key, local);
+        });
+      }
+      const inner = <T>(f: () => T): T => emit(() => this.within({ memoLocals }, f));
+      const when = conditions.map((c) => inner(() => this.expr(c)));
+      const text = inner(() => this.expr(this.live(e), true));
+      const guarded = `(${when.join(" && ")}) ? ${text} : undefined`;
+      return hoisted.length === 0 ? guarded : `(() => { ${hoisted.join(" ")} return ${guarded}; })()`;
     };
     // Whether a getter remembers where its item was: the getters of one item are then made in a function that holds `$at` for them.
     let usesAt = false;
@@ -723,12 +745,18 @@ export function colliderTag(el: {
 }
 
 /**
- * The type of field `name` of the object `ref` names (`(typeof this.bar)["width"]`), for a declaration typed as the field is. A list
- * item that switches between two elements is reached through a cast (`($item as Sprite)`), which `typeof` cannot take: its field is
- * typed through the class it is cast to (`Sprite["image"]`), a class name standing for its instances' type.
+ * The type of field `name` of the object `ref` names, for a declaration typed as the field is. A field of the component
+ * (`this.bar`) is typed through the built-in's class (`Flex["width"]`, a class name standing for its instances' type), and so is
+ * a list item that switches between two elements and is reached through a cast (`($item as Sprite)`), which `typeof` cannot take.
+ * Anything else is a local, and `typeof` reads its type (`(typeof $item)["width"]`).
+ *
+ * Not `(typeof this.bar)["width"]`: TypeScript 7.1 (beta) reports "Cannot find name 'this'" for a `typeof this.x` type that
+ * comes after an optional chain in a condition anywhere earlier in the method (`if (r?.target === "x")`), so `render()` stopped
+ * type-checking the moment a component wrote `{lesson?.target === "jar" && <Spotlight />}` above another element.
  */
-function writtenFieldType(ref: string, name: string): string {
+function writtenFieldType(ref: string, name: string, className: string): string {
   const cast = /^\(\$\w+ as ([\w.<>, {}"']+)\)$/.exec(ref);
   if (cast !== null) return `${cast[1]}[${JSON.stringify(name)}]`;
+  if (ref.startsWith("this.")) return `${className}[${JSON.stringify(name)}]`;
   return `(typeof ${ref})[${JSON.stringify(name)}]`;
 }

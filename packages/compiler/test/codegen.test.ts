@@ -138,7 +138,7 @@ export class WarningIcon extends Entity {
     // Written only when it differs, and then the sprite is told: a render that changes nothing reports nothing.
     assert.match(
       code,
-      /override render\(\): void \{\n {4}const \$1: \(typeof this\.sprite\)\["image"\] = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/
+      /override render\(\): void \{\n {4}const \$1: Sprite\["image"\] = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/
     );
     // The sprite is only ever constructed in its field initialiser.
     assert.equal(code.match(/new Sprite/g)?.length, 1);
@@ -157,6 +157,46 @@ export class WarningIcon extends Entity {
 });
 
 describe("type-checking generated code", () => {
+  it("carries a null check on a derived value into a child's props, under more than one condition", () => {
+    // `chosen` is worked out by a call, so each read is a call TypeScript cannot narrow from one to the next: a child's prop
+    // getter reads it once into a local, tests the local and returns it.
+    const compiled = compile(`
+      function Card({ item }: { item: { name: string } }) {
+        return <Text>{item.name}</Text>;
+      }
+      function Board() {
+        const s = useMutable({ items: [{ name: "a" }], at: 0 });
+        const chosen = s.items.find((i) => i.name === "a") ?? null;
+        return (
+          <Entity>
+            {chosen !== null && s.at === 0 && <Card item={chosen} />}
+            {chosen !== null && chosen.name === "a" && <Card item={chosen} />}
+          </Entity>
+        );
+      }
+    `);
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+
+  it("type-checks an element with a changing prop that follows an optional chain in a condition", () => {
+    // TypeScript 7.1 (beta) cannot find `this` in a `typeof this.x` type once an optional chain has been a condition earlier in
+    // the method, so a changing prop's local is typed through the built-in's class instead (`Text["text"]`).
+    const compiled = compile(`
+      function Board({ lesson }: { lesson: { target: string } | null }) {
+        const s = useMutable({ score: 0 });
+        return (
+          <Entity>
+            {lesson?.target === "jar" && <Shape kind="rect" width={8} height={8} />}
+            {s.score >= 0 && <Text>{\`\${s.score}\`}</Text>}
+            <Shape kind="rect" width={s.score} height={2} />
+          </Entity>
+        );
+      }
+    `);
+    assert.doesNotMatch(compiled.code, /typeof this\./);
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+
   it("generated TypeScript compiles and type-checks", () => {
     const compiled = compile(`
       function Player() {

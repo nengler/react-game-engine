@@ -44,6 +44,9 @@ export function renderRun(config: PlayerConfig, frames: readonly InputFrame[], o
     vsync: false,
     warn: (message) => options.warnings?.push(message) ?? console.warn(message),
   });
+  // A script may aim at what is on screen by its label (`click@Play`).
+  scripted.aim.lookup = (label) => player.pointOf(label);
+  scripted.aim.labels = () => player.labels();
   const keep = options.at === undefined ? null : new Set(options.at);
   const shots: Shot[] = [];
   try {
