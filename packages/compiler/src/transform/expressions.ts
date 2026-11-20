@@ -825,7 +825,8 @@ export class ExpressionLowering extends LoweringBase {
       );
       return null;
     }
-    const args = this.lowerAll(node.arguments);
+    // An engine function may be handed an arrow to call later, in a handler (`watchInputDevice(() => …)`), as an imported one may.
+    const args = this.lowerPlainArgs(node.arguments);
     if (!args) return null;
     return { kind: "Call", callee: result.callee, args };
   }

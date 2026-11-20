@@ -17,7 +17,8 @@ type Binding =
   /** The `children` prop of a component that renders `{children}`: only valid as that child, never read as a value. */
   | { readonly kind: "children"; readonly name: string }
   /** A function declared in the component body, kept in the field `field`: called in handlers, or passed as a value. */
-  | { readonly kind: "function"; readonly name: string; readonly field: string }
+  // `params`: how many arguments it takes at most (Infinity with a rest parameter), so a callback prop hands it no more.
+  | { readonly kind: "function"; readonly name: string; readonly field: string; readonly params: number }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   /**
    * `relower` works the value out again for a handler that reads it, where it depends on a `useMutable` field: from the fields as they

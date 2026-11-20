@@ -6,7 +6,7 @@
  */
 export const LIBRARY_FILE = "tse:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { createBall, createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate } from "@tsengine/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBall, createBody, getInputDevice, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate, watchInputDevice } from "@tsengine/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \`recover\` a second.
@@ -148,6 +148,23 @@ export function useStore(store, read) {
   });
   return s.value;
 }
+
+/**
+ * What the player is using: "keyboard", "pointer" (a mouse or a finger) or "gamepad", by whatever was pressed last. It renders only
+ * when that changes.
+ *   const device = useInputDevice();
+ */
+export function useInputDevice() {
+  const s = useMutable({ device: getInputDevice() });
+  useMount(() => {
+    // Read again: a press may have come between the component being made and its joining the tree.
+    if (s.device !== getInputDevice()) s.device = getInputDevice();
+    return watchInputDevice(() => {
+      s.device = getInputDevice();
+    });
+  });
+  return s.device;
+}
 `;
 
 /** The names of the library's hooks. */
@@ -156,6 +173,7 @@ export const LIBRARY_HOOKS: readonly string[] = [
   "useShake",
   "useTime",
   "useStore",
+  "useInputDevice",
   "useBody",
   "useBall",
   "useSpring",

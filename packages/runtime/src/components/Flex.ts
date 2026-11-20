@@ -377,6 +377,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   onPress: (() => void) | undefined;
   onPointerEnter: (() => void) | undefined;
   onPointerLeave: (() => void) | undefined;
+  onDragStart: ((x: number, y: number) => void) | undefined;
+  onDrag: ((x: number, y: number) => void) | undefined;
+  onDragEnd: ((x: number, y: number) => void) | undefined;
   pressKey: string | undefined;
   focusable: boolean;
   autoFocus: boolean;
@@ -454,6 +457,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.onPress = hostProps.onPress;
     this.onPointerEnter = hostProps.onPointerEnter;
     this.onPointerLeave = hostProps.onPointerLeave;
+    this.onDragStart = hostProps.onDragStart;
+    this.onDrag = hostProps.onDrag;
+    this.onDragEnd = hostProps.onDragEnd;
     this.pressKey = hostProps.pressKey;
     this.focusable = hostProps.focusable ?? false;
     this.autoFocus = hostProps.autoFocus ?? false;

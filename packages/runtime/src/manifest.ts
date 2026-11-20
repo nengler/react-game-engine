@@ -111,6 +111,13 @@ export interface HandleTypeManifest {
 }
 
 /** What a `<Flex>` has as fields (its methods are listed after them), which `Slider` and `Toggle` have too. */
+/** The drag callbacks every pressable takes, each told where the pointer is. */
+const DRAG_POINT = [
+  { name: "x", type: "number" },
+  { name: "y", type: "number" },
+];
+const DRAG_CALLBACKS = { onDragStart: DRAG_POINT, onDrag: DRAG_POINT, onDragEnd: DRAG_POINT };
+
 const FLEX_FIELDS = [
   "direction",
   "alignItems",
@@ -178,6 +185,9 @@ const FLEX_FIELDS = [
   "onPress",
   "onPointerEnter",
   "onPointerLeave",
+  "onDragStart",
+  "onDrag",
+  "onDragEnd",
   "pressKey",
   "focusable",
   "autoFocus",
@@ -306,6 +316,9 @@ export const runtimeManifest: RuntimeManifest = {
       "onPress",
       "onPointerEnter",
       "onPointerLeave",
+      "onDragStart",
+      "onDrag",
+      "onDragEnd",
       "pressKey",
       "focusable",
       "autoFocus",
@@ -437,7 +450,7 @@ export const runtimeManifest: RuntimeManifest = {
       "valueAt",
       "moveTo",
       "onPressAt",
-      "onDrag",
+      "onHeldAt",
       "onNavigate",
     ],
     Toggle: [...FLEX_FIELDS, "checked", "onChange", "onColor", "offColor", "thumbColor", "flip"],
@@ -584,11 +597,12 @@ export const runtimeManifest: RuntimeManifest = {
       // What was sent: its type comes from the collider's tag (`ColliderMessages`), so the parameter is left to the props type.
       onReceive: [{ name: "value", type: CALLBACK_CONTEXTUAL }],
     },
-    Pointer: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [] },
+    Pointer: { onPress: [], onPointerEnter: [], onPointerLeave: [], ...DRAG_CALLBACKS, onFocus: [], onBlur: [] },
     Flex: {
       onPress: [],
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -597,6 +611,7 @@ export const runtimeManifest: RuntimeManifest = {
       onPress: [],
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -605,6 +620,7 @@ export const runtimeManifest: RuntimeManifest = {
       onPress: [],
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -614,6 +630,7 @@ export const runtimeManifest: RuntimeManifest = {
       onPress: [],
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -622,6 +639,7 @@ export const runtimeManifest: RuntimeManifest = {
       onPress: [],
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -632,6 +650,7 @@ export const runtimeManifest: RuntimeManifest = {
       onPress: [],
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -640,6 +659,7 @@ export const runtimeManifest: RuntimeManifest = {
     Toggle: {
       onPointerEnter: [],
       onPointerLeave: [],
+      ...DRAG_CALLBACKS,
       onFocus: [],
       onBlur: [],
       onAdjust: [{ name: "direction", type: "number" }],
@@ -784,5 +804,7 @@ export const runtimeManifest: RuntimeManifest = {
     createBody: 1,
     createBall: 1,
     readContext: 1,
+    getInputDevice: 0,
+    watchInputDevice: 1,
   },
 };

@@ -278,3 +278,37 @@ export function createInputState(snapshot: InputSnapshot = {}, controls?: Contro
 
 /** Input with nothing pressed, used when a tick is given none. */
 export const NO_INPUT: InputState = createInputState();
+
+/** What the player is using: the keyboard, a pointer (a mouse or a finger, which are one thing to a game) or a gamepad. */
+export type InputDevice = "keyboard" | "pointer" | "gamepad";
+
+/** The device a key or button belongs to: `"MouseLeft"` is the pointer's (a touch is reported as it), `"PadA"` the gamepad's. */
+export function inputDeviceOf(key: string): InputDevice {
+  return key.startsWith("Mouse") ? "pointer" : key.startsWith("Pad") ? "gamepad" : "keyboard";
+}
+
+let device: InputDevice = "pointer";
+const deviceListeners = new Set<() => void>();
+
+/**
+ * The device the last press came from, so a game can word its prompts for it ("Press Enter" at a keyboard, "Tap" otherwise). It is
+ * `"pointer"` until something is pressed: a game on a phone never names a key. A component reads it with `useInputDevice()`.
+ */
+export function getInputDevice(): InputDevice {
+  return device;
+}
+
+/** Hear each change of `getInputDevice()`; returns the function that stops listening. */
+export function watchInputDevice(listener: () => void): () => void {
+  deviceListeners.add(listener);
+  return () => {
+    deviceListeners.delete(listener);
+  };
+}
+
+/** Say which device is in use (the world does, from each step's first press; a test may). Listeners hear it only when it changes. */
+export function setInputDevice(next: InputDevice): void {
+  if (next === device) return;
+  device = next;
+  for (const listener of [...deviceListeners]) listener();
+}

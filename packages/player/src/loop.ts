@@ -22,13 +22,14 @@ import {
   type Pressable,
   type SoundSink,
   type StorageSink,
+  setInputDevice,
   type ViewTransform,
 } from "@tsengine/runtime";
 
 import type { Backend, WindowConfig } from "./backend.ts";
 import { CollisionTracker } from "./collide.ts";
 import { MAGENTA, parseColor } from "./color.ts";
-import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame, type ColliderEntry } from "./draw.ts";
+import { draggable, DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame, type ColliderEntry } from "./draw.ts";
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
@@ -179,6 +180,8 @@ const ALT_KEY = KEY_INDEX.get("Alt") as number;
  */
 export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const warner = new Warner(config.warn);
+  // Each game starts with nothing pressed yet (`getInputDevice()`), whatever an earlier player in this process was using.
+  setInputDevice("pointer");
 
   // Build the root first: if it is a `<Game>`, its props say what window to open. Sounds it creates only record their
   // paths for now; they are loaded below, once the window is open. Each game starts from the game state's initial
@@ -414,9 +417,28 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     return (failure = { error, note });
   };
 
+  /** Where the pointer is for a pressable, in its layer's coordinates (the HUD's for one in a `<Hud>`), or null for one no longer drawn. */
+  const pointFor = (pointer: Pressable): { readonly x: number; readonly y: number } | null => {
+    const index = pointers.indexOf(pointer);
+    if (index < 0) return null;
+    return index >= hudPointersFrom
+      ? input.pointThrough(hudView, input.screenX, input.screenY)
+      : input.worldPoint(input.screenX, input.screenY);
+  };
+  // Where the pointer was when the held pressable was last told (`onDragStart` or `onDrag`): `onDrag` is called only when it has moved.
+  let dragX = 0;
+  let dragY = 0;
+
   const dispatchPress = (): void => {
     // The button is up (or was let go since the last step): nothing is pressed any more. A press this step sets it again below.
-    if (((input.keys[LEFT_BUTTON] as number) & (TSE_KEY_DOWN | TSE_KEY_PRESSED)) === 0) world.reportRelease();
+    if (((input.keys[LEFT_BUTTON] as number) & (TSE_KEY_DOWN | TSE_KEY_PRESSED)) === 0) {
+      const held = world.pressed;
+      if (held !== null && held.onDragEnd !== undefined && held.world === world) {
+        const point = pointFor(held);
+        if (point !== null) held.onDragEnd(point.x, point.y);
+      }
+      world.reportRelease();
+    }
     if (((input.keys[LEFT_BUTTON] as number) & TSE_KEY_PRESSED) === 0) return;
     if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
     const at = input.worldPoint(input.screenX, input.screenY);
@@ -425,10 +447,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     // A <Flex> collected only for its hover callbacks lets the press through to what is under it.
     for (let i = pointers.length - 1; i >= 0; i--) {
       const pointer = pointers[i] as Pressable;
-      if (pointer.onPress === undefined && pointer instanceof Flex && pointer.widget === WIDGET_NONE) continue;
+      if (pointer.onPress === undefined && pointer instanceof Flex && pointer.widget === WIDGET_NONE && !draggable(pointer)) continue;
       const point = i >= hudPointersFrom ? hudAt : at;
       if (clippedOff(pointer as unknown as GameObject, point.x, point.y)) continue;
       if (world.reportPress(pointer, point.x, point.y)) {
+        dragX = point.x;
+        dragY = point.y;
         input.pressHandledNext = true;
         return;
       }
@@ -475,17 +499,20 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   };
 
   /**
-   * A press that is still held keeps telling the pressable it began on where the mouse is (`onDrag`), wherever the mouse has gone:
-   * a slider's thumb follows it out of the box. Pressing it already told it once (`onPressAt`); this is every step after.
+   * A press that is still held keeps telling the pressable it began on where the mouse is, wherever the mouse has gone: a slider's
+   * thumb follows it out of the box (`onHeldAt`, every step), and a drag hears each move (`onDrag`, when the mouse is somewhere new).
+   * Pressing it already told it once (`onPressAt`, `onDragStart`).
    */
   const dispatchDrag = (): void => {
     const held = world.pressed;
-    if (held === null || held.onDrag === undefined) return;
+    if (held === null || (held.onHeldAt === undefined && held.onDrag === undefined)) return;
     if (((input.keys[LEFT_BUTTON] as number) & TSE_KEY_DOWN) === 0) return;
-    const index = pointers.indexOf(held);
-    if (index < 0) return;
-    const point =
-      index >= hudPointersFrom ? input.pointThrough(hudView, input.screenX, input.screenY) : input.worldPoint(input.screenX, input.screenY);
+    const point = pointFor(held);
+    if (point === null) return;
+    held.onHeldAt?.(point.x, point.y);
+    if (held.onDrag === undefined || (point.x === dragX && point.y === dragY)) return;
+    dragX = point.x;
+    dragY = point.y;
     held.onDrag(point.x, point.y);
   };
 
