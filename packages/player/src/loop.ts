@@ -24,6 +24,7 @@ import {
   type SoundSink,
   type StorageSink,
   setInputDevice,
+  setWindowSize,
   type ViewTransform,
 } from "@tsengine/runtime";
 
@@ -290,6 +291,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     driver !== null && (game?.interpolate ?? config.interpolate ?? !(config.hidden ?? false)) ? new Interpolator() : null;
   input.values[TSE_IN_WIDTH] = width;
   input.values[TSE_IN_HEIGHT] = height;
+  // The window this game opened, whatever an earlier player in this process left (`getWindowSize()`); each frame keeps it up to date.
+  setWindowSize(width, height);
   const builder = new FrameBuilder({
     loadTexture: (path) => backend.loadTexture(path),
     loadShader: (path) => backend.loadShader?.(path) ?? -2,
@@ -713,6 +716,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
 
   function stepGame(): boolean {
     const started = clock();
+    // Before anything steps, so a handler and a render this frame see the window as it is now (a phone turned, a window dragged).
+    setWindowSize(input.width, input.height);
     toggleFullscreen();
     if (fpsKey !== undefined && ((input.keys[fpsKey] as number) & TSE_KEY_PRESSED) !== 0) showFps = !showFps;
     if (overlayKey !== undefined && ((input.keys[overlayKey] as number) & TSE_KEY_PRESSED) !== 0) {

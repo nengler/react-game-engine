@@ -808,5 +808,7 @@ export const runtimeManifest: RuntimeManifest = {
     readContext: 1,
     getInputDevice: 0,
     watchInputDevice: 1,
+    getWindowSize: 0,
+    watchWindowSize: 1,
   },
 };

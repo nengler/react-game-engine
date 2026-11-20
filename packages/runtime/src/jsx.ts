@@ -48,6 +48,8 @@ export { clamp, grace, shakeOn, springBack, startSpring, startTween, stepSpring,
 export { keepIfEqual } from "./equal.ts";
 export { getInputDevice, watchInputDevice, type InputDevice } from "./input.ts";
 import type { InputDevice } from "./input.ts";
+export { getWindowSize, watchWindowSize, type WindowSize } from "./window.ts";
+import type { WindowSize } from "./window.ts";
 export { createBall, type BallContact, type BallOptions } from "./ball.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
@@ -142,6 +144,17 @@ export function useSound(_path: string): (volume?: number) => void {
  */
 export function useInputDevice(): InputDevice {
   return compileTimeOnly("useInputDevice");
+}
+
+/**
+ * The window's size in logical pixels, kept up to date: `const window = useWindowSize();`, then
+ * `window.height > window.width && <RotatePrompt />` to ask a phone held upright to be turned. It is the window, not the game's
+ * resolution (a `<Screen>` is scaled into it), and the component renders only when it changes.
+ *
+ * An ordinary hook the engine ships (\`useMutable\` and \`useMount\`, inlined like any custom hook).
+ */
+export function useWindowSize(): WindowSize {
+  return compileTimeOnly("useWindowSize");
 }
 
 /** Anything that says when it changed: `subscribe` takes a listener and returns the function that stops it (`createSettings` stores do). */

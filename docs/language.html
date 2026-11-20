@@ -224,6 +224,7 @@ return <Panel title={`Bag (${total})`}>{rows.map((row) => <Label key={row.id}>{r
     <tr><td><code>useShake</code></td><td class="type">const shake = useShake()</td><td>Shipped hook: a camera shake that runs down</td></tr>
     <tr><td><code>useTime</code></td><td class="type">const time = useTime()</td><td>Shipped hook: seconds since mount, for blinking and bobbing</td></tr>
     <tr><td><code>useInputDevice</code></td><td class="type">const device = useInputDevice()</td><td>Shipped hook: <code>"keyboard"</code>, <code>"pointer"</code> or <code>"gamepad"</code>, by the last press</td></tr>
+    <tr><td><code>useWindowSize</code></td><td class="type">const window = useWindowSize()</td><td>Shipped hook: the window's <code>width</code> and <code>height</code>, in logical pixels</td></tr>
     <tr><td><code>useGame</code></td><td class="type">useGame((s) =&gt; s.player.hp)</td><td>Re-renders when that leaf changes</td></tr>
   </table></div>
 
@@ -441,12 +442,15 @@ const values = useStore(settings, settingsView);   // a store outside the game s
 
 const device = useInputDevice();                   // "keyboard", "pointer" or "gamepad": what was pressed last
 
+const window = useWindowSize();                    // { width, height } of the window, kept up to date
+
 const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });   // moves, stopped by what is solid
 
 const { x, y, contacts } = useBall({ x: 40, y: 0, radius: 6, gravity: 600 });      // falls and piles up with other balls
 </script></pre>
   <p><code>useStore(store, read)</code> takes anything with <code>subscribe(listener)</code> that returns a stop function (<code>createSettings</code> stores, <code>controls</code>, a store of your own) and a function of no arguments that returns what to show, both imported from <code>.ts</code> files. It renders only when the data <code>read</code> returns differs (<code>keepIfEqual</code>, which a handler can call too).</p>
   <p><code>useInputDevice()</code> says what the player is using, so a prompt can be worded for it: <code>device === "keyboard" ? "Press Enter" : "Tap to start"</code>. A mouse and a finger are both <code>"pointer"</code>: a touch is a left click to a game. It is <code>"pointer"</code> until something is pressed, so a game on a phone never names a key, and the component renders only when it changes. Outside a component, <code>getInputDevice()</code> reads the same value.</p>
+  <p><code>useWindowSize()</code> is the window's size in logical pixels (a phone's points), so a landscape game can ask a phone held upright to be turned: <code>window.height &gt; window.width &amp;&amp; &lt;RotatePrompt /&gt;</code>. It is the window, not the game's resolution: a <code>&lt;Screen&gt;</code> is still scaled into it as its <code>fit</code> says. The component renders only when the size changes. Outside a component, <code>getWindowSize()</code> reads the same value, and a test can set it with <code>setWindowSize(width, height)</code>.</p>
 
   <h3>Plain functions and constants</h3>
   <p>Import functions and constants from a relative <code>.ts</code> file and use them in any expression: a prop, a derived value, a handler. You can also pass a function as a value. The compiler does not look inside: TypeScript checks the call, and the function is assumed pure. Loops, arrays and anything else are fine in its body.</p>
