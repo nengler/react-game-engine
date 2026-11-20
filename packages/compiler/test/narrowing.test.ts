@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
  */
 import { after, describe, it } from "node:test";
 
-import { World } from "@tsengine/runtime";
+import { Text, World, type Entity } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
@@ -142,6 +142,37 @@ export function Offer({ offers, cursor }: { offers: readonly string[]; cursor: n
   </Entity>;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
+  });
+
+  it("a memo tested under an outer condition is read once there, so the test narrows what the branch passes on (Jam Jar's pool board)", async () => {
+    const compiled = compile(`const NAMES: Record<string, string> = { cherry: "Cherry", grape: "Grape" };
+function Tip({ kind }: { kind: string }) { return <Text>{NAMES[kind] ?? kind}</Text>; }
+export function Board({ rows, at, open }: { rows: readonly { kind: string }[]; at: number; open: boolean }) {
+  const looked = rows[at]?.kind ?? null;
+  const row = rows[at];
+  return <Entity>
+    {open && <Flex>
+      <Flex>{looked !== null && <Tip kind={looked} />}</Flex>
+      {row !== undefined && <Text>{\`take out \${NAMES[row.kind]}\`}</Text>}
+    </Flex>}
+  </Entity>;
+}`);
+    assert.deepEqual(typeCheck(compiled), [], "no `?? fallback` is needed for the branch's `looked` or `row.kind`");
+    type Props = { rows: readonly { kind: string }[]; at: number; open: boolean };
+    const { Board } = await load<{ Board: new (p: Props) => Entity & { updateProps(p: Props): void } }>(compiled);
+    const texts = (e: Entity): string[] => [...(e instanceof Text ? [e.text] : []), ...e.children.flatMap((c) => texts(c as Entity))];
+    const rows = [{ kind: "cherry" }, { kind: "grape" }];
+    const board = new Board({ rows, at: -1, open: true });
+    const world = new World();
+    world.mount(board);
+    world.flush();
+    assert.deepEqual(texts(board), []);
+    board.updateProps({ rows, at: 1, open: true });
+    world.flush();
+    assert.deepEqual(texts(board), ["Grape", "take out Grape"]);
+    board.updateProps({ rows, at: 1, open: false });
+    world.flush();
+    assert.deepEqual(texts(board), []);
   });
 
   it("checks nothing: a callback still runs when its condition no longer holds (a useUnmount telling the parent)", async () => {

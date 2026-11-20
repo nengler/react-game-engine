@@ -1397,7 +1397,8 @@ and the defaults apply. A `<Game>` root overrides them, each prop only where it 
 `undefined` on the object, which is how the player knows to fall back.
 
 **Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
-(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `TSE1210`. Two are exceptions (below):
+(`width={640}`, `smooth`, `resizable={false}`) or a constant imported from a `.ts` module (`background={WALL}`), never state
+or props: anything else is `TSE1210`. Two are exceptions (below):
 `timeScale` and `paused` are read every frame and may be state. `<Game>` is only ever a
 component's root: as a child it is `TSE1003`. It is not placed, so it takes no `x` or `y`. A prop it does not have is
 `TSE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any

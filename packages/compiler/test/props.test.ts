@@ -363,6 +363,38 @@ function Panel({ onDone }: PanelProps) {
     world.tick(1);
     assert.deepEqual([done, replaced], [1, 1], "an updated callback reaches the child");
   });
+
+  it("tests whether an optional callback prop was passed (`onAdjust === undefined`), in the tree and in a handler", async () => {
+    const compiled = compile(`interface RowProps { label: string; onAdjust?: (by: number) => void }
+function Row({ label, onAdjust }: RowProps) {
+  useInput((input) => {
+    if (onAdjust === undefined) return;
+    if (input.pressed("Right")) onAdjust(1);
+  });
+  return <Entity name="Row">{onAdjust !== undefined && <Text>{\`\${label} <>\`}</Text>}{null == onAdjust && <Text>{label}</Text>}</Entity>;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Row } = await load<{
+      Row: new (props: { label: string; onAdjust?: (by: number) => void }) => Entity & { updateProps(p: object): void };
+    }>(compiled);
+    const texts = (row: Entity): string[] => row.children.flatMap((c) => ("text" in c ? [String(c.text)] : []));
+    const world = new World();
+    const plain = new Row({ label: "a" });
+    world.mount(plain);
+    world.flush();
+    assert.deepEqual(texts(plain), ["a"]);
+    const moved: number[] = [];
+    plain.updateProps({ label: "a", onAdjust: (by: number) => moved.push(by) });
+    world.flush();
+    assert.deepEqual(texts(plain), ["a <>"], "passing it later is seen");
+    world.tick(1 / 60, { pressed: (k: string) => k === "Right", down: () => false, released: () => false } as never);
+    assert.deepEqual(moved, [1]);
+    assert.match(
+      compileErrors(`function A({ onGo }: { onGo?: () => void }) { const f = onGo; return <Entity />; }`)[0]!.message,
+      /'onGo' is a callback prop: call it/,
+      "read as a value otherwise, it is still an error"
+    );
+  });
 });
 
 describe("props across files", () => {

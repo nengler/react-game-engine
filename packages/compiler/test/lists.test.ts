@@ -746,22 +746,45 @@ export function Foes() {
 });
 
 describe("a list under a condition", () => {
-  it("is written in a fragment, and `{condition && items.map(…)}` says so", () => {
-    const [error] = compileErrors(
-      withAuthoring(`
+  const BARE = `
 export function Row({ items, show }: { items: { id: number }[]; show: boolean }) {
   return <Entity>{show && items.map((e) => <Sprite key={e.id} image="a.png" />)}</Entity>;
-}`)
-    );
-    assert.equal(error?.code, DiagnosticCode.UnsupportedJsxChild);
-    assert.match(error.message, /A list under a condition goes in a fragment: `\{condition && <>\{items\.map/);
-    const compiled = compile(
-      withAuthoring(`
+}`;
+  const FRAGMENT = `
 export function Row({ items, show }: { items: { id: number }[]; show: boolean }) {
   return <Entity>{show && <>{items.map((e) => <Sprite key={e.id} image="a.png" />)}</>}</Entity>;
-}`)
-    );
-    assert.deepEqual(typeCheck(compiled), []);
+}`;
+
+  it("`{condition && items.map(…)}` compiles as the list in a fragment under the condition", () => {
+    const bare = compile(withAuthoring(BARE));
+    assert.deepEqual(typeCheck(bare), []);
+    assert.equal(bare.code, compile(withAuthoring(FRAGMENT)).code, "the same code as the fragment written out");
+  });
+
+  it("shows the list while the condition holds, and nothing while it does not", async () => {
+    type Props = { items: { id: number }[]; show: boolean };
+    const { Row } = await load<{ Row: new (p: Props) => Entity & { updateProps(next: Props): void } }>(compile(withAuthoring(BARE)));
+    const items = [{ id: 1 }, { id: 2 }];
+    const row = new Row({ items, show: true });
+    const world = new World();
+    world.mount(row);
+    world.flush();
+    const sprites = (): number => {
+      let n = 0;
+      const walk = (e: Entity): void => {
+        if (e instanceof Sprite) n++;
+        e.children.forEach((c) => walk(c as Entity));
+      };
+      walk(row);
+      return n;
+    };
+    assert.equal(sprites(), 2);
+    row.updateProps({ items, show: false });
+    world.flush();
+    assert.equal(sprites(), 0);
+    row.updateProps({ items: [...items, { id: 3 }], show: true });
+    world.flush();
+    assert.equal(sprites(), 3);
   });
 });
 

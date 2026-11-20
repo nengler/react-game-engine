@@ -914,9 +914,9 @@ export class ElementLowering extends HookLowering {
   }
 
   /**
-   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`), and
-   * `controls={controls}` the game's actions, imported from a .ts module. Anything else (a state read, an expression)
-   * would not exist yet, so it is `TSE1210`.
+   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`) or a
+   * constant imported from a .ts module (`width={SCREEN_W}`), and `controls={controls}` the game's actions, imported the same
+   * way. Anything else (a state read, an expression) would not exist yet, so it is `TSE1210`.
    */
   protected lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
     if (name === "controls") {
@@ -947,6 +947,12 @@ export class ElementLowering extends HookLowering {
   }
 
   protected gameLiteral(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
+    // A constant imported from a .ts module (`width={SCREEN_W}`) is made when that module loads, before the tree is built, as a
+    // literal is: the same reason `controls={controls}` may be passed.
+    const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
+    if (expression && isIdentifier(expression) && this.plainImports.has(expression.text) && !this.scope.has(expression.text)) {
+      return { kind: "PlainRef", name: expression.text };
+    }
     let value: ExprIR | null = null;
     if (!init) value = { kind: "BooleanLiteral", value: true };
     else if (isStringLiteral(init)) value = { kind: "StringLiteral", value: init.text };
@@ -964,7 +970,7 @@ export class ElementLowering extends HookLowering {
     if (!value || !literal) {
       this.report(
         DiagnosticCode.InvalidPropValue,
-        `<${GAME_TAG} ${name}> must be a literal (a number, string or true/false): the player reads it before the tree is built, so it cannot depend on state or props.`,
+        `<${GAME_TAG} ${name}> must be a literal (a number, string or true/false) or a constant imported from a .ts module: the player reads it before the tree is built, so it cannot depend on state or props.`,
         at
       );
       return null;
@@ -1053,11 +1059,22 @@ export class ElementLowering extends HookLowering {
         return;
       }
       if (isCallExpression(right) && isPropertyAccessExpression(right.expression) && right.expression.name.text === "map") {
-        this.report(
-          DiagnosticCode.UnsupportedJsxChild,
-          "A list under a condition goes in a fragment: `{condition && <>{items.map((item) => <Element key={item.id} />)}</>}`.",
-          child
-        );
+        // `{condition && items.map(…)}`: the list in a fragment of its own under the condition, as `{condition && <>{items.map(…)}</>}`.
+        const condition = this.lowerNode(expression.left);
+        const list = this.lowerList(right, [...path, 0]);
+        if (condition && list) {
+          const element: ElementIR = {
+            kind: "Element",
+            id: elementId(this.component.name, path),
+            fieldName: this.allocateFieldName(this.hostIntrinsic, null),
+            component: { kind: "Intrinsic", name: this.hostIntrinsic },
+            props: [],
+            transform: [],
+            children: [list],
+            span: this.span(child),
+          };
+          out.push({ kind: "ConditionalChild", condition, dependencies: collectDependencies(condition), element });
+        }
         return;
       }
     }

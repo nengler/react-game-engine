@@ -74,6 +74,9 @@ import { TIMER_FUNCTIONS, WORLD_FUNCTIONS, BINARY_OPERATORS, UNARY_OPERATORS, ne
 import { LoweringBase } from "./lowering.ts";
 import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./statements.ts";
 
+/** The comparisons that may test an optional callback prop against `undefined` or `null`. */
+const EQUALITY_OPERATORS: ReadonlySet<string> = new Set(["===", "!==", "==", "!="]);
+
 /** What to write instead of a call the browser or Node has and a component does not: the game's clock and its replays decide. */
 const TIMERS_INSTEAD =
   "runs on the game's clock in a component: `after(seconds, () => …)` calls once and `every(seconds, () => …)` repeats, both pausing with the game and stopping when the component leaves. Each returns an id: `cancelTimer(id)` stops that one sooner, `cancelTimers()` all of them.";
@@ -265,8 +268,17 @@ export class ExpressionLowering extends LoweringBase {
         );
         return null;
       }
-      const left = this.lowerNode(node.left);
-      const right = this.lowerNode(node.right);
+      // `onAdjust === undefined`: whether an optional callback prop was passed may be tested, though its value is not read otherwise.
+      const absent = (side: Expression): boolean =>
+        side.kind === SyntaxKind.NullKeyword || (isIdentifier(side) && side.text === "undefined" && !this.scope.has("undefined"));
+      const named = (side: Expression): boolean =>
+        isIdentifier(side) || (isPropertyAccessExpression(side) && isIdentifier(side.expression));
+      const tested = (side: Expression, other: Expression): ExprIR | null =>
+        EQUALITY_OPERATORS.has(operator) && absent(other) && named(side)
+          ? this.within({ allowCallbackRead: true }, () => this.lowerNode(side))
+          : this.lowerNode(side);
+      const left = tested(unwrapParens(node.left), unwrapParens(node.right));
+      const right = tested(unwrapParens(node.right), unwrapParens(node.left));
       return left && right && { kind: "Binary", operator, left, right };
     }
     if (isConditionalExpression(node)) {
