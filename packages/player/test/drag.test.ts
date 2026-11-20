@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** Dragging a pressable: `onDragStart`, `onDrag` and `onDragEnd` (see `PressableProps`). */
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Flex, Pointer, Text, getSoundSink, getInputDevice, type GameObject } from "@tsengine/runtime";
+import { Entity, Flex, Pointer, Text, getSoundSink, getInputDevice, getWindowSize, type GameObject } from "@tsengine/runtime";
 
 import { playGame } from "../src/harness.ts";
 import { createPlayer } from "../src/loop.ts";
@@ -143,6 +143,21 @@ describe("the device in use", () => {
     const again = play(() => new Entity({}));
     assert.equal(getInputDevice(), "pointer", "a new game starts with nothing pressed");
     again.p.close();
+  });
+});
+
+describe("the window's size", () => {
+  it("is the window the game opened, then follows it as it changes", () => {
+    const { p, step } = play(() => new Entity({}));
+    assert.deepEqual(getWindowSize(), { width: WINDOW.width, height: WINDOW.height });
+    // The recording backend reports a frame's input as that frame ends, so the next step is the first to see it.
+    step({ width: 390, height: 844 });
+    step({});
+    assert.deepEqual(getWindowSize(), { width: 390, height: 844 }, "a phone held upright");
+    step({ width: 844, height: 390 });
+    step({});
+    assert.deepEqual(getWindowSize(), { width: 844, height: 390 }, "and turned");
+    p.close();
   });
 });
 

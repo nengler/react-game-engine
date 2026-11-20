@@ -609,6 +609,12 @@ and both are what any other game would write again, so they moved here.
   mounted pressables once a press (clicks are rare), and "inside" is by the tree, not by the box: the box around a row of cards
   takes the handler, a tap on a card is inside it, and a tap in the gap between two cards lands on nothing and is outside. It is
   called after the target's own `onPress`.
+- **`useWindowSize()`** (2026-11-20) returns the window's `{ width, height }` in logical pixels. Jam Jar is laid out at 640 × 360,
+  and on a phone held upright it was a small strip with bars above and below; it wanted to ask for the phone to be turned, and
+  only the player knew the window's shape (`FrameBuilder.build` fits the `<Screen>` into it). The size lives in the runtime
+  module (`window.ts`), as the input device does: the player sets it when it opens the window and at the start of every frame,
+  before anything steps, and the hook is a `useMutable` and a `useMount` that subscribes (`watchWindowSize`). It is the window,
+  not the game's resolution, so a game can choose a layout from it without the `<Screen>` changing under it.
 
 ### `playGame`: a test that waits for the game (2026-11-20)
 

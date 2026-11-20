@@ -6,7 +6,7 @@
  */
 export const LIBRARY_FILE = "tse:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { createBall, createBody, getInputDevice, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate, watchInputDevice } from "@tsengine/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBall, createBody, getInputDevice, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate, watchInputDevice, getWindowSize, watchWindowSize } from "@tsengine/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \`recover\` a second.
@@ -165,6 +165,24 @@ export function useInputDevice() {
   });
   return s.device;
 }
+
+/**
+ * The window's size in logical pixels, { width, height }, kept up to date. It renders only when that changes.
+ *   const window = useWindowSize();
+ */
+export function useWindowSize() {
+  const s = useMutable({ width: getWindowSize().width as number, height: getWindowSize().height as number });
+  useMount(() => {
+    // Read again: the window may have changed between the component being made and its joining the tree.
+    if (s.width !== getWindowSize().width) s.width = getWindowSize().width;
+    if (s.height !== getWindowSize().height) s.height = getWindowSize().height;
+    return watchWindowSize(() => {
+      s.width = getWindowSize().width;
+      s.height = getWindowSize().height;
+    });
+  });
+  return { width: s.width, height: s.height };
+}
 `;
 
 /** The names of the library's hooks. */
@@ -174,6 +192,7 @@ export const LIBRARY_HOOKS: readonly string[] = [
   "useTime",
   "useStore",
   "useInputDevice",
+  "useWindowSize",
   "useBody",
   "useBall",
   "useSpring",

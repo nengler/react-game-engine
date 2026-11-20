@@ -179,6 +179,7 @@ export {
   watchInputDevice,
   type InputDevice,
 } from "./input.ts";
+export { getWindowSize, setWindowSize, watchWindowSize, type WindowSize } from "./window.ts";
 export {
   clamp,
   textOf,
