@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 
 import { Entity, Flex, Pointer, getSoundSink, getInputDevice, type GameObject } from "@tsengine/runtime";
 
+import { playGame } from "../src/harness.ts";
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type InputFrame } from "../src/recording.ts";
 
@@ -142,5 +143,106 @@ describe("the device in use", () => {
     const again = play(() => new Entity({}));
     assert.equal(getInputDevice(), "pointer", "a new game starts with nothing pressed");
     again.p.close();
+  });
+});
+
+describe("onPressOutside", () => {
+  afterEach(() => {
+    assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  /** A row of two cards in a box that hears presses outside it, a button apart from them, and a box of its own with a handler. */
+  function scene(heard: string[]) {
+    const root = new Entity({});
+    const row = new Flex({ direction: "row", gap: 10, onPressOutside: () => heard.push("row") });
+    row.addChild(new Flex({ width: 40, height: 20, onPress: () => heard.push("card a") }));
+    row.addChild(new Flex({ width: 40, height: 20, onPress: () => heard.push("card b") }));
+    root.addChild(row);
+    const button = new Pointer({
+      width: 20,
+      height: 20,
+      onPress: () => heard.push("button"),
+      onPressOutside: () => heard.push("button out"),
+    });
+    button.transform.x = 200;
+    root.addChild(button);
+    return { root, row };
+  }
+
+  it("is called for a press on nothing or on another pressable, after that one's own press, and not for a press inside", () => {
+    const heard: string[] = [];
+    const { p, step } = play(() => scene(heard).root);
+    const tap = (x: number, y: number): string[] => {
+      heard.length = 0;
+      step({ mouse: { x, y } });
+      step({ mouse: { x, y }, pressed: ["MouseLeft"], down: ["MouseLeft"] });
+      step({ mouse: { x, y } });
+      return [...heard];
+    };
+    assert.deepEqual(tap(5, 5), ["card a", "button out"], "on a card: inside the row");
+    assert.deepEqual(tap(60, 5), ["card b", "button out"]);
+    assert.deepEqual(tap(45, 5), ["row", "button out"], "between the cards: on nothing, so outside both");
+    assert.deepEqual(tap(205, 5), ["button", "row"], "on the button: its press first, then the row hears it was elsewhere");
+    assert.deepEqual(tap(300, 200), ["row", "button out"], "on nothing at all");
+    p.close();
+  });
+
+  it("is not called for one that is inert, or gone from the tree", () => {
+    const heard: string[] = [];
+    const made = scene(heard);
+    const { p, step } = play(() => made.root);
+    const tap = (): void => {
+      step({ mouse: { x: 300, y: 200 } });
+      step({ mouse: { x: 300, y: 200 }, pressed: ["MouseLeft"], down: ["MouseLeft"] });
+      step({ mouse: { x: 300, y: 200 } });
+    };
+    made.row.inert = true;
+    tap();
+    assert.deepEqual(heard, ["button out"]);
+    made.row.inert = false;
+    made.root.removeChild(made.row);
+    tap();
+    assert.deepEqual(heard, ["button out", "button out"]);
+    p.close();
+  });
+});
+
+describe("playGame", () => {
+  it("plays a game a piece at a time: a script, then steps until something is true", () => {
+    let presses = 0;
+    let ticks = 0;
+    class Counter extends Entity {
+      override onUpdate(): void {
+        ticks++;
+      }
+    }
+    const game = playGame({
+      ...WINDOW,
+      root: () => {
+        const root = new Counter({});
+        root.addChild(new Pointer({ width: 20, height: 20, onPress: () => presses++ }));
+        return root;
+      },
+    });
+    game.input("click@5,5, _");
+    assert.equal(presses, 1);
+    const before = ticks;
+    assert.equal(
+      game.stepUntil(() => ticks >= before + 10),
+      10,
+      "as many steps as it took"
+    );
+    assert.equal(game.steps, 12);
+    assert.equal(
+      game.stepUntil(() => true),
+      0,
+      "already true: no step"
+    );
+    assert.throws(() => game.stepUntil(() => false, { maxSteps: 5 }), /not done after 5 steps/);
+    assert.equal(
+      game.stepUntil(() => false, { maxSteps: 5, throws: false }),
+      5
+    );
+    game.close();
   });
 });

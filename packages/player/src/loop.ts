@@ -454,9 +454,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
         dragX = point.x;
         dragY = point.y;
         input.pressHandledNext = true;
+        // A disabled one swallows the press without becoming the pressed one: it is still what the press landed on.
+        world.reportPressOutside(pointer);
         return;
       }
     }
+    world.reportPressOutside(null);
   };
 
   /** Whether a point is cut off from `object` by an ancestor that clips (`overflow`): a part of a child outside the box that clips it cannot be pressed or hovered. */

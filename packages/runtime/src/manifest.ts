@@ -111,12 +111,12 @@ export interface HandleTypeManifest {
 }
 
 /** What a `<Flex>` has as fields (its methods are listed after them), which `Slider` and `Toggle` have too. */
-/** The drag callbacks every pressable takes, each told where the pointer is. */
+/** The drag callbacks every pressable takes, each told where the pointer is, and `onPressOutside`, told nothing. */
 const DRAG_POINT = [
   { name: "x", type: "number" },
   { name: "y", type: "number" },
 ];
-const DRAG_CALLBACKS = { onDragStart: DRAG_POINT, onDrag: DRAG_POINT, onDragEnd: DRAG_POINT };
+const DRAG_CALLBACKS = { onDragStart: DRAG_POINT, onDrag: DRAG_POINT, onDragEnd: DRAG_POINT, onPressOutside: [] };
 
 const FLEX_FIELDS = [
   "direction",
@@ -188,6 +188,7 @@ const FLEX_FIELDS = [
   "onDragStart",
   "onDrag",
   "onDragEnd",
+  "onPressOutside",
   "pressKey",
   "focusable",
   "autoFocus",
@@ -319,6 +320,7 @@ export const runtimeManifest: RuntimeManifest = {
       "onDragStart",
       "onDrag",
       "onDragEnd",
+      "onPressOutside",
       "pressKey",
       "focusable",
       "autoFocus",

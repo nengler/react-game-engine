@@ -222,6 +222,22 @@ export class World implements BodySpace, BallSpace {
     return true;
   }
 
+  /**
+   * A left press landed on `target` (null: on nothing). Every mounted pressable with an `onPressOutside` hears it, unless the
+   * target is it or inside it, or it is inert. The player calls this once for each press on the game's screen, after the press itself.
+   */
+  reportPressOutside(target: Pressable | null): void {
+    const anyInert = this.#hasInert();
+    // A copy: a handler may take pressables out of the world.
+    for (const p of [...this.#pressables]) {
+      if (p.onPressOutside === undefined || p.world !== this) continue;
+      if (anyInert && this.isInert(p)) continue;
+      let inside = false;
+      for (let at = target as unknown as GameObject | null; at !== null && !inside; at = at.parent) inside = at === p;
+      if (!inside) p.onPressOutside();
+    }
+  }
+
   #pressed: Pressable | null = null;
 
   /** The pressable a press began on, while the mouse button is still held (null for none): what a `<Flex>`'s `pressed*` props are drawn for. */

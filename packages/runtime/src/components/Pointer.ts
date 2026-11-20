@@ -20,6 +20,8 @@ export interface Pressable {
    * frame, and neighbours with one parent (the tiles of a grid) then share one walk up the tree.
    */
   containsIn?(parentSpace: WorldTransform, x: number, y: number): boolean;
+  /** A press landed somewhere else: on nothing, or on a pressable that is not this one or inside it (see `PressableProps.onPressOutside`). */
+  onPressOutside?: (() => void) | undefined;
   /** A key or an action (`"wave"`) whose press calls `onPress`, like the DOM's `accessKey` (see `World.tick`). */
   pressKey?: string | undefined;
   /** It takes the focus: the arrow keys move between focusable things, and the confirm key presses the focused one. */
@@ -64,6 +66,13 @@ export interface PressableProps {
   onDragStart?: (x: number, y: number) => void;
   onDrag?: (x: number, y: number) => void;
   onDragEnd?: (x: number, y: number) => void;
+  /**
+   * Called when a click or a tap lands anywhere but on it or on something inside it: on nothing at all, or on another pressable.
+   * What closes a menu, or puts away what a tap chose: a row of cards takes `onPressOutside={clear}` on the box around them, so
+   * a tap on any card is inside and a tap anywhere else clears. It is called after the `onPress` of what the press did land on.
+   * A press off the game's screen, and one while it is inert, call nothing.
+   */
+  onPressOutside?: () => void;
   /**
    * A key (`"Space"`) or an action of the game's controls (`"wave"`) that presses it, as a click would, while it is mounted and not
    * inert: a button that owns its shortcut, as the DOM's `accessKey`. Every mounted pressable with that key is pressed.
@@ -113,6 +122,7 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
   onDragStart: ((x: number, y: number) => void) | undefined;
   onDrag: ((x: number, y: number) => void) | undefined;
   onDragEnd: ((x: number, y: number) => void) | undefined;
+  onPressOutside: (() => void) | undefined;
   originX: number;
   originY: number;
   pressKey: string | undefined;
@@ -133,6 +143,7 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
     this.onDragStart = hostProps.onDragStart;
     this.onDrag = hostProps.onDrag;
     this.onDragEnd = hostProps.onDragEnd;
+    this.onPressOutside = hostProps.onPressOutside;
     this.originX = hostProps.originX ?? 0;
     this.originY = hostProps.originY ?? 0;
     this.pressKey = hostProps.pressKey;
