@@ -618,6 +618,28 @@ at a pick. `playGame(config, { bindings })` (`player/src/harness.ts`) is the sam
 `input(script)` runs a script, `stepUntil(done)` steps with nothing pressed until `done()` is true (throwing after `maxSteps`),
 and the test reads the game between them. `Rendered.stepUntil` already did this for one component; this is it for a game.
 
+### Four things Jam Jar's tutorial ran into (2026-11-20)
+
+- **`typeof this.x` after an optional chain.** A changing prop of a built-in was written to a local typed
+  `(typeof this.text8)["text"]`. TypeScript 7.1 (beta) reports "Cannot find name 'this'" for such a type once an optional chain
+  has been a condition anywhere earlier in the method: `if (r?.target === "x") {}` and then `const a: (typeof this.t)["text"]`
+  is the whole reproduction. So `{lesson?.target === "jar" && <Spotlight />}` above any element with a changing prop broke
+  `render()`, with an error pointing at the other element. The local is now typed through the built-in's class
+  (`Text["text"]`), which needs no `this` and no narrowing.
+- **A null check on a derived value, carried into a child's props.** `{lesson !== null && open && <Coach lesson={lesson} />}`
+  with `lesson` a memo: the child's prop getter tested the memo and returned the memo, two calls TypeScript cannot narrow
+  between. The getter now reads each memo its conditions read once into a local, as a callback made under a condition already
+  did (`callback`), and tests and returns the local.
+- **`click@Play` in an input script.** A script named a point, which was wrong the day a button moved, and wrong silently: a
+  screenshot of the title when the run was wanted. A label is looked up when its frame comes up (`Player.pointOf`: the middle of
+  the topmost pressable holding a `<Text>` of exactly that text, through the view it was drawn with), by the backends that
+  feed scripted frames (`aimFrame`), since only then is it known what is on screen. A label that is not there throws.
+- **`tse screenshot --gpu`'s error** now names the packages the desktop build needs on Debian and Ubuntu; it is how a shader is
+  looked at, and it said only that the build was missing.
+
+Not changed: a box in a row or column can already be moved without moving its neighbours, by its own `x` and `y` (LAYOUT.md,
+"A child's own `x`, `y`, `rotation` and scale move it within its slot"). The game had animated a whole column for want of knowing it.
+
 ## Why there is no `useEffect` (2026-11-12)
 
 `useEffect` is the first hook a React author reaches for, and it stays out on purpose; each of its uses has a replacement,

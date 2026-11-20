@@ -154,6 +154,12 @@ export interface InputFrame {
   readonly width?: number;
   readonly height?: number;
   readonly mouse?: { readonly x: number; readonly y: number };
+  /**
+   * The mouse is on what is labelled this (`click@Play` in an input script): the middle of the topmost thing that can be
+   * pressed and holds that text. `fresh` on the frame that moves it there, where the label is looked up in the game as it is
+   * drawn; on the frames after, the mouse stays where that found it. A backend that feeds scripted frames resolves it (`aimFrame`).
+   */
+  readonly aim?: { readonly label: string; readonly fresh: boolean };
   readonly wheel?: number;
   readonly quit?: boolean;
   /** Went down this frame (so it is also down). */
@@ -231,6 +237,8 @@ export class RecordingBackend implements Backend {
   readonly #missingSounds: Set<string>;
   readonly #textureSizes: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
   readonly #queue: InputFrame[] = [];
+  /** How a frame's `aim` (a label, `click@Play`) is found: the harness sets `aim.lookup` to its player's `pointOf`. */
+  readonly aim: AimState = { lookup: undefined, last: undefined };
 
   constructor(options: RecordingOptions = {}) {
     this.#keepFrames = options.keepFrames;
@@ -364,7 +372,7 @@ export class RecordingBackend implements Backend {
     if (this.#keepFrames !== undefined && this.frames.length > this.#keepFrames)
       this.frames.splice(0, this.frames.length - this.#keepFrames);
 
-    const next = this.#queue.shift() ?? {};
+    const next = aimFrame(this.#queue.shift() ?? {}, this.aim);
     this.#typed = next.typed ?? "";
     applyInputFrame(next, input, keys, this.config?.width ?? 0, this.config?.height ?? 0);
   }
@@ -533,6 +541,40 @@ export class RecordingBackend implements Backend {
  * Write one scripted frame into the buffers a backend fills at the end of `frame`. A value the frame leaves out is zero
  * (and no key is down), except `dt` (1/60) and the window size, which fall back to `width` and `height`.
  */
+/** Finds where a label is on screen, in window pixels: `Player.pointOf`. Null when nothing that can be pressed holds it. */
+export type AimLookup = (label: string) => { readonly x: number; readonly y: number } | null;
+
+/** What a backend keeps between frames to resolve `InputFrame.aim`: how labels are looked up, and where the last one was. */
+export interface AimState {
+  lookup: AimLookup | undefined;
+  /** The labels that could be aimed at now (`Player.labels`), for the error when one is not there. */
+  labels?: (() => readonly string[]) | undefined;
+  last: { readonly x: number; readonly y: number } | undefined;
+}
+
+/**
+ * A scripted frame with its `aim` turned into a mouse position: looked up now for a `fresh` one (the game as it was just drawn,
+ * which is what the step that reads this frame will act on), the same place again for the frames after it.
+ */
+export function aimFrame(frame: InputFrame, state: AimState): InputFrame {
+  if (frame.aim === undefined) return frame;
+  if (frame.aim.fresh) {
+    if (state.lookup === undefined)
+      throw new Error(
+        `'${frame.aim.label}' in an input script names something on screen, which this run cannot look up: give the mouse a point (click@x,y).`
+      );
+    const found = state.lookup(frame.aim.label);
+    if (found === null) {
+      const there = state.labels?.() ?? [];
+      throw new Error(
+        `An input script aims at '${frame.aim.label}', and nothing that can be pressed is labelled that now.${there.length > 0 ? ` What can be pressed is labelled: ${there.join(", ")}.` : ""}`
+      );
+    }
+    state.last = found;
+  }
+  return state.last === undefined ? frame : { ...frame, mouse: state.last };
+}
+
 export function applyInputFrame(next: InputFrame, input: Float64Array, keys: Uint8Array, width: number, height: number): void {
   input[TSE_IN_DT] = next.dt ?? 1 / 60;
   input[TSE_IN_WIDTH] = next.width ?? width;

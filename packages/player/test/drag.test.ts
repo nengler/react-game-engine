@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** Dragging a pressable: `onDragStart`, `onDrag` and `onDragEnd` (see `PressableProps`). */
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Flex, Pointer, getSoundSink, getInputDevice, type GameObject } from "@tsengine/runtime";
+import { Entity, Flex, Pointer, Text, getSoundSink, getInputDevice, type GameObject } from "@tsengine/runtime";
 
 import { playGame } from "../src/harness.ts";
 import { createPlayer } from "../src/loop.ts";
@@ -242,6 +242,49 @@ describe("playGame", () => {
     assert.equal(
       game.stepUntil(() => false, { maxSteps: 5, throws: false }),
       5
+    );
+    game.close();
+  });
+});
+
+describe("an input script aims at what is on screen by its label", () => {
+  /** Two buttons side by side, each a box with its label in it, and what was pressed. */
+  function menu(pressed: string[]) {
+    const button = (label: string, x: number): Flex => {
+      const box = new Flex({ width: 60, height: 20, onPress: () => pressed.push(label) });
+      box.transform.x = x;
+      box.addChild(new Text({ text: label }));
+      return box;
+    };
+    return () => {
+      const root = new Entity({});
+      root.addChild(button("Play", 20));
+      root.addChild(button("New run", 200));
+      return root;
+    };
+  }
+
+  it("click@Label taps the middle of the thing that holds that text, wherever it is", () => {
+    const pressed: string[] = [];
+    const game = playGame({ ...WINDOW, root: menu(pressed) });
+    game.input("_, click@Play, _*2");
+    assert.deepEqual(pressed, ["Play"]);
+    game.input("click@New run, _*2");
+    assert.deepEqual(pressed, ["Play", "New run"], "a label may have a space in it");
+    assert.deepEqual(game.player.pointOf("New run"), { x: 230, y: 10 }, "the middle of its box");
+    assert.equal(game.player.pointOf("Quit"), null);
+    game.close();
+  });
+
+  it("the mouse stays where a label put it, and a label that is not on screen is an error that names it", () => {
+    const pressed: string[] = [];
+    const game = playGame({ ...WINDOW, root: menu(pressed) });
+    game.input("_, mouse@Play, _, MouseLeft, _*2");
+    assert.deepEqual(pressed, ["Play"], "moved there by its label, pressed two frames on");
+    game.stepUntil(() => true);
+    assert.throws(
+      () => game.input("click@Quit, _"),
+      /aims at 'Quit', and nothing that can be pressed is labelled that now\. What can be pressed is labelled: New run, Play\./
     );
     game.close();
   });

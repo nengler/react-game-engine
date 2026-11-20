@@ -2,6 +2,7 @@ import {
   activeProfiler,
   Flex,
   Game,
+  Text,
   IDENTITY_TRANSFORM,
   WIDGET_NONE,
   World,
@@ -110,6 +111,13 @@ export interface Player {
   /** Run one frame. Returns false once the window has asked to close (that frame is still drawn). */
   step(): boolean;
   /**
+   * Where what is labelled `label` is, in window pixels: the middle of the topmost thing that can be pressed and holds a `<Text>`
+   * of exactly that text, as the last frame drew it. Null when there is none. What `click@Play` in an input script looks up.
+   */
+  pointOf(label: string): { readonly x: number; readonly y: number } | null;
+  /** The text of every `<Text>` in something that can be pressed, as the last frame drew them, topmost first: what `pointOf` can find. */
+  labels(): string[];
+  /**
    * The error the game stopped with, while the window shows it (see `PlayerConfig.showErrors`); null while the game runs. The
    * world is left as the error found it and is not stepped, so a `reload` can still take its state.
    */
@@ -178,6 +186,19 @@ const ALT_KEY = KEY_INDEX.get("Alt") as number;
  * The press uses last frame's pointers because that is what the player was looking at when they
  * clicked, and the input it carries is the state polled at the end of last frame.
  */
+/** Whether `object` or anything under it is a `<Text>` reading exactly `label`. */
+function holdsText(object: GameObject, label: string): boolean {
+  if (object instanceof Text && object.text.trim() === label) return true;
+  for (const child of object.children) if (holdsText(child, label)) return true;
+  return false;
+}
+
+/** Adds the text of every `<Text>` at or under `object` to `found`, once each. */
+function textsIn(object: GameObject, found: string[]): void {
+  if (object instanceof Text && object.text.trim() !== "" && !found.includes(object.text.trim())) found.push(object.text.trim());
+  for (const child of object.children) textsIn(child, found);
+}
+
 export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const warner = new Warner(config.warn);
   // Each game starts with nothing pressed yet (`getInputDevice()`), whatever an earlier player in this process was using.
@@ -556,6 +577,25 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     },
     showError(error: unknown, note?: string): void {
       fail(error, note);
+    },
+    labels(): string[] {
+      const found: string[] = [];
+      for (let i = pointers.length - 1; i >= 0; i--) {
+        const pointer = pointers[i] as Pressable;
+        if (pointer.world === world && pointer.focusPoint !== undefined) textsIn(pointer as unknown as GameObject, found);
+      }
+      return found;
+    },
+    pointOf(label: string): { readonly x: number; readonly y: number } | null {
+      // The last one drawn is on top, as for a press.
+      for (let i = pointers.length - 1; i >= 0; i--) {
+        const pointer = pointers[i] as Pressable;
+        if (pointer.world !== world || pointer.focusPoint === undefined || !holdsText(pointer as unknown as GameObject, label)) continue;
+        const at = pointer.focusPoint();
+        const view = i >= hudPointersFrom ? hudView : input.view;
+        return { x: view.a * at.x + view.c * at.y + view.e, y: view.b * at.x + view.d * at.y + view.f };
+      }
+      return null;
     },
     snapshotClock(): PlayerClock {
       const hovered = world.hovered as unknown as GameObject | null;
